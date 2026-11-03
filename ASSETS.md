@@ -15,5 +15,6 @@
 | `qoder/skills/onepress-discipline/SKILL.md` | harness | 全量覆盖 |
 | `openspec-schema/superspec/**`（10 文件） | harness | 全量覆盖 |
 | `README-ch.md` / `README.md` | docs | 不安装（仅仓库说明，不写入目标仓库） |
+| `openspec/**`（自托管工作区） | self-host | 不安装（本方案自身的 config、CHANGE_NAMING、specs 与变更归档） |
 | `docs/ui-components.md`（注册表模板） | project | 存在即跳过（Protect Local） |
 | `openspec/changes/`（业务变更契约） | project | 永不触碰 |

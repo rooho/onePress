@@ -47,9 +47,10 @@
 
 约束：**仅允许新增这一行**，命令正文其余内容一字不得改动；命令文件不存在时跳过，**不得新建**命令文件。
 
-### 文档条目（不安装）
+### 文档与自托管条目（不安装）
 
 - `ASSETS.md`、`README-ch.md`、`README.md` 属 `docs` 层，**不写入目标仓库**。
+- `openspec/` 属自托管层（本方案自身的 config、规范、变更归档），**不写入目标仓库**；要注入目标仓库的 schema 取自 `openspec-schema/`。
 
 ### 项目级（Protect Local）
 
@@ -117,7 +118,7 @@
 
 ### 模板包结构验收项
 
-- [ ] 模板包根条目均在白名单内：`VERSION`、`ASSETS.md`、`INSTALL_PROMPT.md`、`README-ch.md`、`README.md`、`opencode/`、`qoder/`、`openspec-schema/`；出现白名单外条目即判定失败并输出违规路径
+- [ ] 模板包根条目均在白名单内：`VERSION`、`ASSETS.md`、`INSTALL_PROMPT.md`、`README-ch.md`、`README.md`、`opencode/`、`qoder/`、`openspec-schema/`、`openspec/`；出现白名单外条目即判定失败并输出违规路径
 
 ## ⑤ 收尾
 

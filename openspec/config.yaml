@@ -1,0 +1,19 @@
+# OpenSpec 项目配置 — onePress
+schema: superspec
+
+context: |
+  rules:
+    proposal:
+      - 注明涉及的 harness（.qoder / .opencode）与资产归属层级（harness 级 / 项目级）
+      - 注明受影响的安装场景（全新安装 / 升级 / 回滚）
+      - 引用相关设计文档章节
+  specs:
+    - 每条需求必须使用 RFC 2119 关键词（SHALL/MUST/SHOULD/MAY）
+    - 每条需求必须包含至少一个 Given/When/Then 格式的场景
+    - 场景必须具体且可测试
+  design:
+    - 涉及目标仓库目录结构的变更必须引用对应 harness 的官方文档（如 opencode.ai/docs）
+    - 安装/升级/回滚策略必须明确幂等语义与保护红线
+  tasks:
+    - 每个任务为原子工作单元
+    - 每个任务必须可验证（通过测试、产生输出等）
