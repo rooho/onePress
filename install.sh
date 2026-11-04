@@ -21,6 +21,7 @@ REPO="https://github.com/rooho/onePress.git"
 REF="main"
 DRY_RUN=0
 ASSUME_YES=0
+NO_INIT=0
 TEMP_ROOT=""
 
 SKILL_REF='> onepress: 执行本命令时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。'
@@ -353,7 +354,25 @@ confirm_openspec_schema() {
   local cfg="$target/openspec/config.yaml"
 
   if [ ! -f "$cfg" ]; then
-    skip 'openspec/config.yaml 不存在（目标仓库未初始化 OpenSpec），跳过 schema 对齐'
+    if [ "$DRY_RUN" = 1 ]; then
+      info 'would create openspec/config.yaml (schema: superspec)'
+      return 0
+    fi
+    mkdir -p "$target/openspec"
+    cat > "$cfg" <<'CFG_EOF'
+schema: superspec
+
+context: |
+  rules:
+    specs:
+      - 每条需求 MUST 使用 RFC 2119 关键词（SHALL/MUST/SHOULD/MAY）
+      - 每条需求 MUST 至少包含一个 GIVEN/WHEN/THEN 场景，且场景具体可测试
+    design:
+      - 涉及页面与交互的变更 MUST 在 design.md 底部给出 ui_contract（archetype / reuse_components / schema_mapping / states_matrix / layout_tokens）
+    tasks:
+      - 每个任务为原子工作单元，可独立验证（跑测试、产生输出或肉眼点检）
+CFG_EOF
+    ok 'openspec/config.yaml（新建，schema=superspec）'
     return 0
   fi
 
@@ -376,9 +395,58 @@ confirm_openspec_schema() {
   fi
 
   local tmp="$cfg.ops-tmp"
-  awk 'BEGIN { done = 0 } !done && /^schema:/ { print "schema: superspec"; done = 1; next } { print }' "$cfg" > "$tmp"
+  awk '
+    BEGIN { done = 0 }
+    !done && /^schema:/ {
+      cr = ""
+      line = $0
+      if (line ~ /\r$/) cr = "\r"
+      print "schema: superspec" cr
+      done = 1
+      next
+    }
+    { print }
+  ' "$cfg" > "$tmp"
   mv -f "$tmp" "$cfg"
-  info "openspec/config.yaml schema: $current → superspec（九工件序列依赖它，config 其余字段未改动）"
+  info "openspec/config.yaml schema: $current → superspec（保留原换行与其余字段）"
+}
+
+init_qoder_commands() {
+  local target="$1"
+  local cmd_dir="$target/.qoder/commands"
+  local count=0
+
+  if [ -d "$cmd_dir" ]; then
+    count="$(find "$cmd_dir" -type f -name '*.md' | wc -l | tr -d ' ')"
+  fi
+  if [ "$count" -gt 0 ]; then
+    info ".qoder/commands/ 已有 $count 个命令文件 ... OK"
+    return 0
+  fi
+
+  if [ "$NO_INIT" = 1 ]; then
+    warn '.qoder/commands/ 为空且指定了 --no-init：技能将"存在但永不加载"，需手动 openspec init 后重跑'
+    return 0
+  fi
+
+  if ! command -v openspec >/dev/null 2>&1; then
+    warn '.qoder/commands/ 为空且未检测到 openspec CLI：技能将"存在但永不加载"。请先安装 OpenSpec CLI 并执行 openspec init --tools qoder 后重跑本脚本'
+    return 0
+  fi
+
+  if [ "$DRY_RUN" = 1 ]; then
+    info 'would run: openspec init --tools qoder --no-animation'
+    return 0
+  fi
+
+  local out
+  if ! out="$(cd "$target" && openspec init --tools qoder --no-animation 2>&1)"; then
+    warn "openspec init 失败：$(printf '%s' "$out" | tail -n 3)"
+    return 0
+  fi
+
+  count="$(find "$cmd_dir" -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
+  info "openspec init 生成 $count 个 .qoder/commands 命令（config.yaml 已存在，未被 init 覆盖）"
 }
 
 lock_files() {
@@ -536,7 +604,9 @@ run_acceptance() {
       cmp -s "$pack/$rel" "$target/$dst_rel" || bad "内容不一致：$dst_rel"
     done
     if [ -d "$target/.qoder/commands" ]; then
-      local file
+      local file cmd_count
+      cmd_count="$(find "$target/.qoder/commands" -type f -name '*.md' | wc -l | tr -d ' ')"
+      [ "$cmd_count" -gt 0 ] || bad '.qoder/commands/ 为空：/opsx:* 命令不可用（技能存在但无挂载点）'
       while IFS= read -r file; do
         [ -n "$file" ] || continue
         frel="${file#"$target"/}"
@@ -549,20 +619,20 @@ run_acceptance() {
     fi
     if [ -f "$target/.qoder/skills/onepress-discipline/SKILL.md" ]; then
       local kw
-      for kw in Token 四态 无障碍 防呆; do
+      for kw in ui_contract Token 四态 无障碍 防呆; do
         grep -q "$kw" "$target/.qoder/skills/onepress-discipline/SKILL.md" || bad "SKILL.md 缺少铁律关键词：$kw"
       done
     fi
   fi
 
   if [ -f "$target/openspec/config.yaml" ]; then
-    if grep -qE '^schema:[[:space:]]*superspec[[:space:]]*$' "$target/openspec/config.yaml"; then
+    if tr -d '\r' < "$target/openspec/config.yaml" | grep -qE '^schema:[[:space:]]*superspec[[:space:]]*$'; then
       info 'openspec/config.yaml schema=superspec ... OK'
     else
       bad 'openspec/config.yaml 的 schema 不是 superspec（九工件序列不可用）'
     fi
   else
-    skip 'openspec/config.yaml 不存在（未初始化 OpenSpec）'
+    bad 'openspec/config.yaml 缺失（安装器应已创建）'
   fi
 
   if [ -f "$target/onePress.lock" ]; then
@@ -587,6 +657,7 @@ while [ $# -gt 0 ]; do
     --ref) REF="${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --yes|-y) ASSUME_YES=1; shift ;;
+    --no-init) NO_INIT=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) die "未知参数：$1（--help 查看用法）" ;;
   esac
@@ -656,12 +727,16 @@ if [ "$USE_QODER" = 1 ]; then
   for rel in $QODER_FILES; do
     copy_file "$PACK_ROOT" "$TARGET_ROOT" "$rel" ".qoder/${rel#qoder/}"
   done
-  mount_qoder_reference "$TARGET_ROOT"
 fi
 
 init_ui_components "$TARGET_ROOT"
 
 confirm_openspec_schema "$TARGET_ROOT"
+
+if [ "$USE_QODER" = 1 ]; then
+  init_qoder_commands "$TARGET_ROOT"
+  mount_qoder_reference "$TARGET_ROOT"
+fi
 
 step '③ 写入 onePress.lock'
 write_lock "$TARGET_ROOT" "$VERSION"

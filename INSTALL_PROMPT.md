@@ -2,6 +2,23 @@
 
 > 本文件是 onePress 的 AI 侧安装入口。**首选 `install.ps1` / `install.sh`（一条命令完成同样的五段）；在没有脚本执行能力时，才把本文件完整内容交给任意具备文件读写能力的大模型**，它会按以下五段执行安装。**执行者只需通用文件读写能力，无需 Node.js、Python 或任何运行时。**
 
+## ⓿ 最快路径（MUST 优先尝试）
+
+当前环境能执行命令时，**不要**逐文件手工复制，直接运行模板包自带的安装器：
+
+```powershell
+# Windows
+<pack-root>\install.ps1 -Target <target-repo-root> -Harness <qoder|opencode|both>
+```
+```bash
+# macOS / Linux
+<pack-root>/install.sh --target <target-repo-root> --harness <qoder|opencode|both>
+```
+
+它会在数秒内完成 ①~⑤ 的全部工作（探测 / 写入 / config 对齐 / 命令初始化 / 挂载 / lock / 自检），退出码 `0` 即成功。把它的报告原样转述给用户即可，不要重复校验。
+
+**只有**脚本无法执行（无 shell、无执行权限、环境禁止运行命令）时，才继续按下面 ①~⑤ 手工安装，且手工产出必须与脚本逐字节一致。
+
 ## ① 前置检查
 
 1. 确认当前目录为目标仓库根（存在 `.git/` 或已初始化 git）。
@@ -75,9 +92,15 @@
 
 ### OpenSpec 配置对齐（始终执行）
 
-- 目标仓库存在 `openspec/config.yaml` 时，其顶层 `schema:` MUST 为 `superspec`（九工件序列 brainstorm→…→finalize 依赖它）。当前值不是 `superspec` 时，**只改这一行**，`context` / `rules` 等其余字段一字不动，并在报告中记一行 `config.yaml schema: <旧值> → superspec`。
-- `openspec/config.yaml` 不存在时不创建，在报告中提示"目标仓库尚未 openspec init"。
-- 特别注意：`openspec init` 会把该值重置为 `spec-driven`。安装过程中若执行过 init，**必须在收尾前重新对齐并复核**。
+- 目标仓库存在 `openspec/config.yaml` 时，其顶层 `schema:` MUST 为 `superspec`（九工件序列 brainstorm→…→finalize 依赖它）。当前值不是 `superspec` 时，**只改这一行**，`context` / `rules` 等其余字段一字不动，并在报告中记一行 `config.yaml schema: <旧值> → superspec`。**改行时保留原换行风格**：CRLF 文件的该行末尾有 `\r`，不要一并删掉。
+- `openspec/config.yaml` 不存在时**必须创建**，最小内容为 `schema: superspec` + `context.rules`（specs / design / tasks 三组，design 组要求涉及页面的变更给出 ui_contract 五字段）。缺了它，本次安装提供不了九工件能力。
+- **实测结论**：`openspec init` 在 `config.yaml` 已存在时**不会覆盖**（hash 不变），只有当文件缺失时才会新建为 `spec-driven`。因此正确顺序是：**先创建/对齐 config → 再 init → 再挂载技能引用**。
+
+### 命令初始化（仅当 `HARNESS_SET` 含 `qoder` 且 `.qoder/commands/` 为空）
+
+- `.qoder/commands/` 不存在或其中没有任何 `.md` 时：执行 `openspec init --tools qoder --no-animation` 生成命令，**然后才做技能引用挂载**。漏掉这一步的结果是"技能已落盘但永不加载"，`/opsx:*` 全部不可用。
+- `openspec` 命令不可用时：在报告中明确写"技能存在但无挂载点，需先安装 OpenSpec CLI 并 init"，不得当作安装成功。
+- 已有命令文件时**不重复 init**。
 
 ### 文档与自托管条目（不安装）
 
@@ -151,14 +174,14 @@
 - [ ] 该 SKILL.md 的 `ui_contract` 段落包含 `archetype`、`reuse_components`、`schema_mapping`、`states_matrix`、`layout_tokens` 五个字段
 - [ ] 该 SKILL.md 内容与模板包逐字一致
 - [ ] 既有 `.qoder/commands/` 下命令文件主体未被改写（仅允许 frontmatter 后新增一行技能引用）
-- [ ] `.qoder/commands/` 下每个已存在的命令文件均含一行 `onepress-discipline` 技能引用
+- [ ] `.qoder/commands/` **非空**，且其中每个命令文件均含一行 `onepress-discipline` 技能引用（为空即判定失败：技能存在但无挂载点）
 - [ ] 项目级资产未被覆盖：`docs/ui-components.md`（若安装前已存在）内容不变
 
 ### OpenSpec Schema 验收项
 
 - [ ] `openspec/schemas/superspec/schema.yaml` 与 `templates/` 9 个模板文件齐全（共 10 文件）
 - [ ] `openspec schemas` 可列出 `superspec (project)`
-- [ ] `openspec/config.yaml`（若存在）顶层 `schema:` 为 `superspec`；不存在的记为 `skipped (no openspec init)`，不计入失败
+- [ ] `openspec/config.yaml` 存在且顶层 `schema:` 为 `superspec`（缺失或值不符即判定失败）
 
 ### 安装范围验收项
 

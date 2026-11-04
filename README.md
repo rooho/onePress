@@ -47,9 +47,9 @@ Common options (equivalent on both sides):
 ./install.sh --harness qoder --target ~/repo --dry-run --source ~/pack
 ```
 
-The script does five things in one go: **detect harness → layered write → write `onePress.lock` → self-check → report**. Checks cover layout, verbatim content, all 10 schema files, `openspec/config.yaml` having `schema: superspec`, and lock/scope consistency; any failure aborts with a reason. Exit code `0` = success, `1` = failure. Nothing to verify by hand.
+The script does six things in one go: **detect harness → layered write → align OpenSpec config → write `onePress.lock` → self-check → report**. "Align config" means: create `openspec/config.yaml` (`schema: superspec`) when missing, rewrite only that line when the value is wrong (CRLF preserved), and run `openspec init --tools qoder` automatically when `.qoder/commands/` is empty. Checks cover layout, verbatim content, all 10 schema files, `schema: superspec`, non-empty commands with reference lines, and lock/scope consistency; any failure aborts with a reason. Exit code `0` = success, `1` = failure. Nothing to verify by hand.
 
-> `openspec init` resets `config.yaml` to `schema: spec-driven` (4 artifacts). The script aligns it back to `superspec` (9 artifacts), touching only that line and leaving `context` / `rules` intact; if you ran `init` afterwards, just re-run the script.
+> Measured: `openspec init` does **not** overwrite an existing `config.yaml`, so the order "align config → init → mount" is safe. Use `-NoInit` / `--no-init` to disable the automatic init.
 
 Downloaded the script only, no pack? It shallow-clones automatically:
 

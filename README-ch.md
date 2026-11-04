@@ -47,9 +47,9 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 ./install.sh --harness qoder --target ~/repo --dry-run --source ~/pack
 ```
 
-脚本一键做完五件事：**探测 harness → 分层写入 → 写 `onePress.lock` → 自检 → 输出报告**。自检覆盖布局、逐字一致、schema 10 文件齐全、`openspec/config.yaml` 的 `schema` 为 `superspec`、lock 与安装范围一致；失败即中止并给出原因，退出码 `0` 成功 / `1` 失败。你不需要手动核对任何东西。
+脚本一键做完六件事：**探测 harness → 分层写入 → 对齐 OpenSpec 配置 → 写 `onePress.lock` → 自检 → 输出报告**。其中"对齐配置"包括：`openspec/config.yaml` 不存在时创建（`schema: superspec`）、已存在但值不对时只改那一行（CRLF 也保留），以及 `.qoder/commands/` 为空时自动 `openspec init --tools qoder` 生成命令。自检覆盖布局、逐字一致、schema 10 文件齐全、`schema: superspec`、命令非空且已挂载、lock 与安装范围一致；失败即中止并给出原因，退出码 `0` 成功 / `1` 失败。你不需要手动核对任何东西。
 
-> `openspec init` 会把 `config.yaml` 的 `schema` 重置为 `spec-driven`（4 工件）。脚本会自动把它对齐回 `superspec`（9 工件），只改那一行、不动 `context` / `rules`；若安装后又跑过 `init`，重跑一次脚本即可复原。
+> 实测：`openspec init` 在 `config.yaml` 已存在时**不会覆盖它**，所以"先对齐配置、再 init、再挂载"的顺序是安全的；`-NoInit` / `--no-init` 可关闭自动 init。
 
 只下载了脚本、没有模板包？脚本会自动浅克隆：
 
