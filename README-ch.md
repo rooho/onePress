@@ -22,45 +22,69 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 
 ---
 
-## 一、安装（约 30 秒）
+## 一、安装（一条命令）
 
-### 1. 取模板包
-
-```bash
-git clone --depth 1 --filter=blob:none --sparse https://github.com/rooho/onePress.git <临时目录>
-cd <临时目录>
-git sparse-checkout set onePress
-```
-
-**先校验再继续**（稀疏检出对不存在的路径会静默空检出，不报错）：
+把模板包 clone 下来，在**目标仓库根目录**执行对应脚本：
 
 ```powershell
-Test-Path <临时目录>\onePress\INSTALL_PROMPT.md     # Windows，必须为 True
+# Windows（PowerShell 5.1+）
+.\install.ps1
 ```
 ```bash
-ls <临时目录>/onePress/INSTALL_PROMPT.md            # macOS / Linux
+# macOS / Linux
+./install.sh
 ```
 
-> 拿不到该文件说明检出路径不匹配，停止并核对仓库结构，不要继续。
+常用参数（两侧等价）：
 
-### 2. 交给 AI 安装
-
-把 `<临时目录>/onePress/INSTALL_PROMPT.md` 的**全文**粘贴给目标仓库里的 AI 助手。它会按五段执行：
-
+```powershell
+.\install.ps1 -Harness qoder     # 只装 Qoder（默认 auto：按 .qoder/ .opencode/ 探测）
+.\install.ps1 -Target D:\repo    # 指定目标仓库
+.\install.ps1 -DryRun            # 只打印计划，不落盘
+.\install.ps1 -Source D:\pack    # 指定模板包目录（默认脚本所在目录）
 ```
-① 前置检查 → ② 分层安装 → ③ 幂等与升级 → ④ 验收自检 → ⑤ 收尾
+```bash
+./install.sh --harness qoder --target ~/repo --dry-run --source ~/pack
 ```
 
-### 3. 安装产物
+脚本一键做完五件事：**探测 harness → 分层写入 → 写 `onePress.lock` → 自检 → 输出报告**。自检覆盖布局、逐字一致、schema 10 文件齐全、`openspec/config.yaml` 的 `schema` 为 `superspec`、lock 与安装范围一致；失败即中止并给出原因，退出码 `0` 成功 / `1` 失败。你不需要手动核对任何东西。
 
-| 目标仓库路径 | 内容 | 层级 |
-|--------------|------|------|
-| `.opencode/` | `opencode.json`、`agent/ux-architect.md`、`commands/opsx-{new,apply,verify}.md`、`skills/superpowers-tdd/` | harness |
-| `.qoder/skills/onepress-discipline/SKILL.md` | 四条铁律 + TDD 纪律 | harness |
-| `.qoder/commands/opsx/*.md` | 仅在 frontmatter 后**新增一行**技能引用，主体不改 | harness |
-| `openspec/schemas/superspec/` | `schema.yaml` + 9 模板（共 10 文件） | harness |
-| `onePress.lock` | 版本与受保护资产清单 | harness |
-| `docs/ui-components.md` | 组件注册表模板（首次安装初始化为空表） | project |
+> `openspec init` 会把 `config.yaml` 的 `schema` 重置为 `spec-driven`（4 工件）。脚本会自动把它对齐回 `superspec`（9 工件），只改那一行、不动 `context` / `rules`；若安装后又跑过 `init`，重跑一次脚本即可复原。
+
+只下载了脚本、没有模板包？脚本会自动浅克隆：
+
+```powershell
+.\install.ps1 -Repo https://github.com/rooho/onePress.git -Ref main
+```
+```bash
+./install.sh --repo https://github.com/rooho/onePress.git --ref main
+```
+
+> 不用脚本、想让 AI 自己装也可以：把 `INSTALL_PROMPT.md` 全文交给任意可读写文件的 Agent，它按同样五段执行，产出与本脚本逐字节一致。
+
+### 安装范围会自动判定
+
+脚本探测目标仓库用的是哪个 AI 编码环境，**只装选中的那个**，无需手工指定：
+
+| 探测结果 | 安装内容 |
+|----------|----------|
+| 只有 `.qoder/` | 仅 Qoder 资产 |
+| 只有 `.opencode/` | 仅 OpenCode 资产 |
+| 两者都有 | 两套都装 |
+| 两者都没有 | 交互询问你用哪个（Qoder / OpenCode / 两者），**不默认全装**；无人值守场景请显式传 `-Harness` / `--harness` |
+
+未选中的环境不会被创建目录、不会被写入文件；`onePress.lock` 的 `harnesses` 记录实际安装范围（未装的为 `false`），升级时也只覆盖已启用的那一套。
+
+### 安装产物
+
+| 目标仓库路径 | 内容 | 层级 | 安装条件 |
+|--------------|------|------|----------|
+| `.opencode/` | `opencode.json`、`agent/ux-architect.md`、`commands/opsx-{new,apply,verify}.md`、`skills/superpowers-tdd/` | harness | 仅选中 OpenCode |
+| `.qoder/skills/onepress-discipline/SKILL.md` | 四条铁律 + TDD 纪律 | harness | 仅选中 Qoder |
+| `.qoder/commands/opsx/*.md` | 仅在 frontmatter 后**新增一行**技能引用，主体不改 | harness | 仅选中 Qoder |
+| `openspec/schemas/superspec/` | `schema.yaml` + 9 模板（共 10 文件） | harness | 始终 |
+| `onePress.lock` | 版本、安装范围与受保护资产清单 | harness | 始终 |
+| `docs/ui-components.md` | 组件注册表模板（首次安装初始化为空表） | project | 始终 |
 
 ---
 
@@ -219,7 +243,7 @@ openspec archive <name> --yes                   # 归档并同步 specs
 | project（目标仓库独有） | `docs/ui-components.md`、`openspec/changes/` | 存在即跳过（Protect Local），永不覆盖 |
 | 本地修改 | 目标仓库中未提交的 harness 文件改动 | 检测到即提示并跳过 |
 
-升级 = 用同一条安装流程重跑一遍新版本；`onePress.lock` 里的 `version` 决定"全新安装 / 升级"。lock 缺失或损坏 → 按全新安装处理，但项目级资产仍受保护。
+升级 = 用新版本模板包重跑一次脚本（`.\install.ps1` / `./install.sh`），`onePress.lock` 里的 `version` 决定"全新安装 / 升级"；旧版本遗留的受管文件会按 lock 清单清理。lock 缺失或损坏 → 按全新安装处理，但项目级资产仍受保护。
 
 卸载：删除 `onePress.lock` 中 `protectedAssets` 之外的安装产物（`.opencode/`、`.qoder/skills/onepress-discipline/`、`openspec/schemas/superspec/`），保留 `docs/ui-components.md` 与 `openspec/changes/`。
 
@@ -233,7 +257,9 @@ onePress/
 ├── README.md               # English README
 ├── VERSION                 # 版本号（升级判定基准）
 ├── ASSETS.md               # 资产清单（归属层级 + 覆盖策略）
-├── INSTALL_PROMPT.md       # 安装提示词（唯一安装入口，五段结构）
+├── INSTALL_PROMPT.md       # AI 安装入口（五段结构，脚本的等价兜底）
+├── install.ps1             # Windows 安装器（探测/写入/自检/报告一条命令）
+├── install.sh              # macOS / Linux 安装器
 ├── opencode/               # OpenCode harness 资产（6 文件）
 │   ├── opencode.json
 │   ├── agent/ux-architect.md
@@ -257,8 +283,8 @@ onePress/
 
 ## 七、FAQ
 
-**Q：检出后找不到 `onePress/INSTALL_PROMPT.md`？**
-A：`git sparse-checkout set` 对不存在的路径静默空检出。用 `git ls-tree -r --name-only HEAD | head` 核对真实布局，或改用 `git sparse-checkout disable` 全量检出。
+**Q：AI 说克隆下来找不到 `INSTALL_PROMPT.md`？**
+A：多半是稀疏检出路径与实际布局不符（cone 模式对不存在的路径静默空检出、不报错）。让它先 `git ls-tree -r --name-only HEAD` 核对真实布局，再 `git sparse-checkout disable` 全量检出（包体仅 KB 级）。这条已写进上面的安装提示词，正常情况下它会自己兜住。
 
 **Q：目标仓库没有 OpenSpec？**
 A：安装能完成，但 `/opsx:*` 与 `ui_contract` 解析需要 OpenSpec。先 `openspec init --tools qoder`（或 `--tools opencode`）再安装。
@@ -266,11 +292,17 @@ A：安装能完成，但 `/opsx:*` 与 `ui_contract` 解析需要 OpenSpec。�
 **Q：OpenCode 下没有 `/opsx:continue`、`/opsx:archive`？**
 A：本包只随附三个命令。其余用 `openspec status` / `openspec instructions` / `openspec archive` 等价操作，或自行补 `.opencode/commands/opsx-*.md`。
 
+**Q：能不能只装 Qoder 或只装 OpenCode？**
+A：能，且默认就是这样。安装器按目录探测判定：只有 `.qoder/` 只装 Qoder，只有 `.opencode/` 只装 OpenCode，两者都没有会先问你。也可以在提示词里直接写明"只装 Qoder"覆盖探测。事后想补装另一个环境，再跑一次安装即可，只会增量写那一套，已装的不受影响。
+
 **Q：`.qoder/`、`.opencode/` 要不要入库？**
 A：默认不入库（本地环境配置）。`onePress.lock` 与 `docs/ui-components.md` 建议入库。
 
 **Q：怎么确认装好了？**
-A：看三处——`onePress.lock` 存在且 `version` 匹配；`.qoder/commands/` 每个命令都有一行 `onepress-discipline` 引用；`openspec/schemas/superspec/` 有 10 个文件。安装提示词的 ④ 段会自动跑这套验收。
+A：看脚本退出码与报告——`0` 且收尾语为 `onePress v<version> 安装完成（harnesses: <范围>）` 即成功，报告里已列出跳过项与自检结果。想自己复核只查三处——`onePress.lock` 存在且 `version` 匹配；`.qoder/commands/` 每个命令都有一行 `onepress-discipline` 引用；`openspec/schemas/superspec/` 有 10 个文件。
+
+**Q：重装会不会把我改过的工具链文件冲掉？**
+A：不会。已跟踪文件若有未提交修改，脚本会提示并跳过该文件；`.qoder/commands/` 里的技能引用已存在则跳过，命令正文永不改写。
 
 **Q：已有 `.qoder/` 会被破坏吗？**
 A：不会。只新增技能文件，并在既有命令 frontmatter 后插入一行引用，命令体零改动。

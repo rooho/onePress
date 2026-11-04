@@ -22,45 +22,69 @@ First-class support for two harnesses: `.qoder/` and `.opencode/`. Zero runtime 
 
 ---
 
-## 1. Install (~30 seconds)
+## 1. Install (one command)
 
-### 1.1 Fetch the template pack
-
-```bash
-git clone --depth 1 --filter=blob:none --sparse https://github.com/rooho/onePress.git <temp-dir>
-cd <temp-dir>
-git sparse-checkout set onePress
-```
-
-**Verify before continuing** (sparse checkout silently checks out nothing when the path does not exist):
+Clone the pack, then run the matching script **at the target repo root**:
 
 ```powershell
-Test-Path <temp-dir>\onePress\INSTALL_PROMPT.md     # Windows, must be True
+# Windows (PowerShell 5.1+)
+.\install.ps1
 ```
 ```bash
-ls <temp-dir>/onePress/INSTALL_PROMPT.md            # macOS / Linux
+# macOS / Linux
+./install.sh
 ```
 
-> If the file is missing, the checkout path does not match — stop and inspect the repository layout.
+Common options (equivalent on both sides):
 
-### 1.2 Hand it to the AI
-
-Paste the **full contents** of `<temp-dir>/onePress/INSTALL_PROMPT.md` into the AI assistant inside the target repo. It runs five sections:
-
+```powershell
+.\install.ps1 -Harness qoder     # Qoder only (default auto: detect .qoder/ / .opencode/)
+.\install.ps1 -Target D:\repo    # explicit target repo
+.\install.ps1 -DryRun            # print the plan, write nothing
+.\install.ps1 -Source D:\pack    # pack directory (default: the script's directory)
 ```
-① Preflight → ② Layered install → ③ Idempotency & upgrade → ④ Acceptance checklist → ⑤ Finalize
+```bash
+./install.sh --harness qoder --target ~/repo --dry-run --source ~/pack
 ```
 
-### 1.3 What gets installed
+The script does five things in one go: **detect harness → layered write → write `onePress.lock` → self-check → report**. Checks cover layout, verbatim content, all 10 schema files, `openspec/config.yaml` having `schema: superspec`, and lock/scope consistency; any failure aborts with a reason. Exit code `0` = success, `1` = failure. Nothing to verify by hand.
 
-| Target path | Contents | Layer |
-|-------------|----------|-------|
-| `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/opsx-{new,apply,verify}.md`, `skills/superpowers-tdd/` | harness |
-| `.qoder/skills/onepress-discipline/SKILL.md` | Four iron rules + TDD discipline | harness |
-| `.qoder/commands/opsx/*.md` | One reference line added after frontmatter; body untouched | harness |
-| `openspec/schemas/superspec/` | `schema.yaml` + 9 templates (10 files) | harness |
-| `onePress.lock` | Version and protected-asset manifest | harness |
-| `docs/ui-components.md` | Component registry template (empty tables on first install) | project |
+> `openspec init` resets `config.yaml` to `schema: spec-driven` (4 artifacts). The script aligns it back to `superspec` (9 artifacts), touching only that line and leaving `context` / `rules` intact; if you ran `init` afterwards, just re-run the script.
+
+Downloaded the script only, no pack? It shallow-clones automatically:
+
+```powershell
+.\install.ps1 -Repo https://github.com/rooho/onePress.git -Ref main
+```
+```bash
+./install.sh --repo https://github.com/rooho/onePress.git --ref main
+```
+
+> Prefer no script? Hand the full `INSTALL_PROMPT.md` to any file-capable agent; it runs the same five sections and produces byte-identical output.
+
+### Install scope is detected automatically
+
+The script detects which AI coding environment the target repo uses and **installs only that one** — no manual flag needed:
+
+| Detection | What gets installed |
+|-----------|---------------------|
+| only `.qoder/` | Qoder assets only |
+| only `.opencode/` | OpenCode assets only |
+| both present | both |
+| neither present | asks which one to use (Qoder / OpenCode / both) — **never installs both by default**; pass `-Harness` / `--harness` for unattended runs |
+
+The unselected harness gets no directory created and no files written. `onePress.lock`'s `harnesses` records the actual scope (`false` for the one not installed), and upgrades only overwrite the enabled harness.
+
+### What gets installed
+
+| Target path | Contents | Layer | Installed when |
+|-------------|----------|-------|----------------|
+| `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/opsx-{new,apply,verify}.md`, `skills/superpowers-tdd/` | harness | OpenCode selected |
+| `.qoder/skills/onepress-discipline/SKILL.md` | Four iron rules + TDD discipline | harness | Qoder selected |
+| `.qoder/commands/opsx/*.md` | One reference line added after frontmatter; body untouched | harness | Qoder selected |
+| `openspec/schemas/superspec/` | `schema.yaml` + 9 templates (10 files) | harness | always |
+| `onePress.lock` | Version, install scope, protected assets | harness | always |
+| `docs/ui-components.md` | Component registry template (empty tables on first install) | project | always |
 
 ---
 
@@ -219,7 +243,7 @@ Full details: `onePress/openspec/CHANGE_NAMING.md`.
 | project (owned by target repo) | `docs/ui-components.md`, `openspec/changes/` | Skip if exists (Protect Local), never overwritten |
 | local modifications | Uncommitted harness edits in the target repo | Prompt and skip |
 
-Upgrade = re-run the same install flow with the new version; `onePress.lock`'s `version` decides "fresh install" vs "upgrade". A missing or corrupt lock means fresh install — project-level assets stay protected.
+Upgrade = re-run the script (`.\install.ps1` / `./install.sh`) with the new pack; `onePress.lock`'s `version` decides "fresh install" vs "upgrade", and stale managed files from the older version are cleaned using the lock manifest. A missing or corrupt lock means fresh install — project-level assets stay protected.
 
 Uninstall: remove everything except `protectedAssets` from `onePress.lock` (`.opencode/`, `.qoder/skills/onepress-discipline/`, `openspec/schemas/superspec/`), keeping `docs/ui-components.md` and `openspec/changes/`.
 
@@ -233,7 +257,9 @@ onePress/
 ├── README.md               # English README (this file)
 ├── VERSION                 # Version (upgrade baseline)
 ├── ASSETS.md               # Asset manifest (layer + overwrite policy)
-├── INSTALL_PROMPT.md       # Install prompt (single entry, five sections)
+├── INSTALL_PROMPT.md       # AI install entry (five sections, script-equivalent fallback)
+├── install.ps1             # Windows installer (detect/write/check/report in one command)
+├── install.sh              # macOS / Linux installer
 ├── opencode/               # OpenCode harness assets (6 files)
 │   ├── opencode.json
 │   ├── agent/ux-architect.md
@@ -257,8 +283,8 @@ onePress/
 
 ## 7. FAQ
 
-**Q: `onePress/INSTALL_PROMPT.md` is missing after checkout?**
-A: `git sparse-checkout set` silently checks out nothing when the path does not exist. Verify with `git ls-tree -r --name-only HEAD | head`, or use `git sparse-checkout disable` for a full checkout.
+**Q: The agent cannot find `INSTALL_PROMPT.md` after cloning?**
+A: Usually the sparse-checkout path does not match the real layout (cone mode silently checks out nothing, no error). Have it verify with `git ls-tree -r --name-only HEAD`, then fall back to `git sparse-checkout disable` (the pack is only KB-sized). This is already covered in the install block above, so it normally self-recovers.
 
 **Q: The target repo has no OpenSpec?**
 A: Install still completes, but `/opsx:*` and `ui_contract` parsing require OpenSpec. Run `openspec init --tools qoder` (or `--tools opencode`) first.
@@ -266,11 +292,17 @@ A: Install still completes, but `/opsx:*` and `ui_contract` parsing require Open
 **Q: OpenCode lacks `/opsx:continue` and `/opsx:archive`?**
 A: Only three commands ship with the pack. Use `openspec status` / `openspec instructions` / `openspec archive` instead, or add your own `.opencode/commands/opsx-*.md`.
 
+**Q: Can I install only Qoder or only OpenCode?**
+A: Yes — that is the default. The installer detects by directory: `.qoder/` only → Qoder only, `.opencode/` only → OpenCode only, neither → it asks first. You can also state "Qoder only" in the prompt to override detection. To add the other harness later, re-run the install; only that harness is written and the existing one is untouched.
+
 **Q: Should `.qoder/` and `.opencode/` be committed?**
 A: No — they are local environment config. Do commit `onePress.lock` and `docs/ui-components.md`.
 
 **Q: How do I confirm the install?**
-A: Three checks — `onePress.lock` exists with the matching `version`; every `.qoder/commands/` file has one `onepress-discipline` reference line; `openspec/schemas/superspec/` has 10 files. Section ④ of the install prompt runs these automatically.
+A: Check the exit code and the report — `0` plus the closing line `onePress v<version> 安装完成（harnesses: <scope>）` means success; skipped items and check results are already listed. To double-check yourself, three spots — `onePress.lock` exists with the matching `version`; every `.qoder/commands/` file has one `onepress-discipline` reference line; `openspec/schemas/superspec/` has 10 files.
+
+**Q: Will a re-install clobber my edits to tooling files?**
+A: No. Tracked files with uncommitted changes are reported and skipped; existing skill reference lines are skipped, and command bodies are never rewritten.
 
 **Q: Will my existing `.qoder/` be damaged?**
 A: No. onePress only adds a skill file and inserts one reference line after the frontmatter; command bodies are untouched.

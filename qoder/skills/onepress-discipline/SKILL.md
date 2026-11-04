@@ -1,11 +1,11 @@
 ﻿---
 name: onepress-discipline
-description: onePress 执行纪律（Qoder 载体）——Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆
+description: onePress 执行纪律（Qoder 载体）——ui_contract 契约推导、Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆
 ---
 
 # onePress 执行纪律（onepress-discipline）
 
-> 本技能与 OpenCode 载体 `superpowers-tdd` 语义等价（四条铁律 + TDD 纪律），仅载体格式不同。
+> 本技能承载 Qoder 侧全部 onePress 纪律：**契约先行（ui_contract）+ 四条实现铁律 + TDD 纪律**。OpenCode 侧由 `superpowers-tdd` 技能（实现铁律）与 `ux-architect` subagent（契约推导）分担，两侧语义等价的判定口径是"契约 + 铁律 + TDD"三项齐全。
 
 ## 铁律 1：Token 纯净度
 
@@ -28,6 +28,51 @@ description: onePress 执行纪律（Qoder 载体）——Token 纯净度、四�
 - 一切异步提交动作必须锁定按钮防二次点击。
 - 一切删除/覆盖动作必须经 `<AlertDialog variant="destructive">` 二次确认。
 - 操作结果必须触发 `toast` 通知。
+
+## 铁律 5：契约先行（ui_contract）
+
+任何涉及页面的需求，MUST 先在 `openspec/changes/<change>/design.md` 底部写出 `ui_contract` YAML 块（**严禁超过 40 行**），再写代码；契约未经人工确认不得进入 apply。**严禁让程序员手动构思排版。**
+
+字段口径（与 OpenCode 侧 `ux-architect` 逐字同构）：
+
+| 字段 | 必填 | 约束 |
+|------|------|------|
+| `archetype` | 是 | 5 选 1：`Dashboard-Grid` / `Master-Detail` / `Standard-CRUD-Table` / `Step-Wizard` / `Settings-Split`，严禁自由发明顶层布局 |
+| `reuse_components` | 是 | 先扫 `docs/ui-components.md`，可复用组件必须列入，严禁重复造组件 |
+| `schema_mapping` | 是 | 后端字段逐字段映射 `field` / `type` / `widget` / `rule` / `fallback`（空值降级，严禁渲染 NaN/undefined） |
+| `states_matrix.query` | 是 | `loading`（Skeleton 等高防 CLS）/ `empty`（EmptyState + 重置）/ `error`（Alert + 重试） |
+| `states_matrix.mutation` | 是 | `submitting`（disabled + Loader2）/ `destructive_guard`（AlertDialog 二次确认） |
+| `layout_tokens` | 是 | `container` / `card` / `mobile_rule`，只允许 Tailwind 标准 class 与 Shadcn CSS 变量 |
+
+```yaml
+ui_contract:
+  archetype: "Standard-CRUD-Table"
+  reuse_components:
+    - "@/components/biz/data-table-toolbar"
+  schema_mapping:
+    - field: "user.role"
+      type: "Enum(admin, member)"
+      widget: "Select"
+      rule: "required | default: member"
+    - field: "account.balance"
+      type: "Number"
+      widget: "Badge(variant='outline')"
+      fallback: "'--' (严禁渲染 NaN/undefined)"
+  states_matrix:
+    query:
+      loading: "5行 <Skeleton className='h-10 w-full' />"
+      empty: "<EmptyState /> + 重置筛选按钮"
+      error: "<Alert variant='destructive' /> + 重试按钮"
+    mutation:
+      submitting: "主按钮 disabled + 前置 <Loader2 className='animate-spin' />"
+      destructive_guard: "删除操作必须包裹 <AlertDialog variant='destructive' />"
+  layout_tokens:
+    container: "max-w-7xl mx-auto p-6 space-y-6"
+    card: "p-6 space-y-4 rounded-lg border bg-card shadow-sm"
+    mobile_rule: "<md 视口下 Grid 折叠为 grid-cols-1，表格包裹 overflow-x-auto"
+```
+
+**人工复核点**：契约产出后只核对「字段映射 / 状态矩阵 / 复用组件」三项，此时还没有代码。归档时把本次新建或改造的组件增量追加到 `docs/ui-components.md`。
 
 ## TDD 纪律
 
