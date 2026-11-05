@@ -566,6 +566,16 @@ run_acceptance() {
     bad "openspec/schemas/superspec 文件数应为 10，实际 $count"
   fi
 
+  if [ -f "$target/openspec/schemas/superspec/schema.yaml" ]; then
+    local fb_count
+    fb_count="$(grep -c 'SKILL FALLBACK' "$target/openspec/schemas/superspec/schema.yaml" 2>/dev/null || true)"
+    if [ "${fb_count:-0}" -ge 4 ]; then
+      info "schema.yaml 技能兜底：$fb_count 处 SKILL FALLBACK ... OK"
+    else
+      bad "schema.yaml 只有 ${fb_count:-0} 处 SKILL FALLBACK（brainstorm/plan/apply/finalize 应各 1 处）"
+    fi
+  fi
+
   local src_rel dst_rel rel
   for rel in $SCHEMA_FILES; do
     src_rel="openspec-schema/superspec/$rel"

@@ -286,6 +286,9 @@ onePress/
 **Q：AI 说克隆下来找不到 `INSTALL_PROMPT.md`？**
 A：多半是稀疏检出路径与实际布局不符（cone 模式对不存在的路径静默空检出、不报错）。让它先 `git ls-tree -r --name-only HEAD` 核对真实布局，再 `git sparse-checkout disable` 全量检出（包体仅 KB 级）。这条已写进上面的安装提示词，正常情况下它会自己兜住。
 
+**Q：没装 Superpowers 插件，`/opsx:continue` 卡在 plan 步骤报 `superpowers:writing-plans` 不可用？**
+A：1.0.4 起 superspec 的 Superpowers 技能引用全部带内联兜底（brainstorm / plan / apply 2c / finalize 四处），技能缺失时 AI 会按兜底步骤自行产出 `plan.md`，不会中断。旧版本（schema version ≤ 4）升级重装即可；临时也可让 AI 直接按 `tasks.md` 拆 2–5 分钟微步骤写入 `plan.md`。
+
 **Q：目标仓库没有 OpenSpec？**
 A：安装能完成，但 `/opsx:*` 与 `ui_contract` 解析需要 OpenSpec。先 `openspec init --tools qoder`（或 `--tools opencode`）再安装。
 

@@ -628,6 +628,17 @@ function Test-Acceptance {
     if ($schemaCount -eq 10) { Write-Ok 'openspec/schemas/superspec 共 10 文件' }
     else { Write-Fail "openspec/schemas/superspec 文件数应为 10，实际 $schemaCount" }
 
+    $schemaYaml = Join-Rel $TargetRoot 'openspec/schemas/superspec/schema.yaml'
+    if (Test-Path -LiteralPath $schemaYaml) {
+        $schemaText = [System.IO.File]::ReadAllText($schemaYaml, $script:Utf8NoBom)
+        $fallbackCount = ([regex]::Matches($schemaText, 'SKILL FALLBACK')).Count
+        if ($fallbackCount -ge 4) {
+            Write-Ok "schema.yaml 技能兜底：$fallbackCount 处 SKILL FALLBACK"
+        } else {
+            Write-Fail "schema.yaml 只有 $fallbackCount 处 SKILL FALLBACK（brainstorm/plan/apply/finalize 应各 1 处）"
+        }
+    }
+
     $plan = Get-BuildPlan -HarnessSet $HarnessSet
     foreach ($item in $plan) {
         $dstPath = Join-Rel $TargetRoot $item.Target

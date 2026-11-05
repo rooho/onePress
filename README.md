@@ -286,6 +286,9 @@ onePress/
 **Q: The agent cannot find `INSTALL_PROMPT.md` after cloning?**
 A: Usually the sparse-checkout path does not match the real layout (cone mode silently checks out nothing, no error). Have it verify with `git ls-tree -r --name-only HEAD`, then fall back to `git sparse-checkout disable` (the pack is only KB-sized). This is already covered in the install block above, so it normally self-recovers.
 
+**Q: `/opsx:continue` stops at the plan step saying `superpowers:writing-plans` is unavailable?**
+A: Since 1.0.4 every Superpowers skill reference in superspec carries an inline fallback (brainstorm / plan / apply 2c / finalize), so a missing skill no longer halts the flow — the agent writes `plan.md` inline. On older versions (schema version ≤ 4) just upgrade and re-install; as a stopgap, have the agent split `tasks.md` into 2–5 minute micro-steps and write `plan.md` directly.
+
 **Q: The target repo has no OpenSpec?**
 A: Install still completes, but `/opsx:*` and `ui_contract` parsing require OpenSpec. Run `openspec init --tools qoder` (or `--tools opencode`) first.
 

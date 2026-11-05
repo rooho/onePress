@@ -182,6 +182,7 @@
 - [ ] `openspec/schemas/superspec/schema.yaml` 与 `templates/` 9 个模板文件齐全（共 10 文件）
 - [ ] `openspec schemas` 可列出 `superspec (project)`
 - [ ] `openspec/config.yaml` 存在且顶层 `schema:` 为 `superspec`（缺失或值不符即判定失败）
+- [ ] `openspec/schemas/superspec/schema.yaml` 中每一处 `superpowers:<skill>` 引用都配有 `FALLBACK` 兜底说明（brainstorm / plan / apply / finalize 四处齐全），缺一处即判定失败——否则目标仓库没装 Superpowers 插件时，`/opsx:continue` 会停在 plan 步骤
 
 ### 安装范围验收项
 

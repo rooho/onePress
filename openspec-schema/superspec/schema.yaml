@@ -1,5 +1,5 @@
 name: SuperSpec
-version: 4
+version: 5
 description: >
   Spec-driven workflow integrated with Superpowers skills.
   brainstorm → proposal → specs → tasks → plan → apply → verify → finalize.
@@ -29,6 +29,12 @@ description: >
   wording is also updated to recommend a user-created feature branch
   as the canonical starting state (previously the schema recommended
   starting on the integration branch).
+  v5 (current): every Superpowers skill reference is now optional.
+  brainstorm / plan / apply / finalize each carry an explicit inline
+  FALLBACK (plan: write plan.md inline; apply: 2c inline executor;
+  finalize: inline closeout modes) and must never halt because a
+  skill is missing. This makes the schema self-contained for harnesses
+  that install onePress without the upstream Superpowers plugin.
 
 artifacts:
   - id: brainstorm
@@ -36,7 +42,19 @@ artifacts:
     description: Collaborative design exploration using Superpowers brainstorming
     template: brainstorm.md
     instruction: |
-      Use the Skill tool to invoke **superpowers:brainstorming**.
+      PRECHECK — skill availability:
+      If `superpowers:brainstorming` is in your available skills list,
+      use the Skill tool to invoke it (canonical path).
+      If it is NOT available, do NOT stop and do NOT ask the user to
+      install a plugin — run SKILL FALLBACK below and state which path
+      you took.
+
+      SKILL FALLBACK — inline brainstorming:
+      1. Explore the project context (existing code, specs, constraints).
+      2. Ask clarifying questions, one at a time.
+      3. Propose 2-3 approaches with explicit trade-offs.
+      4. Present the design in sections for approval.
+      5. Record the validated design.
 
       IMPORTANT output redirection:
       - Do NOT write to `docs/superpowers/specs/`. Instead, write the
@@ -47,7 +65,7 @@ artifacts:
       After brainstorming completes, summarize the agreed design in
       brainstorm.md using the template structure.
 
-      The brainstorming skill will:
+      Both paths must cover:
       1. Explore project context
       2. Ask clarifying questions (one at a time)
       3. Propose 2-3 approaches with trade-offs
@@ -163,21 +181,35 @@ artifacts:
     description: Micro-task implementation plan using Superpowers writing-plans
     template: plan.md
     instruction: |
-      Use the Skill tool to invoke **superpowers:writing-plans**.
+      PRECHECK — skill availability:
+      If `superpowers:writing-plans` is in your available skills list,
+      use the Skill tool to invoke it (canonical path).
+      If it is NOT available, do NOT stop, do NOT report "skill
+      unavailable", and do NOT ask the user to install a plugin — run
+      SKILL FALLBACK below and state which path you took.
+
+      SKILL FALLBACK — write plan.md inline:
+      1. Read this change's `tasks.md` and `design.md` (design optional)
+         as the only inputs.
+      2. Break every task into 2-5 minute micro-steps, TDD order:
+         failing test first, then implementation, then refactor.
+      3. Each step MUST name exact file paths, the code to write, and
+         the command that proves it (test / build / lint).
+      4. Add an explicit commit point after each task, stating what
+         that commit contains.
+      5. Write the result directly to this change's `plan.md` using the
+         plan template; never write to `docs/superpowers/plans/`.
+      6. If a task cannot be decomposed below 5 minutes, split it in
+         `tasks.md` first and note the split in `plan.md`.
+      7. Finish by stating the total task count and the estimated
+         number of commits.
 
       IMPORTANT output redirection:
       - Do NOT write to `docs/superpowers/plans/`. Instead, write
         the plan directly to this change's `plan.md`.
 
-      The writing-plans skill will:
-      1. Read the tasks.md and design.md for context
-      2. Break each task into 2-5 minute micro-steps (TDD style)
-      3. Include exact file paths, code snippets, test commands
-      4. Add commit points after each task
-
-      Pass the tasks.md content to the skill as the input for
-      decomposition. The plan should reference the specs and
-      design artifacts in this change directory.
+      The plan MUST reference the specs and design artifacts in this
+      change directory.
     requires:
       - tasks
 
@@ -305,9 +337,22 @@ artifacts:
         completes, or never open a PR at all.
 
       If a structural prerequisite (feature branch, worktree) is
-      not met, skip the auto-executed flow below and invoke
-      `superpowers:finishing-a-development-branch` manually — see
-      "Escape hatch" at the bottom.
+      not met, skip the auto-executed flow below:
+      - If `superpowers:finishing-a-development-branch` is in your skill
+        list, invoke it (escape hatch — see the bottom).
+      - If it is NOT available, do NOT stop. Pick one SKILL FALLBACK
+        inline closeout mode and record the choice plus the commands
+        you ran in finalize.md:
+        a) keep-as-is — leave branch and worktree untouched (default
+           when unsure; ask the user first);
+        b) merge-locally — `git checkout <feature-branch>` then
+           `git merge --no-ff <change-name>`;
+        c) cleanup — do (b), then
+           `git worktree remove .worktrees/<change-name>` and
+           `git branch -d <change-name>`;
+        d) discard — `git worktree remove --force .worktrees/<change-name>`
+           then `git branch -D <change-name>` (confirm with the user
+           before discarding).
 
       Git-side closeout execution steps:
 
@@ -688,15 +733,24 @@ apply:
             apply on the detached HEAD; the worktree will still be
             created.
 
-    1. **Workspace**: Use the Skill tool to invoke
-       **superpowers:using-git-worktrees** to create an isolated
-       git worktree for this change.
+    1. **Workspace** — worktree is optional:
+       - Canonical: if `superpowers:using-git-worktrees` is available,
+         use the Skill tool to invoke it and create an isolated worktree
+         for this change.
+       - FALLBACK (skill unavailable, or the user prefers a single
+         workspace): use plain git —
+         `git worktree add .worktrees/<change-name> -b <change-name>`
+         — or skip the worktree and implement on the current branch.
+       - Either way, record the mode in apply.md as
+         `workspace: worktree | single-workspace` and the branch used.
 
-    2. **Executor** — on Claude Code, Cursor, or OpenCode, you should
-       **always use 2a**. 2b exists only as a fallback for platforms
-       without subagent support; see the 2b section for details.
+    2. **Executor** — pick the FIRST available option, in order:
+       **2a** subagent-driven-development → **2b** executing-plans →
+       **2c** inline task-by-task (always available, no skills needed).
+       Never stop just because 2a or 2b is unavailable.
 
-       **2a. Default — subagent-driven-development**:
+       **2a. Preferred — subagent-driven-development** (only when
+       `superpowers:subagent-driven-development` is in your skill list):
 
        Use the Skill tool to invoke
        **superpowers:subagent-driven-development** to execute
@@ -720,8 +774,8 @@ apply:
          runs for the entire implementation before apply
          concludes.
 
-       **2b. Fallback — executing-plans** (use ONLY when subagent
-       support is unavailable):
+       **2b. Fallback — executing-plans** (only when that skill is in
+       your skill list; otherwise go straight to 2c):
 
        The superpowers:executing-plans SKILL.md itself states:
        "If subagents are available, use superpowers:subagent-
@@ -739,6 +793,25 @@ apply:
          not enforce it)
        - Invoking **superpowers:requesting-code-review** yourself
          after completing the plan, before proceeding to step 3
+
+       **2c. SKILL FALLBACK — inline executor (always available, no
+       Superpowers skills required)**:
+
+       Use this when neither 2a nor 2b is available. For each task in
+       tasks.md, in dependency order:
+       1. Write the failing test first (RED) — pure logic only; do not
+          write DOM snapshot tests.
+       2. Implement until the test passes (GREEN), then refactor while
+          keeping it green.
+       3. Run the project's test / build / lint command and paste the
+          result into apply.md.
+       4. Tick that task's checkbox in tasks.md.
+       5. After all tasks: diff the implementation against the specs
+          (`git diff <base>...HEAD`), list any spec drift or skipped
+          state in apply.md — this inline self-review replaces
+          superpowers:requesting-code-review.
+
+       State explicitly in apply.md that mode 2c was used and why.
 
     3. **Receipt**: Write `apply.md` per `templates/apply.md`. If a
        previous `apply.md` exists in the change directory, read its
@@ -772,5 +845,7 @@ apply:
        - Iteration > 5 → stop the loop and report to the user instead
          of continuing automatically.
 
-    If any skill is unavailable, fall back to manual implementation
-    using the standard task-by-task loop from tasks.md.
+    If any skill is unavailable, fall back in this order: 2a → 2b → 2c.
+    Never halt the apply phase because a Superpowers skill is missing;
+    2c (inline task-by-task) is always available and produces the same
+    artifacts.
