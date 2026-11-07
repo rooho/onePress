@@ -14,6 +14,11 @@
 | `opencode/commands/opsx-verify.md` | harness | 全量覆盖 |
 | `opencode/skills/superpowers-tdd/SKILL.md` | harness | 全量覆盖 |
 | `qoder/skills/onepress-discipline/SKILL.md` | harness | 全量覆盖 |
+| `trae/skills/onepress-discipline/SKILL.md` | harness | 全量覆盖 |
+| `trae/commands/opsx-new.md` | harness | 全量覆盖 |
+| `trae/commands/opsx-apply.md` | harness | 全量覆盖 |
+| `trae/commands/opsx-verify.md` | harness | 全量覆盖 |
+| `cursor/skills/onepress-discipline/SKILL.md` | harness | 全量覆盖 |
 | `openspec-schema/superspec/**`（10 文件） | harness | 全量覆盖 |
 | `README-ch.md` / `README.md` | docs | 不安装（仅仓库说明，不写入目标仓库） |
 | `openspec/**`（自托管工作区） | self-host | 不安装（本方案自身的 config、CHANGE_NAMING、specs 与变更归档） |
@@ -23,6 +28,6 @@
 **安装条件（按 harness 判定，见 INSTALL_PROMPT ①）**：
 
 - `install.ps1`、`install.sh`、`INSTALL_PROMPT.md`、`ASSETS.md`、`README*.md` 属 installer / docs 层，一律不写入目标仓库；
-- `opencode/**` 仅在 `HARNESS_SET` 含 `opencode` 时写入；`qoder/**` 仅在含 `qoder` 时写入；
+- `opencode/**` 仅在 `HARNESS_SET` 含 `opencode` 时写入；`qoder/**` 仅在含 `qoder` 时写入；`trae/**` 仅在含 `trae` 时写入；`cursor/**` 仅在含 `cursor` 时写入；
 - `openspec-schema/**`、`onePress.lock`、`docs/ui-components.md` 与 harness 无关，始终处理；
 - 未选中的 harness：不创建目录、不写文件、不挂载引用；lock 中对应项记 `false`。

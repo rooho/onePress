@@ -8,7 +8,7 @@ onePress targets teams with **no dedicated designer**, where developers drive th
 2. **Delivery by vibes** → sandbox-as-production: ship a clickable UI scaffold first, verify it in 10 seconds with the floating State Bar, then wire the backend.
 3. **Quality by willpower** → second-level static gates (tsc + token purity scan + pure-logic Hook TDD + four-state check) before archive.
 
-First-class support for two harnesses: `.qoder/` and `.opencode/`. Zero runtime dependencies — any model with file read/write access can install it.
+First-class support for four harnesses: `.qoder/`, `.opencode/`, `.trae/` and `.cursor/`. Zero runtime dependencies — any model with file read/write access can install it.
 
 ---
 
@@ -18,7 +18,7 @@ First-class support for two harnesses: `.qoder/` and `.opencode/`. Zero runtime 
 |------|-------------|
 | Target repo | git initialized |
 | OpenSpec CLI | `npm install -g @fission-ai/openspec@latest` (Node 22.12+) |
-| AI assistant | Qoder / OpenCode / any agent with file and command access |
+| AI assistant | Qoder / OpenCode / Trae / Cursor / any agent with file and command access |
 
 ---
 
@@ -38,7 +38,8 @@ Clone the pack, then run the matching script **at the target repo root**:
 Common options (equivalent on both sides):
 
 ```powershell
-.\install.ps1 -Harness qoder     # Qoder only (default auto: detect .qoder/ / .opencode/)
+.\install.ps1 -Harness qoder     # Qoder only (default auto: detect .qoder/ / .opencode/ / .trae/ / .cursor/)
+.\install.ps1 -Harness trae,cursor  # Trae + Cursor only
 .\install.ps1 -Target D:\repo    # explicit target repo
 .\install.ps1 -DryRun            # print the plan, write nothing
 .\install.ps1 -Source D:\pack    # pack directory (default: the script's directory)
@@ -47,7 +48,7 @@ Common options (equivalent on both sides):
 ./install.sh --harness qoder --target ~/repo --dry-run --source ~/pack
 ```
 
-The script does six things in one go: **detect harness → layered write → align OpenSpec config → write `onePress.lock` → self-check → report**. "Align config" means: create `openspec/config.yaml` (`schema: superspec`) when missing, rewrite only that line when the value is wrong (CRLF preserved), and run `openspec init --tools qoder` automatically when `.qoder/commands/` is empty. Checks cover layout, verbatim content, all 10 schema files, `schema: superspec`, non-empty commands with reference lines, and lock/scope consistency; any failure aborts with a reason. Exit code `0` = success, `1` = failure. Nothing to verify by hand.
+The script does six things in one go: **detect harness → layered write → align OpenSpec config → write `onePress.lock` → self-check → report**. "Align config" means: create `openspec/config.yaml` (`schema: superspec`) when missing, rewrite only that line when the value is wrong (CRLF preserved), and run `openspec init --tools qoder|cursor` automatically when the corresponding `.qoder/commands/` or `.cursor/commands/` is empty; Trae commands ship with the pack, so no init is needed. Checks cover layout, verbatim content, all 10 schema files, `schema: superspec`, non-empty commands with reference lines, and lock/scope consistency; any failure aborts with a reason. Exit code `0` = success, `1` = failure. Nothing to verify by hand.
 
 > Measured: `openspec init` does **not** overwrite an existing `config.yaml`, so the order "align config → init → mount" is safe. Use `-NoInit` / `--no-init` to disable the automatic init.
 
@@ -70,8 +71,10 @@ The script detects which AI coding environment the target repo uses and **instal
 |-----------|---------------------|
 | only `.qoder/` | Qoder assets only |
 | only `.opencode/` | OpenCode assets only |
-| both present | both |
-| neither present | asks which one to use (Qoder / OpenCode / both) — **never installs both by default**; pass `-Harness` / `--harness` for unattended runs |
+| only `.trae/` | Trae assets only |
+| only `.cursor/` | Cursor assets only |
+| several present | every detected harness |
+| none present | asks which to use (Qoder / OpenCode / Trae / Cursor / all) — **never installs all by default**; pass `-Harness` / `--harness` for unattended runs |
 
 The unselected harness gets no directory created and no files written. `onePress.lock`'s `harnesses` records the actual scope (`false` for the one not installed), and upgrades only overwrite the enabled harness.
 
@@ -82,6 +85,10 @@ The unselected harness gets no directory created and no files written. `onePress
 | `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/opsx-{new,apply,verify}.md`, `skills/superpowers-tdd/` | harness | OpenCode selected |
 | `.qoder/skills/onepress-discipline/SKILL.md` | Four iron rules + TDD discipline | harness | Qoder selected |
 | `.qoder/commands/opsx/*.md` | One reference line added after frontmatter; body untouched | harness | Qoder selected |
+| `.trae/skills/onepress-discipline/SKILL.md` | Four iron rules + TDD discipline (Trae carrier) | harness | Trae selected |
+| `.trae/commands/opsx-{new,apply,verify}.md` | Trae slash commands (reference line included) | harness | Trae selected |
+| `.cursor/skills/onepress-discipline/SKILL.md` | Four iron rules + TDD discipline (Cursor carrier) | harness | Cursor selected |
+| `.cursor/commands/opsx-*.md` | One reference line added after frontmatter; body untouched | harness | Cursor selected |
 | `openspec/schemas/superspec/` | `schema.yaml` + 9 templates (10 files) | harness | always |
 | `onePress.lock` | Version, install scope, protected assets | harness | always |
 | `docs/ui-components.md` | Component registry template (empty tables on first install) | project | always |
@@ -191,21 +198,21 @@ Batch: `/opsx:bulk-archive`. Sync specs only: `/opsx:sync`.
 
 ## 3. Command reference
 
-| Command | Qoder | OpenCode | Purpose |
-|---------|:-----:|:--------:|---------|
-| `/opsx:new <name>` | ✅ | ✅ | Contract init (proposal + design + ui_contract) |
-| `/opsx:continue` | ✅ | CLI | Produce the next artifact |
-| `/opsx:ff` | ✅ | CLI | Produce all remaining artifacts |
-| `/opsx:propose` | ✅ | CLI | Full proposal in one step |
-| `/opsx:explore` | ✅ | — | Discussion only, no files |
-| `/opsx:apply` | ✅ | ✅ | Two-stage implementation |
-| `/opsx:verify` | ✅ | ✅ | Four gates |
-| `/opsx:sync` | ✅ | CLI | Sync delta specs only |
-| `/opsx:archive` | ✅ | CLI | Archive + registry append |
-| `/opsx:bulk-archive` | ✅ | CLI | Archive several changes |
+| Command | Qoder | OpenCode | Trae | Cursor | Purpose |
+|---------|:-----:|:--------:|:----:|:------:|---------|
+| `/opsx:new <name>` | ✅ | ✅ | ✅ | ✅ | Contract init (proposal + design + ui_contract) |
+| `/opsx:continue` | ✅ | CLI | CLI | ✅ | Produce the next artifact |
+| `/opsx:ff` | ✅ | CLI | CLI | ✅ | Produce all remaining artifacts |
+| `/opsx:propose` | ✅ | CLI | CLI | ✅ | Full proposal in one step |
+| `/opsx:explore` | ✅ | — | — | ✅ | Discussion only, no files |
+| `/opsx:apply` | ✅ | ✅ | ✅ | ✅ | Two-stage implementation |
+| `/opsx:verify` | ✅ | ✅ | ✅ | ✅ | Four gates |
+| `/opsx:sync` | ✅ | CLI | CLI | ✅ | Sync delta specs only |
+| `/opsx:archive` | ✅ | CLI | CLI | ✅ | Archive + registry append |
+| `/opsx:bulk-archive` | ✅ | CLI | CLI | ✅ | Archive several changes |
 
-- **Qoder**: `openspec init --tools qoder` generates the 10 commands; onePress only adds the skill and a one-line reference.
-- **OpenCode**: only `new` / `apply` / `verify` ship with this pack; use the CLI for the rest:
+- **Qoder / Cursor**: `openspec init --tools qoder|cursor` generates the 10 commands; onePress only adds the skill and a one-line reference (Cursor slash commands are `/opsx-apply`-style).
+- **OpenCode / Trae**: only `new` / `apply` / `verify` ship with this pack; Trae commands live in `.trae/commands/` (`/opsx-new`-style). Use the CLI for the rest:
 
 ```bash
 openspec status --change <name> --json          # progress and next step
@@ -245,7 +252,7 @@ Full details: `onePress/openspec/CHANGE_NAMING.md`.
 
 Upgrade = re-run the script (`.\install.ps1` / `./install.sh`) with the new pack; `onePress.lock`'s `version` decides "fresh install" vs "upgrade", and stale managed files from the older version are cleaned using the lock manifest. A missing or corrupt lock means fresh install — project-level assets stay protected.
 
-Uninstall: remove everything except `protectedAssets` from `onePress.lock` (`.opencode/`, `.qoder/skills/onepress-discipline/`, `openspec/schemas/superspec/`), keeping `docs/ui-components.md` and `openspec/changes/`.
+Uninstall: remove everything except `protectedAssets` from `onePress.lock` (`.opencode/`, `.qoder/skills/onepress-discipline/`, `.trae/skills/onepress-discipline/`, `.trae/commands/opsx-*`, `.cursor/skills/onepress-discipline/`, `openspec/schemas/superspec/`), keeping `docs/ui-components.md` and `openspec/changes/`.
 
 ---
 
@@ -266,6 +273,11 @@ onePress/
 │   ├── commands/opsx-{new,apply,verify}.md
 │   └── skills/superpowers-tdd/SKILL.md
 ├── qoder/                  # Qoder harness assets (1 file)
+│   └── skills/onepress-discipline/SKILL.md
+├── trae/                   # Trae harness assets (4 files)
+│   ├── skills/onepress-discipline/SKILL.md
+│   └── commands/opsx-{new,apply,verify}.md
+├── cursor/                 # Cursor harness assets (1 file)
 │   └── skills/onepress-discipline/SKILL.md
 ├── openspec-schema/superspec/   # Schema installed into target repos (10 files)
 └── openspec/               # This toolkit's own spec workspace (not installed)
@@ -290,25 +302,25 @@ A: Usually the sparse-checkout path does not match the real layout (cone mode si
 A: Since 1.0.4 every Superpowers skill reference in superspec carries an inline fallback (brainstorm / plan / apply 2c / finalize), so a missing skill no longer halts the flow — the agent writes `plan.md` inline. On older versions (schema version ≤ 4) just upgrade and re-install; as a stopgap, have the agent split `tasks.md` into 2–5 minute micro-steps and write `plan.md` directly.
 
 **Q: The target repo has no OpenSpec?**
-A: Install still completes, but `/opsx:*` and `ui_contract` parsing require OpenSpec. Run `openspec init --tools qoder` (or `--tools opencode`) first.
+A: Install still completes, but `/opsx:*` and `ui_contract` parsing require OpenSpec. Run `openspec init --tools qoder|cursor|opencode` first; for Trae, `openspec init --tools trae` adds the remaining OpenSpec skills.
 
-**Q: OpenCode lacks `/opsx:continue` and `/opsx:archive`?**
-A: Only three commands ship with the pack. Use `openspec status` / `openspec instructions` / `openspec archive` instead, or add your own `.opencode/commands/opsx-*.md`.
+**Q: OpenCode / Trae lacks `/opsx:continue` and `/opsx:archive`?**
+A: Only three commands ship with the pack. Use `openspec status` / `openspec instructions` / `openspec archive` instead, or add your own `.opencode/commands/opsx-*.md` / `.trae/commands/opsx-*.md`.
 
-**Q: Can I install only Qoder or only OpenCode?**
-A: Yes — that is the default. The installer detects by directory: `.qoder/` only → Qoder only, `.opencode/` only → OpenCode only, neither → it asks first. You can also state "Qoder only" in the prompt to override detection. To add the other harness later, re-run the install; only that harness is written and the existing one is untouched.
+**Q: Can I install only one harness?**
+A: Yes — that is the default. The installer detects by directory: `.qoder/` only → Qoder only, `.trae/` only → Trae only, `.cursor/` only → Cursor only, several present → every detected harness, none → it asks first. You can also pass `--harness trae,cursor`. To add another harness later, re-run the install; only that harness is written and the existing one is untouched.
 
-**Q: Should `.qoder/` and `.opencode/` be committed?**
+**Q: Should `.qoder/`, `.opencode/`, `.trae/`, `.cursor/` be committed?**
 A: No — they are local environment config. Do commit `onePress.lock` and `docs/ui-components.md`.
 
 **Q: How do I confirm the install?**
-A: Check the exit code and the report — `0` plus the closing line `onePress v<version> 安装完成（harnesses: <scope>）` means success; skipped items and check results are already listed. To double-check yourself, three spots — `onePress.lock` exists with the matching `version`; every `.qoder/commands/` file has one `onepress-discipline` reference line; `openspec/schemas/superspec/` has 10 files.
+A: Check the exit code and the report — `0` plus the closing line `onePress v<version> 安装完成（harnesses: <scope>）` means success; skipped items and check results are already listed. To double-check yourself, three spots — `onePress.lock` exists with the matching `version`; every `.qoder/commands/`, `.cursor/commands/` and `.trae/commands/` file has one `onepress-discipline` reference line; `openspec/schemas/superspec/` has 10 files.
 
 **Q: Will a re-install clobber my edits to tooling files?**
 A: No. Tracked files with uncommitted changes are reported and skipped; existing skill reference lines are skipped, and command bodies are never rewritten.
 
-**Q: Will my existing `.qoder/` be damaged?**
-A: No. onePress only adds a skill file and inserts one reference line after the frontmatter; command bodies are untouched.
+**Q: Will my existing `.qoder/` / `.cursor/` be damaged?**
+A: No. onePress only adds a skill file and inserts one reference line after the frontmatter; command bodies are untouched. Trae only adds the `onepress-discipline` skill and three `opsx-*.md` command files.
 
 ---
 

@@ -47,6 +47,30 @@ TBD - created by archiving change req-261103-001-onepress-scheme-install. Update
 
 ---
 
+### Requirement: Trae 技能与命令直出
+
+`.trae/` 集成 MUST 写入 `.trae/skills/onepress-discipline/SKILL.md`，并直出 `.trae/commands/opsx-new.md`、`opsx-apply.md`、`opsx-verify.md` 三个命令文件；命令正文 MUST 自带 `onepress-discipline` 技能引用行。Trae 命令 MUST NOT 依赖 `openspec init` 生成。
+
+#### Scenario: Trae 命令随包安装
+
+- **GIVEN** 目标仓库存在 `.trae/`
+- **WHEN** 安装器以 `trae` harness 执行
+- **THEN** `.trae/commands/` 下存在上述三个命令文件，且每个文件均含技能引用行
+
+---
+
+### Requirement: Cursor 技能挂载法
+
+`.cursor/` 集成 MUST 以新增技能 `.cursor/skills/onepress-discipline/SKILL.md` 的形式承载纪律，并通过 `.cursor/commands/` 命令文件头部引用该技能生效；MUST NOT 改写既有命令的主体内容。
+
+#### Scenario: Cursor 命令挂载技能引用
+
+- **GIVEN** 目标仓库已存在 `.cursor/commands/opsx-apply.md`
+- **WHEN** 执行 onePress 安装
+- **THEN** 该文件 frontmatter 后新增一行 `onepress-discipline` 技能引用，且命令正文其余内容保持不变
+
+---
+
 ### Requirement: superspec schema 强制注入
 
 安装器 MUST 将 `openspec/schemas/superspec/`（`schema.yaml` 与 `templates/` 下 9 个模板文件）注入目标仓库；任一文件缺失 MUST 判定安装失败并中止后续步骤。
@@ -65,12 +89,12 @@ TBD - created by archiving change req-261103-001-onepress-scheme-install. Update
 
 ---
 
-### Requirement: 双 harness 语义等价
+### Requirement: 多 harness 语义等价
 
-同一能力在 `.qoder/` 与 `.opencode/` 中的纪律内容 MUST 语义等价（步骤、红线、验收项一致），仅允许载体格式差异（frontmatter 字段、目录名）。
+同一能力在 `.qoder/`、`.opencode/`、`.trae/` 与 `.cursor/` 中的纪律内容 MUST 语义等价（步骤、红线、验收项一致），仅允许载体格式差异（frontmatter 字段、目录名）。
 
 #### Scenario: 纪律要点一致
 
-- **GIVEN** `.qoder/skills/onepress-discipline/SKILL.md` 与 `.opencode/skills/` 下对应技能
-- **WHEN** 比对二者的纪律要点（门禁项、红线条目）
+- **GIVEN** `.qoder/skills/onepress-discipline/SKILL.md`、`.trae/skills/onepress-discipline/SKILL.md`、`.cursor/skills/onepress-discipline/SKILL.md` 与 `.opencode/skills/` 下对应技能
+- **WHEN** 比对四者的纪律要点（门禁项、红线条目）
 - **THEN** 要点集合完全一致

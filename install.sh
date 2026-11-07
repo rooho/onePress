@@ -7,6 +7,7 @@
 # Run from the target repo root:
 #   ./install.sh                     # source = this script's directory (pack already cloned)
 #   ./install.sh --harness qoder     # install Qoder only (default: auto-detect)
+#   ./install.sh --harness trae,cursor  # install Trae + Cursor only
 #   ./install.sh --target ~/repo     # explicit target repo
 #   ./install.sh --dry-run           # print the plan, write nothing
 #
@@ -31,6 +32,10 @@ SCHEMA_FILES="schema.yaml templates/apply.md templates/brainstorm.md templates/d
 OPENCODE_FILES="opencode/opencode.json opencode/agent/ux-architect.md opencode/commands/opsx-new.md opencode/commands/opsx-apply.md opencode/commands/opsx-verify.md opencode/skills/superpowers-tdd/SKILL.md"
 
 QODER_FILES="qoder/skills/onepress-discipline/SKILL.md"
+
+TRAE_FILES="trae/skills/onepress-discipline/SKILL.md trae/commands/opsx-new.md trae/commands/opsx-apply.md trae/commands/opsx-verify.md"
+
+CURSOR_FILES="cursor/skills/onepress-discipline/SKILL.md"
 
 WRITTEN=""
 SKIPPED=""
@@ -71,6 +76,8 @@ test_pack_root() {
   [ -f "$path/VERSION" ] || return 1
   [ -f "$path/opencode/opencode.json" ] || return 1
   [ -f "$path/qoder/skills/onepress-discipline/SKILL.md" ] || return 1
+  [ -f "$path/trae/skills/onepress-discipline/SKILL.md" ] || return 1
+  [ -f "$path/cursor/skills/onepress-discipline/SKILL.md" ] || return 1
   [ -f "$path/openspec-schema/superspec/schema.yaml" ] || return 1
   return 0
 }
@@ -106,47 +113,76 @@ resolve_source() {
     printf '%s\n' "$TEMP_ROOT/pack/onePress"
     return 0
   fi
-  die "克隆成功但未找到模板包根（VERSION / opencode/ / qoder/ / openspec-schema/ 缺失），请核对仓库布局。"
+  die "克隆成功但未找到模板包根（VERSION / opencode/ / qoder/ / trae/ / cursor/ / openspec-schema/ 缺失），请核对仓库布局。"
 }
 
-# 输出 qoder 与 opencode 的启用状态到全局变量
+# 输出 qoder / opencode / trae / cursor 的启用状态到全局变量
 resolve_harness() {
   local choice="$1"
   local target="$2"
   local has_qoder=0
   local has_opencode=0
+  local has_trae=0
+  local has_cursor=0
 
   [ -d "$target/.qoder" ] && has_qoder=1
   [ -d "$target/.opencode" ] && has_opencode=1
+  [ -d "$target/.trae" ] && has_trae=1
+  [ -d "$target/.cursor" ] && has_cursor=1
+
+  USE_QODER=0
+  USE_OPENCODE=0
+  USE_TRAE=0
+  USE_CURSOR=0
 
   case "$choice" in
-    qoder)    USE_QODER=1; USE_OPENCODE=0 ;;
-    opencode) USE_QODER=0; USE_OPENCODE=1 ;;
+    qoder)    USE_QODER=1 ;;
+    opencode) USE_OPENCODE=1 ;;
+    trae)     USE_TRAE=1 ;;
+    cursor)   USE_CURSOR=1 ;;
     both)     USE_QODER=1; USE_OPENCODE=1 ;;
+    all)      USE_QODER=1; USE_OPENCODE=1; USE_TRAE=1; USE_CURSOR=1 ;;
     auto)
-      if [ "$has_qoder" = 1 ] && [ "$has_opencode" = 1 ]; then
-        USE_QODER=1; USE_OPENCODE=1
-      elif [ "$has_qoder" = 1 ]; then
-        USE_QODER=1; USE_OPENCODE=0
-      elif [ "$has_opencode" = 1 ]; then
-        USE_QODER=0; USE_OPENCODE=1
+      if [ "$has_qoder" = 1 ] || [ "$has_opencode" = 1 ] || [ "$has_trae" = 1 ] || [ "$has_cursor" = 1 ]; then
+        USE_QODER=$has_qoder
+        USE_OPENCODE=$has_opencode
+        USE_TRAE=$has_trae
+        USE_CURSOR=$has_cursor
       else
         if [ "$ASSUME_YES" = 1 ]; then
-          die "目标仓库既无 .qoder/ 也无 .opencode/，无法自动判定安装范围；请显式指定 --harness qoder|opencode|both。"
+          die "目标仓库未检测到 .qoder/、.opencode/、.trae/ 或 .cursor/，无法自动判定安装范围；请显式指定 --harness qoder|opencode|trae|cursor|both|all。"
         fi
-        printf '\n目标仓库未检测到 .qoder/ 或 .opencode/，请选择要安装的环境：\n' >&2
-        printf '  1) Qoder\n  2) OpenCode\n  3) 两者都装\n' >&2
-        printf '输入 1 / 2 / 3: ' >&2
+        printf '\n目标仓库未检测到受支持的 AI 编码环境，请选择要安装的环境：\n' >&2
+        printf '  1) Qoder\n  2) OpenCode\n  3) Trae\n  4) Cursor\n  5) 全部\n' >&2
+        printf '输入 1 / 2 / 3 / 4 / 5（可用逗号组合多个，如 3,4）: ' >&2
         read -r answer
-        case "$answer" in
-          1) USE_QODER=1; USE_OPENCODE=0 ;;
-          2) USE_QODER=0; USE_OPENCODE=1 ;;
-          3) USE_QODER=1; USE_OPENCODE=1 ;;
-          *) die "无效选择：$answer" ;;
-        esac
+        local token
+        for token in $(printf '%s' "$answer" | tr ',+ ' '  '); do
+          case "$token" in
+            1) USE_QODER=1 ;;
+            2) USE_OPENCODE=1 ;;
+            3) USE_TRAE=1 ;;
+            4) USE_CURSOR=1 ;;
+            5) USE_QODER=1; USE_OPENCODE=1; USE_TRAE=1; USE_CURSOR=1 ;;
+            *) die "无效选择：$answer" ;;
+          esac
+        done
+        [ "$USE_QODER$USE_OPENCODE$USE_TRAE$USE_CURSOR" != "0000" ] || die "无效选择：$answer"
       fi
       ;;
-    *) die "无效 --harness：$choice（可选 auto|qoder|opencode|both）" ;;
+    *)
+      local item
+      for item in $(printf '%s' "$choice" | tr ',+ ' '  '); do
+        case "$item" in
+          qoder)    USE_QODER=1 ;;
+          opencode) USE_OPENCODE=1 ;;
+          trae)     USE_TRAE=1 ;;
+          cursor)   USE_CURSOR=1 ;;
+          *) die "无效 --harness：$choice（可选 auto|qoder|opencode|trae|cursor|both|all，或用逗号组合）" ;;
+        esac
+      done
+      [ "$USE_QODER$USE_OPENCODE$USE_TRAE$USE_CURSOR" != "0000" ] || die "无效 --harness：$choice"
+      ;;
   esac
 }
 
@@ -227,12 +263,13 @@ copy_file() {
   ok "$dst_rel"
 }
 
-mount_qoder_reference() {
+mount_skill_reference() {
   local target="$1"
-  local cmd_dir="$target/.qoder/commands"
+  local harness_dir="$2"
+  local cmd_dir="$target/$harness_dir/commands"
 
   if [ ! -d "$cmd_dir" ]; then
-    skip '.qoder/commands/ 不存在，跳过技能挂载（不新建命令文件）'
+    skip "$harness_dir/commands/ 不存在，跳过技能挂载（不新建命令文件）"
     return 0
   fi
 
@@ -304,7 +341,7 @@ mount_qoder_reference() {
     ok "$rel（+1 行技能引用）"
   done < <(find "$cmd_dir" -type f -name '*.md' | sort)
 
-  [ "$found" = 1 ] || skip '.qoder/commands/ 下没有命令文件，跳过技能挂载'
+  [ "$found" = 1 ] || skip "$harness_dir/commands/ 下没有命令文件，跳过技能挂载"
 }
 
 init_ui_components() {
@@ -411,42 +448,44 @@ CFG_EOF
   info "openspec/config.yaml schema: $current → superspec（保留原换行与其余字段）"
 }
 
-init_qoder_commands() {
+init_harness_commands() {
   local target="$1"
-  local cmd_dir="$target/.qoder/commands"
+  local harness_dir="$2"
+  local tool="$3"
+  local cmd_dir="$target/$harness_dir/commands"
   local count=0
 
   if [ -d "$cmd_dir" ]; then
     count="$(find "$cmd_dir" -type f -name '*.md' | wc -l | tr -d ' ')"
   fi
   if [ "$count" -gt 0 ]; then
-    info ".qoder/commands/ 已有 $count 个命令文件 ... OK"
+    info "$harness_dir/commands/ 已有 $count 个命令文件 ... OK"
     return 0
   fi
 
   if [ "$NO_INIT" = 1 ]; then
-    warn '.qoder/commands/ 为空且指定了 --no-init：技能将"存在但永不加载"，需手动 openspec init 后重跑'
+    warn "$harness_dir/commands/ 为空且指定了 --no-init：技能将\"存在但永不加载\"，需手动 openspec init 后重跑"
     return 0
   fi
 
   if ! command -v openspec >/dev/null 2>&1; then
-    warn '.qoder/commands/ 为空且未检测到 openspec CLI：技能将"存在但永不加载"。请先安装 OpenSpec CLI 并执行 openspec init --tools qoder 后重跑本脚本'
+    warn "$harness_dir/commands/ 为空且未检测到 openspec CLI：技能将\"存在但永不加载\"。请先安装 OpenSpec CLI 并执行 openspec init --tools $tool 后重跑本脚本"
     return 0
   fi
 
   if [ "$DRY_RUN" = 1 ]; then
-    info 'would run: openspec init --tools qoder --no-animation'
+    info "would run: openspec init --tools $tool --no-animation"
     return 0
   fi
 
   local out
-  if ! out="$(cd "$target" && openspec init --tools qoder --no-animation 2>&1)"; then
+  if ! out="$(cd "$target" && openspec init --tools "$tool" --no-animation 2>&1)"; then
     warn "openspec init 失败：$(printf '%s' "$out" | tail -n 3)"
     return 0
   fi
 
   count="$(find "$cmd_dir" -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
-  info "openspec init 生成 $count 个 .qoder/commands 命令（config.yaml 已存在，未被 init 覆盖）"
+  info "openspec init 生成 $count 个 $harness_dir/commands 命令（config.yaml 已存在，未被 init 覆盖）"
 }
 
 lock_files() {
@@ -483,6 +522,16 @@ build_will_write() {
       WILL_WRITE="$WILL_WRITE.qoder/${rel#qoder/}"$'\n'
     done
   fi
+  if [ "$USE_TRAE" = 1 ]; then
+    for rel in $TRAE_FILES; do
+      WILL_WRITE="$WILL_WRITE.trae/${rel#trae/}"$'\n'
+    done
+  fi
+  if [ "$USE_CURSOR" = 1 ]; then
+    for rel in $CURSOR_FILES; do
+      WILL_WRITE="$WILL_WRITE.cursor/${rel#cursor/}"$'\n'
+    done
+  fi
   WILL_WRITE="$WILL_WRITE""docs/ui-components.md"$'\n'
 }
 
@@ -498,6 +547,8 @@ remove_stale_files() {
     case "$rel" in
       .opencode/*) [ "$USE_OPENCODE" = 1 ] || continue ;;
       .qoder/*)    [ "$USE_QODER" = 1 ] || continue ;;
+      .trae/*)     [ "$USE_TRAE" = 1 ] || continue ;;
+      .cursor/*)   [ "$USE_CURSOR" = 1 ] || continue ;;
       docs/*|openspec/changes/*) continue ;;
     esac
     [ -f "$target/$rel" ] || continue
@@ -517,10 +568,12 @@ remove_stale_files() {
 write_lock() {
   local target="$1"
   local version="$2"
-  local qoder_bool opencode_bool files_json
+  local qoder_bool opencode_bool trae_bool cursor_bool files_json
 
   [ "$USE_QODER" = 1 ] && qoder_bool="true" || qoder_bool="false"
   [ "$USE_OPENCODE" = 1 ] && opencode_bool="true" || opencode_bool="false"
+  [ "$USE_TRAE" = 1 ] && trae_bool="true" || trae_bool="false"
+  [ "$USE_CURSOR" = 1 ] && cursor_bool="true" || cursor_bool="false"
 
   files_json="$(printf '%s' "$WRITTEN" | grep -v '(+1 line)' | grep -v '^$' | sed 's/.*/    "&",/' | sed '$ s/,$//')"
 
@@ -535,7 +588,9 @@ write_lock() {
   "installedAt": "$(date -u +%Y-%m-%dT%H:%M:%SZ)",
   "harnesses": {
     "qoder": $qoder_bool,
-    "opencode": $opencode_bool
+    "opencode": $opencode_bool,
+    "trae": $trae_bool,
+    "cursor": $cursor_bool
   },
   "protectedAssets": [
     "docs/ui-components.md",
@@ -547,6 +602,46 @@ $files_json
 }
 LOCK_EOF
   ok 'onePress.lock'
+}
+
+# 验收以技能 + 命令引用为载体的 harness（qoder / trae / cursor）
+accept_skill_harness() {
+  local pack="$1"
+  local target="$2"
+  local harness_dir="$3"
+  local tool="$4"
+  local files="$5"
+  local rel dst_rel file frel kw cmd_count
+
+  for rel in $files; do
+    dst_rel="$harness_dir/${rel#$tool/}"
+    if in_list "$dst_rel" "$PROTECTED"; then
+      skip "$dst_rel（受保护跳过，不计入失败）"
+      continue
+    fi
+    [ -f "$target/$dst_rel" ] || bad "缺失目标文件：$dst_rel"
+    cmp -s "$pack/$rel" "$target/$dst_rel" || bad "内容不一致：$dst_rel"
+  done
+
+  if [ -f "$target/$harness_dir/skills/onepress-discipline/SKILL.md" ]; then
+    for kw in ui_contract Token 四态 无障碍 防呆; do
+      grep -q "$kw" "$target/$harness_dir/skills/onepress-discipline/SKILL.md" || bad "$harness_dir/skills/onepress-discipline/SKILL.md 缺少铁律关键词：$kw"
+    done
+  fi
+
+  if [ -d "$target/$harness_dir/commands" ]; then
+    cmd_count="$(find "$target/$harness_dir/commands" -type f -name '*.md' | wc -l | tr -d ' ')"
+    [ "$cmd_count" -gt 0 ] || bad "$harness_dir/commands/ 为空：/opsx:* 命令不可用（技能存在但无挂载点）"
+    while IFS= read -r file; do
+      [ -n "$file" ] || continue
+      frel="${file#"$target"/}"
+      if in_list "$frel" "$MOUNT_SKIPPED"; then
+        skip "$frel（无 frontmatter，挂载跳过，不计入失败）"
+        continue
+      fi
+      grep -q 'onepress-discipline' "$file" || bad "未挂载技能引用：$frel"
+    done < <(find "$target/$harness_dir/commands" -type f -name '*.md')
+  fi
 }
 
 run_acceptance() {
@@ -604,35 +699,15 @@ run_acceptance() {
   fi
 
   if [ "$USE_QODER" = 1 ]; then
-    for rel in $QODER_FILES; do
-      dst_rel=".qoder/${rel#qoder/}"
-      if in_list "$dst_rel" "$PROTECTED"; then
-        skip "$dst_rel（受保护跳过，不计入失败）"
-        continue
-      fi
-      [ -f "$target/$dst_rel" ] || bad "缺失目标文件：$dst_rel"
-      cmp -s "$pack/$rel" "$target/$dst_rel" || bad "内容不一致：$dst_rel"
-    done
-    if [ -d "$target/.qoder/commands" ]; then
-      local file cmd_count
-      cmd_count="$(find "$target/.qoder/commands" -type f -name '*.md' | wc -l | tr -d ' ')"
-      [ "$cmd_count" -gt 0 ] || bad '.qoder/commands/ 为空：/opsx:* 命令不可用（技能存在但无挂载点）'
-      while IFS= read -r file; do
-        [ -n "$file" ] || continue
-        frel="${file#"$target"/}"
-        if in_list "$frel" "$MOUNT_SKIPPED"; then
-          skip "$frel（无 frontmatter，挂载跳过，不计入失败）"
-          continue
-        fi
-        grep -q 'onepress-discipline' "$file" || bad "未挂载技能引用：$frel"
-      done < <(find "$target/.qoder/commands" -type f -name '*.md')
-    fi
-    if [ -f "$target/.qoder/skills/onepress-discipline/SKILL.md" ]; then
-      local kw
-      for kw in ui_contract Token 四态 无障碍 防呆; do
-        grep -q "$kw" "$target/.qoder/skills/onepress-discipline/SKILL.md" || bad "SKILL.md 缺少铁律关键词：$kw"
-      done
-    fi
+    accept_skill_harness "$pack" "$target" .qoder qoder "$QODER_FILES"
+  fi
+
+  if [ "$USE_TRAE" = 1 ]; then
+    accept_skill_harness "$pack" "$target" .trae trae "$TRAE_FILES"
+  fi
+
+  if [ "$USE_CURSOR" = 1 ]; then
+    accept_skill_harness "$pack" "$target" .cursor cursor "$CURSOR_FILES"
   fi
 
   if [ -f "$target/openspec/config.yaml" ]; then
@@ -691,6 +766,8 @@ resolve_harness "$HARNESS" "$TARGET_ROOT"
 SCOPE=""
 [ "$USE_QODER" = 1 ] && SCOPE="qoder"
 [ "$USE_OPENCODE" = 1 ] && SCOPE="${SCOPE:+$SCOPE+}opencode"
+[ "$USE_TRAE" = 1 ] && SCOPE="${SCOPE:+$SCOPE+}trae"
+[ "$USE_CURSOR" = 1 ] && SCOPE="${SCOPE:+$SCOPE+}cursor"
 printf '   [OK]   安装范围 harnesses：%s\n' "$SCOPE"
 
 LOCK="$TARGET_ROOT/onePress.lock"
@@ -739,13 +816,30 @@ if [ "$USE_QODER" = 1 ]; then
   done
 fi
 
+if [ "$USE_TRAE" = 1 ]; then
+  for rel in $TRAE_FILES; do
+    copy_file "$PACK_ROOT" "$TARGET_ROOT" "$rel" ".trae/${rel#trae/}"
+  done
+fi
+
+if [ "$USE_CURSOR" = 1 ]; then
+  for rel in $CURSOR_FILES; do
+    copy_file "$PACK_ROOT" "$TARGET_ROOT" "$rel" ".cursor/${rel#cursor/}"
+  done
+fi
+
 init_ui_components "$TARGET_ROOT"
 
 confirm_openspec_schema "$TARGET_ROOT"
 
 if [ "$USE_QODER" = 1 ]; then
-  init_qoder_commands "$TARGET_ROOT"
-  mount_qoder_reference "$TARGET_ROOT"
+  init_harness_commands "$TARGET_ROOT" .qoder qoder
+  mount_skill_reference "$TARGET_ROOT" .qoder
+fi
+
+if [ "$USE_CURSOR" = 1 ]; then
+  init_harness_commands "$TARGET_ROOT" .cursor cursor
+  mount_skill_reference "$TARGET_ROOT" .cursor
 fi
 
 step '③ 写入 onePress.lock'

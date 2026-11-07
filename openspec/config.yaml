@@ -4,7 +4,7 @@ schema: superspec
 context: |
   rules:
     proposal:
-      - 注明涉及的 harness（.qoder / .opencode）与资产归属层级（harness 级 / 项目级）
+      - 注明涉及的 harness（.qoder / .opencode / .trae / .cursor）与资产归属层级（harness 级 / 项目级）
       - 注明受影响的安装场景（全新安装 / 升级 / 回滚）
       - 引用相关设计文档章节
   specs:

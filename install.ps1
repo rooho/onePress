@@ -10,6 +10,7 @@
     在目标仓库根目录执行：
         .\install.ps1                        # 源 = 本脚本所在目录（已克隆模板包）
         .\install.ps1 -Harness qoder         # 只装 Qoder（auto 为默认，按目录探测）
+        .\install.ps1 -Harness trae,cursor   # 只装 Trae + Cursor
         .\install.ps1 -Target D:\repo        # 指定目标仓库（默认当前目录）
         .\install.ps1 -DryRun                # 只打印计划，不落盘
 
@@ -17,7 +18,7 @@
         .\install.ps1 -Source '' -Repo https://github.com/rooho/onePress.git -Ref main
 
 .PARAMETER Harness
-    auto（默认，按 .qoder/ 与 .opencode/ 探测）/ qoder / opencode / both。
+    auto（默认，按 .qoder/ .opencode/ .trae/ .cursor/ 探测）/ qoder / opencode / trae / cursor / both / all，或用逗号组合多个。
 
 .PARAMETER Source
     模板包根目录。留空则先取本脚本所在目录，再回退到浅克隆。
@@ -33,7 +34,6 @@
 #>
 [CmdletBinding()]
 param(
-    [ValidateSet('auto', 'qoder', 'opencode', 'both')]
     [string]$Harness = 'auto',
 
     [string]$Source = '',
@@ -88,6 +88,17 @@ $script:OpenCodeFiles = @(
 
 $script:QoderFiles = @(
     'qoder/skills/onepress-discipline/SKILL.md'
+)
+
+$script:TraeFiles = @(
+    'trae/skills/onepress-discipline/SKILL.md',
+    'trae/commands/opsx-new.md',
+    'trae/commands/opsx-apply.md',
+    'trae/commands/opsx-verify.md'
+)
+
+$script:CursorFiles = @(
+    'cursor/skills/onepress-discipline/SKILL.md'
 )
 
 $script:OpenSpecConfigTemplate = @'
@@ -184,7 +195,7 @@ function Convert-ToRel {
 function Test-PackRoot {
     param([string]$Path)
     if ([string]::IsNullOrWhiteSpace($Path)) { return $false }
-    foreach ($rel in @('VERSION', 'opencode/opencode.json', 'qoder/skills/onepress-discipline/SKILL.md', 'openspec-schema/superspec/schema.yaml')) {
+    foreach ($rel in @('VERSION', 'opencode/opencode.json', 'qoder/skills/onepress-discipline/SKILL.md', 'trae/skills/onepress-discipline/SKILL.md', 'cursor/skills/onepress-discipline/SKILL.md', 'openspec-schema/superspec/schema.yaml')) {
         if (-not (Test-Path -LiteralPath (Join-Rel $Path $rel))) { return $false }
     }
     return $true
@@ -210,7 +221,7 @@ function Resolve-PackSource {
     if (Test-PackRoot $tmp) { return $tmp }
     $sub = Join-Path $tmp 'onePress'
     if (Test-PackRoot $sub) { return $sub }
-    Stop-Install '克隆成功但未找到模板包根（VERSION / opencode/ / qoder/ / openspec-schema/ 缺失），请核对仓库布局。'
+    Stop-Install '克隆成功但未找到模板包根（VERSION / opencode/ / qoder/ / trae/ / cursor/ / openspec-schema/ 缺失），请核对仓库布局。'
 }
 
 function Resolve-Harness {
@@ -218,34 +229,75 @@ function Resolve-Harness {
 
     $hasQoder = Test-Path -LiteralPath (Join-Path $TargetRoot '.qoder')
     $hasOpenCode = Test-Path -LiteralPath (Join-Path $TargetRoot '.opencode')
+    $hasTrae = Test-Path -LiteralPath (Join-Path $TargetRoot '.trae')
+    $hasCursor = Test-Path -LiteralPath (Join-Path $TargetRoot '.cursor')
 
-    $set = $null
+    $set = @{ qoder = $false; opencode = $false; trae = $false; cursor = $false }
+
     switch ($Choice) {
-        'qoder' { $set = @{ qoder = $true; opencode = $false } }
-        'opencode' { $set = @{ qoder = $false; opencode = $true } }
-        'both' { $set = @{ qoder = $true; opencode = $true } }
+        'qoder' { $set.qoder = $true }
+        'opencode' { $set.opencode = $true }
+        'trae' { $set.trae = $true }
+        'cursor' { $set.cursor = $true }
+        'both' { $set.qoder = $true; $set.opencode = $true }
+        'all' { $set.qoder = $true; $set.opencode = $true; $set.trae = $true; $set.cursor = $true }
+        'auto' {
+            if ($hasQoder -or $hasOpenCode -or $hasTrae -or $hasCursor) {
+                $set.qoder = $hasQoder
+                $set.opencode = $hasOpenCode
+                $set.trae = $hasTrae
+                $set.cursor = $hasCursor
+            } else {
+                $set = $null
+            }
+        }
         default {
-            if ($hasQoder -and $hasOpenCode) { $set = @{ qoder = $true; opencode = $true } }
-            elseif ($hasQoder) { $set = @{ qoder = $true; opencode = $false } }
-            elseif ($hasOpenCode) { $set = @{ qoder = $false; opencode = $true } }
+            $tokens = @($Choice -split '[,+]' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+            if ($tokens.Count -eq 0) {
+                Stop-Install "无效 -Harness：$Choice（可选 auto|qoder|opencode|trae|cursor|both|all，或用逗号组合）"
+            }
+            $any = $false
+            foreach ($token in $tokens) {
+                switch ($token) {
+                    'qoder' { $set.qoder = $true; $any = $true }
+                    'opencode' { $set.opencode = $true; $any = $true }
+                    'trae' { $set.trae = $true; $any = $true }
+                    'cursor' { $set.cursor = $true; $any = $true }
+                    default { Stop-Install "无效 -Harness：$Choice（可选 auto|qoder|opencode|trae|cursor|both|all，或用逗号组合）" }
+                }
+            }
+            if (-not $any) {
+                Stop-Install "无效 -Harness：$Choice（可选 auto|qoder|opencode|trae|cursor|both|all，或用逗号组合）"
+            }
         }
     }
 
     if (-not $set) {
         if ($AssumeYes) {
-            Stop-Install '目标仓库既无 .qoder/ 也无 .opencode/，无法自动判定安装范围；请显式指定 -Harness qoder|opencode|both。'
+            Stop-Install '目标仓库未检测到 .qoder/、.opencode/、.trae/ 或 .cursor/，无法自动判定安装范围；请显式指定 -Harness qoder|opencode|trae|cursor|both|all。'
         }
         Write-Host ''
-        Write-Host '目标仓库未检测到 .qoder/ 或 .opencode/，请选择要安装的环境：' -ForegroundColor Yellow
+        Write-Host '目标仓库未检测到受支持的 AI 编码环境，请选择要安装的环境：' -ForegroundColor Yellow
         Write-Host '  1) Qoder'
         Write-Host '  2) OpenCode'
-        Write-Host '  3) 两者都装'
-        $answer = Read-Host '输入 1 / 2 / 3'
-        $set = switch ($answer.Trim()) {
-            '1' { @{ qoder = $true; opencode = $false } }
-            '2' { @{ qoder = $false; opencode = $true } }
-            '3' { @{ qoder = $true; opencode = $true } }
-            default { Stop-Install "无效选择：$answer" }
+        Write-Host '  3) Trae'
+        Write-Host '  4) Cursor'
+        Write-Host '  5) 全部'
+        $answer = Read-Host '输入 1 / 2 / 3 / 4 / 5（可用逗号组合多个，如 3,4）'
+        $set = @{ qoder = $false; opencode = $false; trae = $false; cursor = $false }
+        $tokens = @($answer -split '[,+ ]' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+        foreach ($token in $tokens) {
+            switch ($token) {
+                '1' { $set.qoder = $true }
+                '2' { $set.opencode = $true }
+                '3' { $set.trae = $true }
+                '4' { $set.cursor = $true }
+                '5' { $set.qoder = $true; $set.opencode = $true; $set.trae = $true; $set.cursor = $true }
+                default { Stop-Install "无效选择：$answer" }
+            }
+        }
+        if (-not ($set.qoder -or $set.opencode -or $set.trae -or $set.cursor)) {
+            Stop-Install "无效选择：$answer"
         }
     }
 
@@ -306,6 +358,20 @@ function Get-BuildPlan {
         }
     }
 
+    if ($HarnessSet.trae) {
+        foreach ($file in $script:TraeFiles) {
+            $dest = $file -replace '^trae/', '.trae/'
+            [void]$plan.Add([pscustomobject]@{ Source = $file; Target = $dest; Layer = 'harness(trae)' })
+        }
+    }
+
+    if ($HarnessSet.cursor) {
+        foreach ($file in $script:CursorFiles) {
+            $dest = $file -replace '^cursor/', '.cursor/'
+            [void]$plan.Add([pscustomobject]@{ Source = $file; Target = $dest; Layer = 'harness(cursor)' })
+        }
+    }
+
     return $plan
 }
 
@@ -356,18 +422,18 @@ function Copy-PackFile {
     [void]$script:Written.Add($Item.Target)
 }
 
-function Mount-QoderReference {
-    param([string]$TargetRoot, [hashtable]$GitStatus)
+function Mount-SkillReference {
+    param([string]$TargetRoot, [string]$HarnessDir, [hashtable]$GitStatus)
 
-    $cmdDir = Join-Path $TargetRoot '.qoder\commands'
+    $cmdDir = Join-Path (Join-Path $TargetRoot $HarnessDir) 'commands'
     if (-not (Test-Path -LiteralPath $cmdDir)) {
-        Write-Skip '.qoder/commands/ 不存在，跳过技能挂载（不新建命令文件）'
+        Write-Skip "$HarnessDir/commands/ 不存在，跳过技能挂载（不新建命令文件）"
         return
     }
 
     $files = Get-ChildItem -LiteralPath $cmdDir -Recurse -File -Filter '*.md'
     if (-not $files) {
-        Write-Skip '.qoder/commands/ 下没有命令文件，跳过技能挂载'
+        Write-Skip "$HarnessDir/commands/ 下没有命令文件，跳过技能挂载"
         return
     }
 
@@ -456,32 +522,32 @@ function Confirm-OpenSpecSchema {
     Write-Ok "openspec/config.yaml schema: $current → superspec（保留原换行与其余字段）"
 }
 
-function Initialize-QoderCommands {
-    param([string]$TargetRoot)
+function Initialize-HarnessCommands {
+    param([string]$TargetRoot, [string]$HarnessDir, [string]$Tool)
 
-    $cmdDir = Join-Path $TargetRoot '.qoder\commands'
+    $cmdDir = Join-Path (Join-Path $TargetRoot $HarnessDir) 'commands'
     $existing = @()
     if (Test-Path -LiteralPath $cmdDir) {
         $existing = @(Get-ChildItem -LiteralPath $cmdDir -Recurse -File -Filter '*.md' -ErrorAction SilentlyContinue)
     }
 
     if ($existing.Count -gt 0) {
-        Write-Ok ".qoder/commands/ 已有 $($existing.Count) 个命令文件"
+        Write-Ok "$HarnessDir/commands/ 已有 $($existing.Count) 个命令文件"
         return
     }
 
     if ($NoInit) {
-        Write-Warn '.qoder/commands/ 为空且指定了 -NoInit：技能将"存在但永不加载"，需手动 openspec init 后重跑'
+        Write-Warn "$HarnessDir/commands/ 为空且指定了 -NoInit：技能将`"存在但永不加载`"，需手动 openspec init 后重跑"
         return
     }
 
     if (-not (Get-Command openspec -CommandType Application -ErrorAction SilentlyContinue)) {
-        Write-Warn '.qoder/commands/ 为空且未检测到 openspec CLI：技能将"存在但永不加载"。请先安装 OpenSpec CLI 并执行 openspec init --tools qoder 后重跑本脚本'
+        Write-Warn "$HarnessDir/commands/ 为空且未检测到 openspec CLI：技能将`"存在但永不加载`"。请先安装 OpenSpec CLI 并执行 openspec init --tools $Tool 后重跑本脚本"
         return
     }
 
     if ($DryRun) {
-        Write-Info 'would run: openspec init --tools qoder --no-animation'
+        Write-Info "would run: openspec init --tools $Tool --no-animation"
         return
     }
 
@@ -491,7 +557,7 @@ function Initialize-QoderCommands {
     $ErrorActionPreference = 'Continue'
     try {
         # openspec 会把 node 警告写到 stderr；在 Stop 策略下会被当成终止错误，故整体重定向到文件
-        & openspec init --tools qoder --no-animation *> $logPath
+        & openspec init --tools $Tool --no-animation *> $logPath
         $code = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previousEap
@@ -511,7 +577,7 @@ function Initialize-QoderCommands {
     }
 
     $created = @(Get-ChildItem -LiteralPath $cmdDir -Recurse -File -Filter '*.md' -ErrorAction SilentlyContinue)
-    Write-Ok "openspec init 生成 $($created.Count) 个 .qoder/commands 命令（config.yaml 已存在，未被 init 覆盖）"
+    Write-Ok "openspec init 生成 $($created.Count) 个 $HarnessDir/commands 命令（config.yaml 已存在，未被 init 覆盖）"
 }
 
 function Initialize-UiComponents {
@@ -572,8 +638,12 @@ function Remove-StaleFiles {
 
         $isOpenCode = $text -like '.opencode/*'
         $isQoder = $text -like '.qoder/*'
+        $isTrae = $text -like '.trae/*'
+        $isCursor = $text -like '.cursor/*'
         if ($isOpenCode -and -not $HarnessSet.opencode) { continue }
         if ($isQoder -and -not $HarnessSet.qoder) { continue }
+        if ($isTrae -and -not $HarnessSet.trae) { continue }
+        if ($isCursor -and -not $HarnessSet.cursor) { continue }
         if ($text -like 'docs/*' -or $text -like 'openspec/changes/*') { continue }
 
         $path = Join-Rel $TargetRoot $text
@@ -599,7 +669,12 @@ function Write-LockFile {
     $lock = [ordered]@{
         version         = $Version
         installedAt     = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
-        harnesses       = [ordered]@{ qoder = [bool]$HarnessSet.qoder; opencode = [bool]$HarnessSet.opencode }
+        harnesses       = [ordered]@{
+            qoder    = [bool]$HarnessSet.qoder
+            opencode = [bool]$HarnessSet.opencode
+            trae     = [bool]$HarnessSet.trae
+            cursor   = [bool]$HarnessSet.cursor
+        }
         protectedAssets = @('docs/ui-components.md', 'openspec/changes/')
         files           = @($script:Written | Where-Object { $_ -notlike '*(+1 line)*' -and $_ -ne 'onePress.lock' })
     }
@@ -613,6 +688,35 @@ function Write-LockFile {
 
     [System.IO.File]::WriteAllText((Join-Path $TargetRoot 'onePress.lock'), $json, $script:Utf8NoBom)
     Write-Ok 'onePress.lock'
+}
+
+function Test-SkillHarness {
+    param([string]$TargetRoot, [string]$HarnessDir)
+
+    $cmdDir = Join-Path (Join-Path $TargetRoot $HarnessDir) 'commands'
+    if (Test-Path -LiteralPath $cmdDir) {
+        $cmdFiles = @(Get-ChildItem -LiteralPath $cmdDir -Recurse -File -Filter '*.md')
+        if ($cmdFiles.Count -eq 0) {
+            Write-Fail "$HarnessDir/commands/ 为空：/opsx:* 命令不可用（技能存在但无挂载点）"
+        }
+        foreach ($file in $cmdFiles) {
+            $rel = Convert-ToRel -Root $TargetRoot -FullPath $file.FullName
+            if ($script:MountSkipped.ContainsKey($rel)) {
+                Write-Skip "$rel（无 frontmatter，挂载跳过，不计入失败）"
+                continue
+            }
+            $text = [System.IO.File]::ReadAllText($file.FullName, $script:Utf8NoBom)
+            if ($text -notmatch 'onepress-discipline') { Write-Fail "未挂载技能引用：$rel" }
+        }
+    }
+
+    $skill = Join-Rel $TargetRoot "$HarnessDir/skills/onepress-discipline/SKILL.md"
+    if (Test-Path -LiteralPath $skill) {
+        $skillText = [System.IO.File]::ReadAllText($skill, $script:Utf8NoBom)
+        foreach ($rule in @('ui_contract', 'Token', '四态', '无障碍', '防呆')) {
+            if ($skillText -notmatch $rule) { Write-Fail "$HarnessDir/skills/onepress-discipline/SKILL.md 缺少铁律关键词：$rule" }
+        }
+    }
 }
 
 function Test-Acceptance {
@@ -656,31 +760,9 @@ function Test-Acceptance {
         if ($srcHash -ne $dstHash) { Write-Fail "内容不一致：$($item.Target)" }
     }
 
-    if ($HarnessSet.qoder) {
-        $cmdDir = Join-Path $TargetRoot '.qoder\commands'
-        if (Test-Path -LiteralPath $cmdDir) {
-            $cmdFiles = @(Get-ChildItem -LiteralPath $cmdDir -Recurse -File -Filter '*.md')
-            if ($cmdFiles.Count -eq 0) {
-                Write-Fail '.qoder/commands/ 为空：/opsx:* 命令不可用（技能存在但无挂载点）'
-            }
-            foreach ($file in $cmdFiles) {
-                $rel = Convert-ToRel -Root $TargetRoot -FullPath $file.FullName
-                if ($script:MountSkipped.ContainsKey($rel)) {
-                    Write-Skip "$rel（无 frontmatter，挂载跳过，不计入失败）"
-                    continue
-                }
-                $text = [System.IO.File]::ReadAllText($file.FullName, $script:Utf8NoBom)
-                if ($text -notmatch 'onepress-discipline') { Write-Fail "未挂载技能引用：$rel" }
-            }
-        }
-        $skill = Join-Rel $TargetRoot '.qoder/skills/onepress-discipline/SKILL.md'
-        if (Test-Path -LiteralPath $skill) {
-            $skillText = [System.IO.File]::ReadAllText($skill, $script:Utf8NoBom)
-            foreach ($rule in @('ui_contract', 'Token', '四态', '无障碍', '防呆')) {
-                if ($skillText -notmatch $rule) { Write-Fail "SKILL.md 缺少铁律关键词：$rule" }
-            }
-        }
-    }
+    if ($HarnessSet.qoder) { Test-SkillHarness -TargetRoot $TargetRoot -HarnessDir '.qoder' }
+    if ($HarnessSet.trae) { Test-SkillHarness -TargetRoot $TargetRoot -HarnessDir '.trae' }
+    if ($HarnessSet.cursor) { Test-SkillHarness -TargetRoot $TargetRoot -HarnessDir '.cursor' }
 
     if ($HarnessSet.opencode) {
         $json = Join-Rel $TargetRoot '.opencode/opencode.json'
@@ -709,6 +791,8 @@ function Test-Acceptance {
             if ($lock.version -ne $Version) { Write-Fail "lock version 应为 $Version，实际 $($lock.version)" }
             if ([bool]$lock.harnesses.qoder -ne [bool]$HarnessSet.qoder) { Write-Fail 'lock.harnesses.qoder 与安装范围不一致' }
             if ([bool]$lock.harnesses.opencode -ne [bool]$HarnessSet.opencode) { Write-Fail 'lock.harnesses.opencode 与安装范围不一致' }
+            if ([bool]$lock.harnesses.trae -ne [bool]$HarnessSet.trae) { Write-Fail 'lock.harnesses.trae 与安装范围不一致' }
+            if ([bool]$lock.harnesses.cursor -ne [bool]$HarnessSet.cursor) { Write-Fail 'lock.harnesses.cursor 与安装范围不一致' }
         } catch {
             Write-Fail 'onePress.lock 无法解析'
         }
@@ -738,7 +822,7 @@ Write-Info "模板包：$packRoot（v$version）"
 Write-Info "目标仓库：$targetRoot"
 
 $harnessSet = Resolve-Harness -Choice $Harness -TargetRoot $targetRoot -AssumeYes:$Yes
-$scope = (@('qoder', 'opencode') | Where-Object { $harnessSet[$_] }) -join '+'
+$scope = (@('qoder', 'opencode', 'trae', 'cursor') | Where-Object { $harnessSet[$_] }) -join '+'
 Write-Ok "安装范围 harnesses：$scope"
 
 $oldLock = Read-Lock -TargetRoot $targetRoot
@@ -777,8 +861,13 @@ Initialize-UiComponents -TargetRoot $targetRoot
 Confirm-OpenSpecSchema -TargetRoot $targetRoot
 
 if ($harnessSet.qoder) {
-    Initialize-QoderCommands -TargetRoot $targetRoot
-    Mount-QoderReference -TargetRoot $targetRoot -GitStatus $gitStatus
+    Initialize-HarnessCommands -TargetRoot $targetRoot -HarnessDir '.qoder' -Tool 'qoder'
+    Mount-SkillReference -TargetRoot $targetRoot -HarnessDir '.qoder' -GitStatus $gitStatus
+}
+
+if ($harnessSet.cursor) {
+    Initialize-HarnessCommands -TargetRoot $targetRoot -HarnessDir '.cursor' -Tool 'cursor'
+    Mount-SkillReference -TargetRoot $targetRoot -HarnessDir '.cursor' -GitStatus $gitStatus
 }
 
 Write-Step '③ 写入 onePress.lock'

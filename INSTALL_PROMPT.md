@@ -8,11 +8,11 @@
 
 ```powershell
 # Windows
-<pack-root>\install.ps1 -Target <target-repo-root> -Harness <qoder|opencode|both>
+<pack-root>\install.ps1 -Target <target-repo-root> -Harness <qoder|opencode|trae|cursor|both|all|逗号组合>
 ```
 ```bash
 # macOS / Linux
-<pack-root>/install.sh --target <target-repo-root> --harness <qoder|opencode|both>
+<pack-root>/install.sh --target <target-repo-root> --harness <qoder|opencode|trae|cursor|both|all|逗号组合>
 ```
 
 它会在数秒内完成 ①~⑤ 的全部工作（探测 / 写入 / config 对齐 / 命令初始化 / 挂载 / lock / 自检），退出码 `0` 即成功。把它的报告原样转述给用户即可，不要重复校验。
@@ -29,16 +29,20 @@
    |----------|------------------------|
    | 仅 `.qoder/` 存在 | `{qoder}` |
    | 仅 `.opencode/` 存在 | `{opencode}` |
-   | 两者都存在 | `{qoder, opencode}` |
-   | 两者都不存在 | **询问用户**"本仓库使用哪个 AI 编码环境？Qoder / OpenCode / 两者都要"，按回答确定，**禁止默认全装** |
+   | 仅 `.trae/` 存在 | `{trae}` |
+   | 仅 `.cursor/` 存在 | `{cursor}` |
+   | 多个目录存在 | 对应多个 harness 的集合 |
+   | 一个都不存在 | **询问用户**"本仓库使用哪个 AI 编码环境？Qoder / OpenCode / Trae / Cursor / 全部"，按回答确定，**禁止默认全装** |
 
-   - **自身环境佐证**：你在 Qoder 中运行 → 倾向 Qoder；在 OpenCode 中运行 → 倾向 OpenCode。佐证与目录探测冲突时，以用户确认为准。
+   - **自身环境佐证**：你在 Qoder 中运行 → 倾向 Qoder；在 OpenCode 中运行 → 倾向 OpenCode；在 Trae 中运行 → 倾向 Trae；在 Cursor 中运行 → 倾向 Cursor。佐证与目录探测冲突时，以用户确认为准。
    - 判定结论 MUST 在报告首行写明，后续 ②③④ 全部以 `HARNESS_SET` 为准。
    - **未选中的 harness：不得创建其目录、不得写入任何文件、不得挂载引用。**
 
 3. 探测现状并记录：
    - `.qoder/` 是否存在；若存在，其 `commands/` 与 `skills/` 下有哪些文件。
    - `.opencode/` 是否存在；若存在，其 `commands/`、`agent/`、`skills/` 下有哪些文件。
+   - `.trae/` 是否存在；若存在，其 `commands/` 与 `skills/` 下有哪些文件。
+   - `.cursor/` 是否存在；若存在，其 `commands/` 与 `skills/` 下有哪些文件。
    - `onePress.lock` 是否存在且可解析（JSON）；存在且版本小于本包 `VERSION` 则本次为**升级**，缺失/损坏则按**全新安装**处理。
    - `docs/ui-components.md` 是否已存在（决定 Protect Local 行为）。
 4. 记录安装前的 `git status --porcelain`，识别哪些 harness 文件存在**未提交的本地修改**。
@@ -48,7 +52,7 @@
 **红线（违反任一条立即中止安装并报告）：**
 
 1. 禁止覆盖项目级资产：`docs/ui-components.md`、`openspec/changes/` 及其下任何文件。
-2. 禁止修改目标仓库的业务代码与既有业务文档（仅允许写入 `HARNESS_SET` 内的 `.qoder/` 或 `.opencode/`、`openspec/schemas/`、`onePress.lock`、`docs/ui-components.md`（首装初始化））。
+2. 禁止修改目标仓库的业务代码与既有业务文档（仅允许写入 `HARNESS_SET` 内的 `.qoder/`、`.opencode/`、`.trae/`、`.cursor/`、`openspec/schemas/`、`onePress.lock`、`docs/ui-components.md`（首装初始化））。
 3. 禁止删除用户本地文件（升级时仅允许删除将被全量覆盖的 harness 目录内的旧文件）。
 
 **逐字写入约束：模板包内所有文件必须逐字写入目标路径，禁止改写、精简或重排内容；无法逐字写入时中止并报告。**
@@ -78,11 +82,26 @@
 |-----------|---------|
 | `qoder/skills/onepress-discipline/SKILL.md` | `.qoder/skills/onepress-discipline/SKILL.md` |
 
-写入顺序：先创建目录，再逐文件写入。未选中的 harness 目录**保持不存在或原样不动**。
+**仅 Trae（`HARNESS_SET` 含 `trae` 时）**
 
-### Qoder 命令技能挂载（仅当 `HARNESS_SET` 含 `qoder`）
+| 模板源路径 | 目标路径 |
+|-----------|---------|
+| `trae/skills/onepress-discipline/SKILL.md` | `.trae/skills/onepress-discipline/SKILL.md` |
+| `trae/commands/opsx-new.md` | `.trae/commands/opsx-new.md` |
+| `trae/commands/opsx-apply.md` | `.trae/commands/opsx-apply.md` |
+| `trae/commands/opsx-verify.md` | `.trae/commands/opsx-verify.md` |
 
-对目标仓库 `.qoder/commands/` 下每个已存在的命令文件（含 `opsx/` 子目录），在 YAML frontmatter 之后插入一行（若该行已存在则跳过）：
+**仅 Cursor（`HARNESS_SET` 含 `cursor` 时）**
+
+| 模板源路径 | 目标路径 |
+|-----------|---------|
+| `cursor/skills/onepress-discipline/SKILL.md` | `.cursor/skills/onepress-discipline/SKILL.md` |
+
+写入顺序：先创建目录，再逐文件写入。未选中的 harness 目录**保持不存在或原样不动**。Trae 命令文件已自带技能引用行，**不做挂载**。
+
+### Qoder / Cursor 命令技能挂载（仅当 `HARNESS_SET` 含 `qoder` 或 `cursor`）
+
+对目标仓库 `.qoder/commands/` 或 `.cursor/commands/` 下每个已存在的命令文件（含子目录），在 YAML frontmatter 之后插入一行（若该行已存在则跳过）：
 
 ```
 > onepress: 执行本命令时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。
@@ -96,11 +115,11 @@
 - `openspec/config.yaml` 不存在时**必须创建**，最小内容为 `schema: superspec` + `context.rules`（specs / design / tasks 三组，design 组要求涉及页面的变更给出 ui_contract 五字段）。缺了它，本次安装提供不了九工件能力。
 - **实测结论**：`openspec init` 在 `config.yaml` 已存在时**不会覆盖**（hash 不变），只有当文件缺失时才会新建为 `spec-driven`。因此正确顺序是：**先创建/对齐 config → 再 init → 再挂载技能引用**。
 
-### 命令初始化（仅当 `HARNESS_SET` 含 `qoder` 且 `.qoder/commands/` 为空）
+### 命令初始化（仅当 `HARNESS_SET` 含 `qoder` 或 `cursor`，且对应 `commands/` 为空）
 
-- `.qoder/commands/` 不存在或其中没有任何 `.md` 时：执行 `openspec init --tools qoder --no-animation` 生成命令，**然后才做技能引用挂载**。漏掉这一步的结果是"技能已落盘但永不加载"，`/opsx:*` 全部不可用。
+- `.qoder/commands/` 或 `.cursor/commands/` 不存在或其中没有任何 `.md` 时：执行 `openspec init --tools qoder|cursor --no-animation` 生成命令，**然后才做技能引用挂载**。漏掉这一步的结果是"技能已落盘但永不加载"，`/opsx:*` 全部不可用。
 - `openspec` 命令不可用时：在报告中明确写"技能存在但无挂载点，需先安装 OpenSpec CLI 并 init"，不得当作安装成功。
-- 已有命令文件时**不重复 init**。
+- 已有命令文件时**不重复 init**。Trae 命令随包写入，无需 init。
 
 ### 文档与自托管条目（不安装）
 
@@ -127,7 +146,9 @@
   "installedAt": "2026-11-03T00:00:00Z",
   "harnesses": {
     "qoder": true,
-    "opencode": false
+    "opencode": false,
+    "trae": false,
+    "cursor": false
   },
   "protectedAssets": [
     "docs/ui-components.md",
@@ -146,7 +167,7 @@
 
 ### 三档升级策略
 
-1. **Harness 核心全量覆盖（仅限已启用的 harness）**：升级时先删除**该 harness** 目录中由 onePress 管理的旧文件（`commands/`、`skills/`、`opencode.json`，以及通用的 `openspec/schemas/superspec/`），再按第②段逐字写入，杜绝旧版本残留；未启用的 harness 目录不读不写。
+1. **Harness 核心全量覆盖（仅限已启用的 harness）**：升级时先删除**该 harness** 目录中由 onePress 管理的旧文件（`commands/`、`skills/`、`opencode.json`；Trae 仅删 `opsx-*` 命令与 `onepress-discipline` 技能；Cursor 仅删 `onepress-discipline` 技能），以及通用的 `openspec/schemas/superspec/`，再按第②段逐字写入，杜绝旧版本残留；未启用的 harness 目录不读不写。
 2. **项目级 Protect Local**：存在即跳过，仅首装初始化。
 3. **本地修改保护**：未提交修改默认跳过并提示。
 
@@ -167,14 +188,21 @@
 - [ ] `.opencode/skills/superpowers-tdd/SKILL.md` frontmatter `name: superpowers-tdd` 与目录名一致，`description` 长度 1–1024 字符
 - [ ] `.opencode/skills/superpowers-tdd/SKILL.md` 内容与模板包逐字一致
 
-### .qoder 验收项（仅当 `HARNESS_SET` 含 `qoder`）
+### .qoder / .cursor 验收项（仅当 `HARNESS_SET` 含 `qoder` 或 `cursor`）
 
-- [ ] `.qoder/skills/onepress-discipline/SKILL.md` 存在
+- [ ] 对应目录（`.qoder/` 或 `.cursor/`）下 `skills/onepress-discipline/SKILL.md` 存在
 - [ ] 该 SKILL.md 包含五项铁律标题（ui_contract 契约先行 / Token 纯净度 / 四态状态机 / 无障碍基线 / 防呆与反馈闭环）
 - [ ] 该 SKILL.md 的 `ui_contract` 段落包含 `archetype`、`reuse_components`、`schema_mapping`、`states_matrix`、`layout_tokens` 五个字段
 - [ ] 该 SKILL.md 内容与模板包逐字一致
-- [ ] 既有 `.qoder/commands/` 下命令文件主体未被改写（仅允许 frontmatter 后新增一行技能引用）
-- [ ] `.qoder/commands/` **非空**，且其中每个命令文件均含一行 `onepress-discipline` 技能引用（为空即判定失败：技能存在但无挂载点）
+- [ ] 既有 `commands/` 下命令文件主体未被改写（仅允许 frontmatter 后新增一行技能引用）
+- [ ] `commands/` **非空**，且其中每个命令文件均含一行 `onepress-discipline` 技能引用（为空即判定失败：技能存在但无挂载点）
+- [ ] 项目级资产未被覆盖：`docs/ui-components.md`（若安装前已存在）内容不变
+
+### .trae 验收项（仅当 `HARNESS_SET` 含 `trae`）
+
+- [ ] `.trae/skills/onepress-discipline/SKILL.md` 存在，包含五项铁律与 `ui_contract` 五字段，且与模板包逐字一致
+- [ ] `.trae/commands/` 下存在 `opsx-new.md`、`opsx-apply.md`、`opsx-verify.md` 三个文件
+- [ ] 三个命令文件均含一行 `onepress-discipline` 技能引用，且与模板包逐字一致
 - [ ] 项目级资产未被覆盖：`docs/ui-components.md`（若安装前已存在）内容不变
 
 ### OpenSpec Schema 验收项
@@ -191,7 +219,7 @@
 
 ### 模板包结构验收项
 
-- [ ] 模板包根条目均在白名单内：`VERSION`、`ASSETS.md`、`INSTALL_PROMPT.md`、`install.ps1`、`install.sh`、`README-ch.md`、`README.md`、`opencode/`、`qoder/`、`openspec-schema/`、`openspec/`；出现白名单外条目即判定失败并输出违规路径
+- [ ] 模板包根条目均在白名单内：`VERSION`、`ASSETS.md`、`INSTALL_PROMPT.md`、`install.ps1`、`install.sh`、`README-ch.md`、`README.md`、`opencode/`、`qoder/`、`trae/`、`cursor/`、`openspec-schema/`、`openspec/`；出现白名单外条目即判定失败并输出违规路径
 
 ## ⑤ 收尾
 
