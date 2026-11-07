@@ -91,10 +91,7 @@ $script:QoderFiles = @(
 )
 
 $script:TraeFiles = @(
-    'trae/skills/onepress-discipline/SKILL.md',
-    'trae/commands/opsx-new.md',
-    'trae/commands/opsx-apply.md',
-    'trae/commands/opsx-verify.md'
+    'trae/skills/onepress-discipline/SKILL.md'
 )
 
 $script:CursorFiles = @(
@@ -522,8 +519,37 @@ function Confirm-OpenSpecSchema {
     Write-Ok "openspec/config.yaml schema: $current → superspec（保留原换行与其余字段）"
 }
 
+function Test-HarnessCommandSetComplete {
+    param([string]$CmdDir)
+
+    foreach ($id in @('continue', 'ff', 'propose', 'archive')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $CmdDir "opsx-$id.md"))) { return $false }
+    }
+    return $true
+}
+
+function Remove-LegacyCommands {
+    param([string]$TargetRoot, [string]$HarnessDir, $ModifiedFiles)
+
+    foreach ($name in @('opsx-new.md', 'opsx-apply.md', 'opsx-verify.md')) {
+        $rel = "$HarnessDir/commands/$name"
+        $path = Join-Rel $TargetRoot $rel
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        if ($ModifiedFiles -and $ModifiedFiles.ContainsKey($rel)) {
+            Write-Warn "保留未提交修改，不清理旧版命令：$rel"
+            continue
+        }
+        if ($DryRun) {
+            Write-Info "would remove legacy $rel"
+            continue
+        }
+        Remove-Item -LiteralPath $path -Force
+        Write-Info "清理旧版随包命令：$rel"
+    }
+}
+
 function Initialize-HarnessCommands {
-    param([string]$TargetRoot, [string]$HarnessDir, [string]$Tool)
+    param([string]$TargetRoot, [string]$HarnessDir, [string]$Tool, $ModifiedFiles = @{})
 
     $cmdDir = Join-Path (Join-Path $TargetRoot $HarnessDir) 'commands'
     $existing = @()
@@ -532,17 +558,30 @@ function Initialize-HarnessCommands {
     }
 
     if ($existing.Count -gt 0) {
-        Write-Ok "$HarnessDir/commands/ 已有 $($existing.Count) 个命令文件"
-        return
+        # qoder 的命令集在 commands/opsx/ 子目录，不能用扁平文件名判断完整性
+        if ($Tool -eq 'qoder' -or (Test-HarnessCommandSetComplete $cmdDir)) {
+            Write-Ok "$HarnessDir/commands/ 已有 $($existing.Count) 个命令文件"
+            return
+        }
+        Write-Warn "$HarnessDir/commands/ 仅 $($existing.Count) 个命令且命令集不完整，按旧版残留处理"
+        Remove-LegacyCommands -TargetRoot $TargetRoot -HarnessDir $HarnessDir -ModifiedFiles $ModifiedFiles
+        if ($DryRun) {
+            Write-Info "would run: openspec init --tools $Tool --no-animation"
+            return
+        }
+        $existing = @(Get-ChildItem -LiteralPath $cmdDir -Recurse -File -Filter '*.md' -ErrorAction SilentlyContinue)
+        if ($existing.Count -gt 0) {
+            Write-Info "$HarnessDir/commands/ 保留 $($existing.Count) 个既有命令，仅补齐 openspec 标准命令"
+        }
     }
 
     if ($NoInit) {
-        Write-Warn "$HarnessDir/commands/ 为空且指定了 -NoInit：技能将`"存在但永不加载`"，需手动 openspec init 后重跑"
+        Write-Warn "$HarnessDir/commands/ 命令集不完整且指定了 -NoInit：技能将`"存在但永不加载`"，需手动 openspec init 后重跑"
         return
     }
 
     if (-not (Get-Command openspec -CommandType Application -ErrorAction SilentlyContinue)) {
-        Write-Warn "$HarnessDir/commands/ 为空且未检测到 openspec CLI：技能将`"存在但永不加载`"。请先安装 OpenSpec CLI 并执行 openspec init --tools $Tool 后重跑本脚本"
+        Write-Warn "$HarnessDir/commands/ 命令集不完整且未检测到 openspec CLI：技能将`"存在但永不加载`"。请先安装 OpenSpec CLI 并执行 openspec init --tools $Tool 后重跑本脚本"
         return
     }
 
@@ -861,12 +900,17 @@ Initialize-UiComponents -TargetRoot $targetRoot
 Confirm-OpenSpecSchema -TargetRoot $targetRoot
 
 if ($harnessSet.qoder) {
-    Initialize-HarnessCommands -TargetRoot $targetRoot -HarnessDir '.qoder' -Tool 'qoder'
+    Initialize-HarnessCommands -TargetRoot $targetRoot -HarnessDir '.qoder' -Tool 'qoder' -ModifiedFiles $gitStatus.modified
     Mount-SkillReference -TargetRoot $targetRoot -HarnessDir '.qoder' -GitStatus $gitStatus
 }
 
+if ($harnessSet.trae) {
+    Initialize-HarnessCommands -TargetRoot $targetRoot -HarnessDir '.trae' -Tool 'trae' -ModifiedFiles $gitStatus.modified
+    Mount-SkillReference -TargetRoot $targetRoot -HarnessDir '.trae' -GitStatus $gitStatus
+}
+
 if ($harnessSet.cursor) {
-    Initialize-HarnessCommands -TargetRoot $targetRoot -HarnessDir '.cursor' -Tool 'cursor'
+    Initialize-HarnessCommands -TargetRoot $targetRoot -HarnessDir '.cursor' -Tool 'cursor' -ModifiedFiles $gitStatus.modified
     Mount-SkillReference -TargetRoot $targetRoot -HarnessDir '.cursor' -GitStatus $gitStatus
 }
 

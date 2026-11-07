@@ -87,9 +87,6 @@
 | 模板源路径 | 目标路径 |
 |-----------|---------|
 | `trae/skills/onepress-discipline/SKILL.md` | `.trae/skills/onepress-discipline/SKILL.md` |
-| `trae/commands/opsx-new.md` | `.trae/commands/opsx-new.md` |
-| `trae/commands/opsx-apply.md` | `.trae/commands/opsx-apply.md` |
-| `trae/commands/opsx-verify.md` | `.trae/commands/opsx-verify.md` |
 
 **仅 Cursor（`HARNESS_SET` 含 `cursor` 时）**
 
@@ -97,11 +94,11 @@
 |-----------|---------|
 | `cursor/skills/onepress-discipline/SKILL.md` | `.cursor/skills/onepress-discipline/SKILL.md` |
 
-写入顺序：先创建目录，再逐文件写入。未选中的 harness 目录**保持不存在或原样不动**。Trae 命令文件已自带技能引用行，**不做挂载**。
+写入顺序：先创建目录，再逐文件写入。未选中的 harness 目录**保持不存在或原样不动**。
 
-### Qoder / Cursor 命令技能挂载（仅当 `HARNESS_SET` 含 `qoder` 或 `cursor`）
+### Qoder / Trae / Cursor 命令技能挂载（仅当 `HARNESS_SET` 含 `qoder`、`trae` 或 `cursor`）
 
-对目标仓库 `.qoder/commands/` 或 `.cursor/commands/` 下每个已存在的命令文件（含子目录），在 YAML frontmatter 之后插入一行（若该行已存在则跳过）：
+对目标仓库 `.qoder/commands/`、`.trae/commands/` 或 `.cursor/commands/` 下每个已存在的命令文件（含子目录），在 YAML frontmatter 之后插入一行（若该行已存在则跳过）：
 
 ```
 > onepress: 执行本命令时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。
@@ -115,11 +112,13 @@
 - `openspec/config.yaml` 不存在时**必须创建**，最小内容为 `schema: superspec` + `context.rules`（specs / design / tasks 三组，design 组要求涉及页面的变更给出 ui_contract 五字段）。缺了它，本次安装提供不了九工件能力。
 - **实测结论**：`openspec init` 在 `config.yaml` 已存在时**不会覆盖**（hash 不变），只有当文件缺失时才会新建为 `spec-driven`。因此正确顺序是：**先创建/对齐 config → 再 init → 再挂载技能引用**。
 
-### 命令初始化（仅当 `HARNESS_SET` 含 `qoder` 或 `cursor`，且对应 `commands/` 为空）
+### 命令初始化（仅当 `HARNESS_SET` 含 `qoder`、`trae` 或 `cursor`，且对应 `commands/` 为空或不完整）
 
-- `.qoder/commands/` 或 `.cursor/commands/` 不存在或其中没有任何 `.md` 时：执行 `openspec init --tools qoder|cursor --no-animation` 生成命令，**然后才做技能引用挂载**。漏掉这一步的结果是"技能已落盘但永不加载"，`/opsx:*` 全部不可用。
+- **不完整的判定（Trae / Cursor）**：`commands/` 中存在 `.md` 文件，但缺少 OpenSpec 标准命令（如 `opsx-continue.md`、`opsx-propose.md`、`opsx-archive.md`）；只有 `opsx-new.md` / `opsx-apply.md` / `opsx-verify.md` 三个文件即属此类（旧版 onePress 随包直出的命令）。
+- 判定为不完整时：先删除旧版随包命令 `commands/opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`（存在未提交修改的跳过并记录），再执行 `openspec init --tools qoder|trae|cursor --no-animation` 生成完整命令集（通常 10 个），**然后才做技能引用挂载**。漏掉这一步的结果是"技能已落盘但永不加载"，`/opsx:*` 全部不可用。
+- `.qoder/commands/` 的命令位于 `commands/opsx/` 子目录，不适用上述扁平文件名判定；其非空即视为完整。
 - `openspec` 命令不可用时：在报告中明确写"技能存在但无挂载点，需先安装 OpenSpec CLI 并 init"，不得当作安装成功。
-- 已有命令文件时**不重复 init**。Trae 命令随包写入，无需 init。
+- 已有完整命令集时**不重复 init**。
 
 ### 文档与自托管条目（不安装）
 
@@ -167,7 +166,11 @@
 
 ### 三档升级策略
 
-1. **Harness 核心全量覆盖（仅限已启用的 harness）**：升级时先删除**该 harness** 目录中由 onePress 管理的旧文件（`commands/`、`skills/`、`opencode.json`；Trae 仅删 `opsx-*` 命令与 `onepress-discipline` 技能；Cursor 仅删 `onepress-discipline` 技能），以及通用的 `openspec/schemas/superspec/`，再按第②段逐字写入，杜绝旧版本残留；未启用的 harness 目录不读不写。
+1. **Harness 核心全量覆盖（仅限已启用的 harness）**：升级时先删除**该 harness** 目录中由 onePress 管理的旧文件，再按第②段逐字写入，杜绝旧版本残留；未启用的 harness 目录不读不写。删除范围：
+   - OpenCode：`commands/`、`skills/`、`opencode.json`
+   - Trae：`skills/onepress-discipline/`、lock 中记录的命令文件，以及旧版随包直出的 `commands/opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`（**lock 未记录也要删**，否则会阻塞 `openspec init` 而只剩 3 个命令）
+   - Cursor：`skills/onepress-discipline/`
+   - 通用：`openspec/schemas/superspec/`
 2. **项目级 Protect Local**：存在即跳过，仅首装初始化。
 3. **本地修改保护**：未提交修改默认跳过并提示。
 
@@ -201,8 +204,8 @@
 ### .trae 验收项（仅当 `HARNESS_SET` 含 `trae`）
 
 - [ ] `.trae/skills/onepress-discipline/SKILL.md` 存在，包含五项铁律与 `ui_contract` 五字段，且与模板包逐字一致
-- [ ] `.trae/commands/` 下存在 `opsx-new.md`、`opsx-apply.md`、`opsx-verify.md` 三个文件
-- [ ] 三个命令文件均含一行 `onepress-discipline` 技能引用，且与模板包逐字一致
+- [ ] `.trae/commands/` **非空**（完整命令集通常 10 个），且其中每个命令文件均含一行 `onepress-discipline` 技能引用（为空即判定失败：技能存在但无挂载点）
+- [ ] 既有 `commands/` 下命令文件主体未被改写（仅允许 frontmatter 后新增一行技能引用）
 - [ ] 项目级资产未被覆盖：`docs/ui-components.md`（若安装前已存在）内容不变
 
 ### OpenSpec Schema 验收项

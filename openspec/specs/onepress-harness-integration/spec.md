@@ -47,15 +47,21 @@ TBD - created by archiving change req-261103-001-onepress-scheme-install. Update
 
 ---
 
-### Requirement: Trae 技能与命令直出
+### Requirement: Trae 命令初始化与挂载
 
-`.trae/` 集成 MUST 写入 `.trae/skills/onepress-discipline/SKILL.md`，并直出 `.trae/commands/opsx-new.md`、`opsx-apply.md`、`opsx-verify.md` 三个命令文件；命令正文 MUST 自带 `onepress-discipline` 技能引用行。Trae 命令 MUST NOT 依赖 `openspec init` 生成。
+`.trae/` 集成 MUST 写入 `.trae/skills/onepress-discipline/SKILL.md`；当 `.trae/commands/` 为空或**命令集不完整**（缺少 `opsx-continue.md`、`opsx-propose.md`、`opsx-archive.md` 等 OpenSpec 标准命令）时 MUST 先清理旧版随包命令（`opsx-new.md` / `opsx-apply.md` / `opsx-verify.md`，存在未提交修改的除外）再执行 `openspec init --tools trae` 生成完整命令集，并在每个命令的 frontmatter 后挂载 `onepress-discipline` 技能引用。Trae MUST 与 Qoder 一样获得完整 `/opsx:*` 命令集，不得只提供三个命令。
 
-#### Scenario: Trae 命令随包安装
+#### Scenario: Trae 命令与 Qoder 对齐
 
-- **GIVEN** 目标仓库存在 `.trae/`
+- **GIVEN** 目标仓库存在 `.trae/` 且 `.trae/commands/` 为空
 - **WHEN** 安装器以 `trae` harness 执行
-- **THEN** `.trae/commands/` 下存在上述三个命令文件，且每个文件均含技能引用行
+- **THEN** `.trae/commands/` 下生成完整命令集（通常 10 个），且每个命令均含技能引用行
+
+#### Scenario: 旧版 3 命令残留时自动修复
+
+- **GIVEN** 目标仓库 `.trae/commands/` 仅有旧版随包直出的 `opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`，且 `onePress.lock` 未记录这些文件
+- **WHEN** 安装器以 `trae` harness 再次执行
+- **THEN** 这 3 个旧文件被清理，`.trae/commands/` 下重新生成完整命令集且均含技能引用行
 
 ---
 

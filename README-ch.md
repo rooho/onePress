@@ -48,7 +48,7 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 ./install.sh --harness qoder --target ~/repo --dry-run --source ~/pack
 ```
 
-脚本一键做完六件事：**探测 harness → 分层写入 → 对齐 OpenSpec 配置 → 写 `onePress.lock` → 自检 → 输出报告**。其中"对齐配置"包括：`openspec/config.yaml` 不存在时创建（`schema: superspec`）、已存在但值不对时只改那一行（CRLF 也保留），以及 `.qoder/`、`.cursor/` 的 `commands/` 为空时自动 `openspec init --tools <qoder|cursor>` 生成命令；Trae 的命令随包写入，无需 init。自检覆盖布局、逐字一致、schema 10 文件齐全、`schema: superspec`、命令非空且已挂载、lock 与安装范围一致；失败即中止并给出原因，退出码 `0` 成功 / `1` 失败。你不需要手动核对任何东西。
+脚本一键做完六件事：**探测 harness → 分层写入 → 对齐 OpenSpec 配置 → 写 `onePress.lock` → 自检 → 输出报告**。其中"对齐配置"包括：`openspec/config.yaml` 不存在时创建（`schema: superspec`）、已存在但值不对时只改那一行（CRLF 也保留），以及 `.qoder/`、`.trae/`、`.cursor/` 的 `commands/` 为空时自动 `openspec init --tools <qoder|trae|cursor>` 生成命令。自检覆盖布局、逐字一致、schema 10 文件齐全、`schema: superspec`、命令非空且已挂载、lock 与安装范围一致；失败即中止并给出原因，退出码 `0` 成功 / `1` 失败。你不需要手动核对任何东西。
 
 > 实测：`openspec init` 在 `config.yaml` 已存在时**不会覆盖它**，所以"先对齐配置、再 init、再挂载"的顺序是安全的；`-NoInit` / `--no-init` 可关闭自动 init。
 
@@ -86,7 +86,7 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 | `.qoder/skills/onepress-discipline/SKILL.md` | 四条铁律 + TDD 纪律 | harness | 仅选中 Qoder |
 | `.qoder/commands/opsx/*.md` | 仅在 frontmatter 后**新增一行**技能引用，主体不改 | harness | 仅选中 Qoder |
 | `.trae/skills/onepress-discipline/SKILL.md` | 四条铁律 + TDD 纪律（Trae 载体） | harness | 仅选中 Trae |
-| `.trae/commands/opsx-{new,apply,verify}.md` | Trae 斜杠命令（自带技能引用） | harness | 仅选中 Trae |
+| `.trae/commands/opsx-*.md` | 仅在 frontmatter 后**新增一行**技能引用，主体不改 | harness | 仅选中 Trae |
 | `.cursor/skills/onepress-discipline/SKILL.md` | 四条铁律 + TDD 纪律（Cursor 载体） | harness | 仅选中 Cursor |
 | `.cursor/commands/opsx-*.md` | 仅在 frontmatter 后**新增一行**技能引用，主体不改 | harness | 仅选中 Cursor |
 | `openspec/schemas/superspec/` | `schema.yaml` + 9 模板（共 10 文件） | harness | 始终 |
@@ -201,18 +201,18 @@ State Bar 一次只驱动一个状态（Idle / Loading / Empty / Error / Submitt
 | 命令 | Qoder | OpenCode | Trae | Cursor | 用途 |
 |------|:----:|:--------:|:----:|:------:|------|
 | `/opsx:new <name>` | ✅ | ✅ | ✅ | ✅ | 契约初始化（proposal + design + ui_contract） |
-| `/opsx:continue` | ✅ | 用 CLI | 用 CLI | ✅ | 生成下一个工件 |
-| `/opsx:ff` | ✅ | 用 CLI | 用 CLI | ✅ | 一次补齐全部工件 |
-| `/opsx:propose` | ✅ | 用 CLI | 用 CLI | ✅ | 一步生成完整提案 |
-| `/opsx:explore` | ✅ | — | — | ✅ | 只讨论，不落文件 |
+| `/opsx:continue` | ✅ | 用 CLI | ✅ | ✅ | 生成下一个工件 |
+| `/opsx:ff` | ✅ | 用 CLI | ✅ | ✅ | 一次补齐全部工件 |
+| `/opsx:propose` | ✅ | 用 CLI | ✅ | ✅ | 一步生成完整提案 |
+| `/opsx:explore` | ✅ | — | ✅ | ✅ | 只讨论，不落文件 |
 | `/opsx:apply` | ✅ | ✅ | ✅ | ✅ | 两阶段实现 |
 | `/opsx:verify` | ✅ | ✅ | ✅ | ✅ | 四道门禁 |
-| `/opsx:sync` | ✅ | 用 CLI | 用 CLI | ✅ | 仅同步 delta specs |
-| `/opsx:archive` | ✅ | 用 CLI | 用 CLI | ✅ | 归档 + 注册表增量 |
-| `/opsx:bulk-archive` | ✅ | 用 CLI | 用 CLI | ✅ | 批量归档 |
+| `/opsx:sync` | ✅ | 用 CLI | ✅ | ✅ | 仅同步 delta specs |
+| `/opsx:archive` | ✅ | 用 CLI | ✅ | ✅ | 归档 + 注册表增量 |
+| `/opsx:bulk-archive` | ✅ | 用 CLI | ✅ | ✅ | 批量归档 |
 
-- **Qoder / Cursor**：`openspec init --tools qoder|cursor` 已生成 10 个命令，onePress 只加技能与一行引用（Cursor 的斜杠命令名为 `/opsx-apply` 形式）。
-- **OpenCode / Trae**：本包只随附 `new` / `apply` / `verify` 三个命令；Trae 命令位于 `.trae/commands/`（`/opsx-new` 形式）。其余用 CLI 等价替代：
+- **Qoder / Trae / Cursor**：`openspec init --tools qoder|trae|cursor` 已生成 10 个命令，onePress 只加技能与一行引用（Trae / Cursor 的斜杠命令名为 `/opsx-apply` 形式）。
+- **OpenCode**：本包只随附 `new` / `apply` / `verify` 三个命令；其余用 CLI 等价替代：
 
 ```bash
 openspec status --change <name> --json          # 看进度与下一步
@@ -274,9 +274,8 @@ onePress/
 │   └── skills/superpowers-tdd/SKILL.md
 ├── qoder/                  # Qoder harness 资产（1 文件）
 │   └── skills/onepress-discipline/SKILL.md
-├── trae/                   # Trae harness 资产（4 文件）
-│   ├── skills/onepress-discipline/SKILL.md
-│   └── commands/opsx-{new,apply,verify}.md
+├── trae/                   # Trae harness 资产（1 文件）
+│   └── skills/onepress-discipline/SKILL.md
 ├── cursor/                 # Cursor harness 资产（1 文件）
 │   └── skills/onepress-discipline/SKILL.md
 ├── openspec-schema/superspec/   # 分发给目标仓库的 schema（10 文件）
@@ -302,10 +301,10 @@ A：多半是稀疏检出路径与实际布局不符（cone 模式对不存在�
 A：1.0.4 起 superspec 的 Superpowers 技能引用全部带内联兜底（brainstorm / plan / apply 2c / finalize 四处），技能缺失时 AI 会按兜底步骤自行产出 `plan.md`，不会中断。旧版本（schema version ≤ 4）升级重装即可；临时也可让 AI 直接按 `tasks.md` 拆 2–5 分钟微步骤写入 `plan.md`。
 
 **Q：目标仓库没有 OpenSpec？**
-A：安装能完成，但 `/opsx:*` 与 `ui_contract` 解析需要 OpenSpec。先 `openspec init --tools qoder|cursor|opencode` 再安装；Trae 只需 `openspec init --tools trae` 获取其余 OpenSpec 技能。
+A：安装能完成，但 `/opsx:*` 与 `ui_contract` 解析需要 OpenSpec。先 `openspec init --tools qoder|trae|cursor|opencode` 再安装。
 
-**Q：OpenCode / Trae 下没有 `/opsx:continue`、`/opsx:archive`？**
-A：本包只随附三个命令。其余用 `openspec status` / `openspec instructions` / `openspec archive` 等价操作，或自行补 `.opencode/commands/opsx-*.md` / `.trae/commands/opsx-*.md`。
+**Q：OpenCode 下没有 `/opsx:continue`、`/opsx:archive`？**
+A：本包只随附三个命令。其余用 `openspec status` / `openspec instructions` / `openspec archive` 等价操作，或自行补 `.opencode/commands/opsx-*.md`。
 
 **Q：能不能只装某一个平台？**
 A：能，且默认就是这样。安装器按目录探测判定：只有 `.qoder/` 只装 Qoder，只有 `.trae/` 只装 Trae，只有 `.cursor/` 只装 Cursor，多个目录存在则对应多套都装，一个都没有会先问你。也可以用 `--harness trae,cursor` 显式指定。事后想补装另一个环境，再跑一次安装即可，只会增量写那一套，已装的不受影响。
@@ -314,13 +313,13 @@ A：能，且默认就是这样。安装器按目录探测判定：只有 `.qode
 A：默认不入库（本地环境配置）。`onePress.lock` 与 `docs/ui-components.md` 建议入库。
 
 **Q：怎么确认装好了？**
-A：看脚本退出码与报告——`0` 且收尾语为 `onePress v<version> 安装完成（harnesses: <范围>）` 即成功，报告里已列出跳过项与自检结果。想自己复核只查三处——`onePress.lock` 存在且 `version` 匹配；`.qoder/commands/`、`.cursor/commands/`、`.trae/commands/` 每个命令都有一行 `onepress-discipline` 引用；`openspec/schemas/superspec/` 有 10 个文件。
+A：看脚本退出码与报告——`0` 且收尾语为 `onePress v<version> 安装完成（harnesses: <范围>）` 即成功，报告里已列出跳过项与自检结果。想自己复核只查三处——`onePress.lock` 存在且 `version` 匹配；`.qoder/commands/`、`.trae/commands/`、`.cursor/commands/` 每个命令都有一行 `onepress-discipline` 引用；`openspec/schemas/superspec/` 有 10 个文件。
 
 **Q：重装会不会把我改过的工具链文件冲掉？**
-A：不会。已跟踪文件若有未提交修改，脚本会提示并跳过该文件；`.qoder/commands/`、`.cursor/commands/` 里的技能引用已存在则跳过，命令正文永不改写。
+A：不会。已跟踪文件若有未提交修改，脚本会提示并跳过该文件；`.qoder/commands/`、`.trae/commands/`、`.cursor/commands/` 里的技能引用已存在则跳过，命令正文永不改写。
 
-**Q：已有 `.qoder/` / `.cursor/` 会被破坏吗？**
-A：不会。只新增技能文件，并在既有命令 frontmatter 后插入一行引用，命令体零改动。Trae 只新增 `onepress-discipline` 技能与 3 个 `opsx-*.md` 命令文件。
+**Q：已有 `.qoder/` / `.trae/` / `.cursor/` 会被破坏吗？**
+A：不会。只新增技能文件，并在既有命令 frontmatter 后插入一行引用，命令体零改动。
 
 ---
 

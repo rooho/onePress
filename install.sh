@@ -33,7 +33,7 @@ OPENCODE_FILES="opencode/opencode.json opencode/agent/ux-architect.md opencode/c
 
 QODER_FILES="qoder/skills/onepress-discipline/SKILL.md"
 
-TRAE_FILES="trae/skills/onepress-discipline/SKILL.md trae/commands/opsx-new.md trae/commands/opsx-apply.md trae/commands/opsx-verify.md"
+TRAE_FILES="trae/skills/onepress-discipline/SKILL.md"
 
 CURSOR_FILES="cursor/skills/onepress-discipline/SKILL.md"
 
@@ -448,6 +448,38 @@ CFG_EOF
   info "openspec/config.yaml schema: $current → superspec（保留原换行与其余字段）"
 }
 
+# 判断 commands/ 是否已是 openspec 生成的完整命令集（缺任一标准命令即视为不完整）
+harness_command_set_complete() {
+  local cmd_dir="$1"
+  local id
+  for id in continue ff propose archive; do
+    [ -f "$cmd_dir/opsx-$id.md" ] || return 1
+  done
+  return 0
+}
+
+# 清理旧版本随包直出的命令（会阻塞 openspec init，导致只剩 3 个命令）
+remove_legacy_commands() {
+  local target="$1"
+  local harness_dir="$2"
+  local rel path
+
+  for rel in opsx-new.md opsx-apply.md opsx-verify.md; do
+    path="$target/$harness_dir/commands/$rel"
+    [ -f "$path" ] || continue
+    if in_list "$harness_dir/commands/$rel" "$MODIFIED"; then
+      warn "保留未提交修改，不清理旧版命令：$harness_dir/commands/$rel"
+      continue
+    fi
+    if [ "$DRY_RUN" = 1 ]; then
+      info "would remove legacy $harness_dir/commands/$rel"
+      continue
+    fi
+    rm -f "$path"
+    info "清理旧版随包命令：$harness_dir/commands/$rel"
+  done
+}
+
 init_harness_commands() {
   local target="$1"
   local harness_dir="$2"
@@ -459,17 +491,28 @@ init_harness_commands() {
     count="$(find "$cmd_dir" -type f -name '*.md' | wc -l | tr -d ' ')"
   fi
   if [ "$count" -gt 0 ]; then
-    info "$harness_dir/commands/ 已有 $count 个命令文件 ... OK"
-    return 0
+    # qoder 的命令集在 commands/opsx/ 子目录，不能用扁平文件名判断完整性
+    if [ "$tool" = "qoder" ] || harness_command_set_complete "$cmd_dir"; then
+      info "$harness_dir/commands/ 已有 $count 个命令文件 ... OK"
+      return 0
+    fi
+    warn "$harness_dir/commands/ 仅 $count 个命令且命令集不完整，按旧版残留处理"
+    remove_legacy_commands "$target" "$harness_dir"
+    if [ "$DRY_RUN" != 1 ]; then
+      count="$(find "$cmd_dir" -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
+    fi
+    if [ "$count" -gt 0 ]; then
+      info "$harness_dir/commands/ 保留 $count 个既有命令，仅补齐 openspec 标准命令"
+    fi
   fi
 
   if [ "$NO_INIT" = 1 ]; then
-    warn "$harness_dir/commands/ 为空且指定了 --no-init：技能将\"存在但永不加载\"，需手动 openspec init 后重跑"
+    warn "$harness_dir/commands/ 命令集不完整且指定了 --no-init：技能将\"存在但永不加载\"，需手动 openspec init 后重跑"
     return 0
   fi
 
   if ! command -v openspec >/dev/null 2>&1; then
-    warn "$harness_dir/commands/ 为空且未检测到 openspec CLI：技能将\"存在但永不加载\"。请先安装 OpenSpec CLI 并执行 openspec init --tools $tool 后重跑本脚本"
+    warn "$harness_dir/commands/ 命令集不完整且未检测到 openspec CLI：技能将\"存在但永不加载\"。请先安装 OpenSpec CLI 并执行 openspec init --tools $tool 后重跑本脚本"
     return 0
   fi
 
@@ -835,6 +878,11 @@ confirm_openspec_schema "$TARGET_ROOT"
 if [ "$USE_QODER" = 1 ]; then
   init_harness_commands "$TARGET_ROOT" .qoder qoder
   mount_skill_reference "$TARGET_ROOT" .qoder
+fi
+
+if [ "$USE_TRAE" = 1 ]; then
+  init_harness_commands "$TARGET_ROOT" .trae trae
+  mount_skill_reference "$TARGET_ROOT" .trae
 fi
 
 if [ "$USE_CURSOR" = 1 ]; then

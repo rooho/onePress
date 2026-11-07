@@ -15,9 +15,6 @@
 | `opencode/skills/superpowers-tdd/SKILL.md` | harness | 全量覆盖 |
 | `qoder/skills/onepress-discipline/SKILL.md` | harness | 全量覆盖 |
 | `trae/skills/onepress-discipline/SKILL.md` | harness | 全量覆盖 |
-| `trae/commands/opsx-new.md` | harness | 全量覆盖 |
-| `trae/commands/opsx-apply.md` | harness | 全量覆盖 |
-| `trae/commands/opsx-verify.md` | harness | 全量覆盖 |
 | `cursor/skills/onepress-discipline/SKILL.md` | harness | 全量覆盖 |
 | `openspec-schema/superspec/**`（10 文件） | harness | 全量覆盖 |
 | `README-ch.md` / `README.md` | docs | 不安装（仅仓库说明，不写入目标仓库） |
