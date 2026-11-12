@@ -84,15 +84,17 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 | 目标仓库路径 | 内容 | 层级 | 安装条件 |
 |--------------|------|------|----------|
 | `.opencode/` | `opencode.json`、`agent/ux-architect.md`、`commands/opsx-{new,apply,verify}.md`、`skills/superpowers-tdd/` | harness | 仅选中 OpenCode |
-| `.qoder/skills/onepress-discipline/SKILL.md` | 四条铁律 + TDD 纪律 | harness | 仅选中 Qoder |
+| `.qoder/skills/onepress-discipline/SKILL.md` | 九条铁律（契约 / 分流 / 检索 / 沙箱 / 门禁 / Token / 四态 / 无障碍 / 防呆）+ TDD 纪律 | harness | 仅选中 Qoder |
 | `.qoder/commands/opsx/*.md` | 仅在 frontmatter 后**新增一行**技能引用，主体不改 | harness | 仅选中 Qoder |
-| `.trae/skills/onepress-discipline/SKILL.md` | 四条铁律 + TDD 纪律（Trae 载体） | harness | 仅选中 Trae |
+| `.trae/skills/onepress-discipline/SKILL.md` | 九条铁律 + TDD 纪律（Trae 载体） | harness | 仅选中 Trae |
 | `.trae/commands/opsx-*.md` | 仅在 frontmatter 后**新增一行**技能引用，主体不改 | harness | 仅选中 Trae |
-| `.cursor/skills/onepress-discipline/SKILL.md` | 四条铁律 + TDD 纪律（Cursor 载体） | harness | 仅选中 Cursor |
+| `.cursor/skills/onepress-discipline/SKILL.md` | 九条铁律 + TDD 纪律（Cursor 载体） | harness | 仅选中 Cursor |
 | `.cursor/commands/opsx-*.md` | 仅在 frontmatter 后**新增一行**技能引用，主体不改 | harness | 仅选中 Cursor |
 | `openspec/schemas/superspec/` | `schema.yaml` + 10 模板（共 11 文件，含 `ui-spec.md`） | harness | 始终 |
 | `onePress.lock` | 版本、安装范围与受保护资产清单 | harness | 始终 |
-| `docs/ui-components.md` | 组件注册表模板（首次安装初始化为空表） | project | 始终 |
+| `docs/ui-components.md` | 组件注册表模板（四列，首次安装初始化为空表） | project | 始终 |
+
+> `docs/design-system/projectbaseline/MASTER.md` 由可选的 `ui-ux-pro-max` 技能**一次性**生成；onePress 在安装/升级时只保护它，不创建也不改写。
 
 ---
 
@@ -129,7 +131,7 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 
 ### 步骤 2：补全工件 `/opsx:continue` / `/opsx:ff`
 
-superspec 的工件序列共 9 个，`/opsx:continue` **每次只产出一个**：
+superspec 的工件序列共 9 个 DAG 工件，`/opsx:continue` **每次只产出一个**；UI 变更额外产出末行这对条件文件：
 
 ```text
 brainstorm → proposal → design → specs → tasks → plan → apply → verify → finalize
@@ -140,6 +142,7 @@ brainstorm → proposal → design → specs → tasks → plan → apply → ve
 | `brainstorm.md` | 备选方案对比与选型结论 |
 | `proposal.md` | 为什么做、做什么、影响哪些 capability |
 | `design.md` | 技术决策（D1…Dn）+ 风险（UI 契约在 `ui-spec.md`） |
+| `ui-spec.md` / `sandbox-preview.html` | **条件产物，非 DAG 工件**：六章节契约 + 单文件沙箱；仅 `**UI Change**: yes` 时产出 |
 | `specs/<capability>/spec.md` | delta 规范：`### Requirement:` + `#### Scenario:`（GIVEN/WHEN/THEN） |
 | `tasks.md` | 可勾选的原子任务 |
 | `plan.md` | 2–5 分钟粒度的微步骤 |
@@ -280,6 +283,10 @@ onePress/
 │   └── skills/onepress-discipline/SKILL.md
 ├── cursor/                 # Cursor harness 资产（1 文件）
 │   └── skills/onepress-discipline/SKILL.md
+├── scripts/                # 维护者自测脚本（不安装）
+│   ├── onepress-gate.sh    # 八门禁，AUTO 2/4/5/6/7 + MANUAL 1/3/8
+│   ├── onepress-registry-append.sh  # 按分区追加组件行（幂等）
+│   └── verify-gate.sh / verify-carriers.sh / verify-trae.sh / verify-cursor.sh
 ├── openspec-schema/superspec/   # 分发给目标仓库的 schema（11 文件，含 templates/ui-spec.md）
 └── openspec/               # 本方案自身的规范工作区（不安装）
     ├── config.yaml         # schema: superspec

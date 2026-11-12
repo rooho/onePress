@@ -84,15 +84,17 @@ The unselected harness gets no directory created and no files written. `onePress
 | Target path | Contents | Layer | Installed when |
 |-------------|----------|-------|----------------|
 | `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/opsx-{new,apply,verify}.md`, `skills/superpowers-tdd/` | harness | OpenCode selected |
-| `.qoder/skills/onepress-discipline/SKILL.md` | Four iron rules + TDD discipline | harness | Qoder selected |
+| `.qoder/skills/onepress-discipline/SKILL.md` | Nine iron rules (contract / triage / retrieval / sandbox / gates / token / states / a11y / anti-mistake) + TDD discipline | harness | Qoder selected |
 | `.qoder/commands/opsx/*.md` | One reference line added after frontmatter; body untouched | harness | Qoder selected |
-| `.trae/skills/onepress-discipline/SKILL.md` | Four iron rules + TDD discipline (Trae carrier) | harness | Trae selected |
+| `.trae/skills/onepress-discipline/SKILL.md` | Nine iron rules + TDD discipline (Trae carrier) | harness | Trae selected |
 | `.trae/commands/opsx-*.md` | One reference line added after frontmatter; body untouched | harness | Trae selected |
-| `.cursor/skills/onepress-discipline/SKILL.md` | Four iron rules + TDD discipline (Cursor carrier) | harness | Cursor selected |
+| `.cursor/skills/onepress-discipline/SKILL.md` | Nine iron rules + TDD discipline (Cursor carrier) | harness | Cursor selected |
 | `.cursor/commands/opsx-*.md` | One reference line added after frontmatter; body untouched | harness | Cursor selected |
 | `openspec/schemas/superspec/` | `schema.yaml` + 10 templates incl. `ui-spec.md` (11 files) | harness | always |
 | `onePress.lock` | Version, install scope, protected assets | harness | always |
-| `docs/ui-components.md` | Component registry template (empty tables on first install) | project | always |
+| `docs/ui-components.md` | Component registry template (four columns, empty tables on first install) | project | always |
+
+> `docs/design-system/projectbaseline/MASTER.md` is generated **once** by the optional `ui-ux-pro-max` skill. onePress protects it on install/upgrade but never creates or rewrites it.
 
 ---
 
@@ -129,7 +131,7 @@ What happens:
 
 ### Step 2 — Complete artifacts `/opsx:continue` / `/opsx:ff`
 
-superspec defines 9 artifacts; `/opsx:continue` produces **one per invocation**:
+superspec defines 9 DAG artifacts; `/opsx:continue` produces **one per invocation**. UI changes additionally produce the conditional pair in the last row:
 
 ```text
 brainstorm → proposal → design → specs → tasks → plan → apply → verify → finalize
@@ -140,6 +142,7 @@ brainstorm → proposal → design → specs → tasks → plan → apply → ve
 | `brainstorm.md` | Options compared, decision recorded |
 | `proposal.md` | Why, what, affected capabilities |
 | `design.md` | Decisions (D1…Dn) + risks (UI contract lives in `ui-spec.md`) |
+| `ui-spec.md` / `sandbox-preview.html` | **Conditional, not a DAG artifact**: six-section UI contract + single-file sandbox; only when `**UI Change**: yes` |
 | `specs/<capability>/spec.md` | Delta spec: `### Requirement:` + `#### Scenario:` (GIVEN/WHEN/THEN) |
 | `tasks.md` | Atomic checkable tasks |
 | `plan.md` | 2–5 minute micro-steps |
@@ -280,7 +283,11 @@ onePress/
 │   └── skills/onepress-discipline/SKILL.md
 ├── cursor/                 # Cursor harness assets (1 file)
 │   └── skills/onepress-discipline/SKILL.md
-├── openspec-schema/superspec/   # Schema installed into target repos (10 files)
+├── scripts/                # Maintainer self-tests (not installed)
+│   ├── onepress-gate.sh    # Eight gates, AUTO 2/4/5/6/7 + MANUAL 1/3/8
+│   ├── onepress-registry-append.sh  # Append a component row (idempotent)
+│   └── verify-gate.sh / verify-carriers.sh / verify-trae.sh / verify-cursor.sh
+├── openspec-schema/superspec/   # Schema installed into target repos (11 files, incl. templates/ui-spec.md)
 └── openspec/               # This toolkit's own spec workspace (not installed)
     ├── config.yaml         # schema: superspec
     ├── CHANGE_NAMING.md    # Change naming convention
