@@ -4,9 +4,9 @@
 
 onePress 面向"没有专职设计师、由程序员主导"的团队，解决三个具体问题：
 
-1. **UI 靠猜**：让 AI 按功能点自动推导 `ui_contract` 契约（页面骨架 / 字段控件 / 状态矩阵 / 布局 Token），不再临场发挥。
-2. **交付靠感觉**：沙箱即生产——先出可点击的 UI 底座，用浮动 State Bar 十秒肉眼验收，再接后端。
-3. **质量靠自觉**：秒级静态门禁（tsc + Token 纯净度扫描 + 纯逻辑 Hook TDD + 四态点检）卡在归档前。
+1. **设计靠猜**：让 AI 检索本地设计知识库，产出六章节 `ui-spec.md`（组件层级 / 16 通道 Token / 四态矩阵 / 响应式规则 / 微动效 / 行业反模式），不再凭训练数据均值配色。
+2. **交付靠感觉**：先出单文件 `sandbox-preview.html`（四态 + Light/Dark 切换），把色彩、字体、密度、动效锁死，再写生产组件。
+3. **质量靠自觉**：八项门禁（Token 纯净度 + WCAG 对比度 + 反模式 + 热区 + 无障碍 + 纯逻辑状态测试 + 人工项）由 `scripts/onepress-gate.sh` 执行。
 
 首批支持四个 AI 编码环境：`.qoder/`、`.opencode/`、`.trae/` 与 `.cursor/`。安装零运行时依赖，任意具备文件读写能力的模型都能执行。
 
@@ -18,6 +18,7 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 |----|------|
 | 目标仓库 | 已初始化 git |
 | OpenSpec CLI | `npm install -g @fission-ai/openspec@latest`（Node 22.12+） |
+| 设计检索（可选） | `npm install -g ui-ux-pro-max-cli` + `uipro init --ai <harness> --offline`；缺失时自动降级 |
 | AI 助手 | Qoder / OpenCode / Trae / Cursor / 任意具备文件读写与命令执行能力的 Agent |
 
 ---
@@ -48,7 +49,7 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 ./install.sh --harness qoder --target ~/repo --dry-run --source ~/pack
 ```
 
-脚本一键做完六件事：**探测 harness → 分层写入 → 对齐 OpenSpec 配置 → 写 `onePress.lock` → 自检 → 输出报告**。其中"对齐配置"包括：`openspec/config.yaml` 不存在时创建（`schema: superspec`）、已存在但值不对时只改那一行（CRLF 也保留），以及 `.qoder/`、`.trae/`、`.cursor/` 的 `commands/` 为空时自动 `openspec init --tools <qoder|trae|cursor>` 生成命令。自检覆盖布局、逐字一致、schema 10 文件齐全、`schema: superspec`、命令非空且已挂载、lock 与安装范围一致；失败即中止并给出原因，退出码 `0` 成功 / `1` 失败。你不需要手动核对任何东西。
+脚本一键做完六件事：**探测 harness → 分层写入 → 对齐 OpenSpec 配置 → 写 `onePress.lock` → 自检 → 输出报告**。其中"对齐配置"包括：`openspec/config.yaml` 不存在时创建（`schema: superspec`）、已存在但值不对时只改那一行（CRLF 也保留），以及 `.qoder/`、`.trae/`、`.cursor/` 的 `commands/` 为空时自动 `openspec init --tools <qoder|trae|cursor>` 生成命令。自检覆盖布局、逐字一致、schema 11 文件齐全、`schema: superspec`、命令非空且已挂载、lock 与安装范围一致；失败即中止并给出原因，退出码 `0` 成功 / `1` 失败。你不需要手动核对任何东西。
 
 > 实测：`openspec init` 在 `config.yaml` 已存在时**不会覆盖它**，所以"先对齐配置、再 init、再挂载"的顺序是安全的；`-NoInit` / `--no-init` 可关闭自动 init。
 
@@ -89,7 +90,7 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 | `.trae/commands/opsx-*.md` | 仅在 frontmatter 后**新增一行**技能引用，主体不改 | harness | 仅选中 Trae |
 | `.cursor/skills/onepress-discipline/SKILL.md` | 四条铁律 + TDD 纪律（Cursor 载体） | harness | 仅选中 Cursor |
 | `.cursor/commands/opsx-*.md` | 仅在 frontmatter 后**新增一行**技能引用，主体不改 | harness | 仅选中 Cursor |
-| `openspec/schemas/superspec/` | `schema.yaml` + 9 模板（共 10 文件） | harness | 始终 |
+| `openspec/schemas/superspec/` | `schema.yaml` + 10 模板（共 11 文件，含 `ui-spec.md`） | harness | 始终 |
 | `onePress.lock` | 版本、安装范围与受保护资产清单 | harness | 始终 |
 | `docs/ui-components.md` | 组件注册表模板（首次安装初始化为空表） | project | 始终 |
 
@@ -101,10 +102,10 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 
 | 步骤 | 命令 | 你提供 | 产物 | 通过标准 |
 |------|------|--------|------|----------|
-| 1 契约初始化 | `/opsx:new <change>` | 功能描述 | `proposal.md`、`design.md`（含 `ui_contract`） | 契约字段与后端 Schema 逐项对齐 |
+| 1 契约初始化 | `/opsx:new <change>` | 功能描述 | `proposal.md`、`design.md`、`ui-spec.md` + `sandbox-preview.html`（仅 UI 变更） | 六章节齐全，沙箱 Light/Dark 可打开 |
 | 2 补全工件 | `/opsx:continue` ×N 或 `/opsx:ff` | — | `specs/`、`tasks.md`、`plan.md` | `openspec validate --strict` 通过 |
-| 3 实现 | `/opsx:apply` | — | 代码 + `apply.md` | Stage 1 State Bar 验收通过 |
-| 4 验证 | `/opsx:verify` | — | `verify.md` | 四道门禁全绿，无 CRITICAL |
+| 3 实现 | `/opsx:apply` | — | 代码 + `apply.md` | 与沙箱 Light + Dark 对齐 |
+| 4 验证 | `/opsx:verify` | — | `verify.md` | 八门禁全绿，无 CRITICAL |
 | 5 归档 | `/opsx:archive` | — | 主 specs 更新 + `finalize.md` + 归档目录 | 组件已增量写入注册表 |
 
 ### 步骤 1：契约初始化 `/opsx:new`
@@ -115,29 +116,16 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 
 做的事：
 
-1. `ux-architect`（OpenCode 为 subagent，Qoder 为技能内联）检索 `docs/ui-components.md`，能复用的组件必须列入 `reuse_components`；
-2. 后端字段逐字段映射到控件与空值降级策略；
-3. 页面骨架从 5 种 archetype 里择一：`Dashboard-Grid` / `Master-Detail` / `Standard-CRUD-Table` / `Step-Wizard` / `Settings-Split`；
-4. 把契约写到 `openspec/changes/<change>/design.md` 底部。
+1. `/opsx:new` 先按三条规则判定 `**UI Change**: yes|no`（路由/页面；表格列、表单字段或状态展示；破坏性交互），并把结论写到 `proposal.md` 首行；
+2. `yes` 时 `ux-architect` 读取 `docs/design-system/projectbaseline/MASTER.md`，再执行双步检索（先 `--domain ux`，后 `--stack shadcn|html-tailwind`）；
+3. 从 `docs/ui-components.md`（四列，按"适用骨架"检索）拉取可复用组件；
+4. 生成六章节 `ui-spec.md`，随后生成单文件 `sandbox-preview.html`。
 
-产物示例（`design.md` 末尾的 `ui_contract`）：
+`ui-spec.md` 六章节：组件层级拆解 / Design Token 映射（16 通道 + 字体配对 + `xs`–`3xl` 密度）/ 四态状态机矩阵 / 响应式与排版 / 交互热点与微动效 / 行业反模式黑名单。
 
-```yaml
-ui_contract:
-  archetype: "Standard-CRUD-Table"
-  reuse_components: ["DataTable", "RoleBadge"]
-  schema_mapping:
-    - field: "user.role"
-      widget: "Select"
-      rule: "required | default: member"
-  states_matrix:
-    query: { loading: "Skeleton 等高", empty: "EmptyState + 重置", error: "Alert + 重试" }
-    mutation: { submitting: "disabled + Loader2", destructive_guard: "AlertDialog 二次确认" }
-  layout_tokens:
-    container: "max-w-7xl mx-auto p-6 space-y-6"
-```
+**人工复核点**：只核对 `ui-spec.md` 与沙箱（Light + Dark 各一遍），此时还没有生产代码。
 
-**人工复核点**：只核对契约本身（字段映射、状态矩阵、复用组件），此时还没有代码。
+**可选加速器**：`ui-ux-pro-max` 提供本地 CSV 知识库。`python3` 或技能目录缺失时，检索记为 `SKIP`，`ui-spec.md` 改为手工填写——安装与门禁照常工作。
 
 ### 步骤 2：补全工件 `/opsx:continue` / `/opsx:ff`
 
@@ -151,7 +139,7 @@ brainstorm → proposal → design → specs → tasks → plan → apply → ve
 |------|------|
 | `brainstorm.md` | 备选方案对比与选型结论 |
 | `proposal.md` | 为什么做、做什么、影响哪些 capability |
-| `design.md` | 技术决策（D1…Dn）+ 风险 + 底部 `ui_contract` |
+| `design.md` | 技术决策（D1…Dn）+ 风险（UI 契约在 `ui-spec.md`） |
 | `specs/<capability>/spec.md` | delta 规范：`### Requirement:` + `#### Scenario:`（GIVEN/WHEN/THEN） |
 | `tasks.md` | 可勾选的原子任务 |
 | `plan.md` | 2–5 分钟粒度的微步骤 |
@@ -163,21 +151,28 @@ brainstorm → proposal → design → specs → tasks → plan → apply → ve
 
 | 阶段 | 做什么 | 产出 | 验收 |
 |------|--------|------|------|
-| Stage 1 UI 底座直出 | 按 `ui_contract` 直接生成页面（mock 数据 + 四态） | 可点击页面 + 浮动 State Bar | 十个状态按钮逐个点，肉眼 10 秒确认 |
-| Stage 2 Schema 接线 | 接后端字段、错误码、权限与提交逻辑 | 真实数据流 | 表单校验、破坏性操作二次确认生效 |
+| Stage 1 UI 底座直出 | 按 `ui-spec.md` 的 Token 直接写生产级受控组件（四态齐全） | 生产组件 | 与 `sandbox-preview.html` 在 Light + Dark 下无显著偏差 |
+| Stage 2 Schema 接线 | 接后端字段、错误码、权限与提交逻辑 | 真实数据流 | 组件结构与 class 集合不变 |
 
-State Bar 一次只驱动一个状态（Idle / Loading / Empty / Error / Submitting），**不写 DOM 单测**——用眼睛验收，用类型与正则守质量。
+不再注入 in-app State Bar：`sandbox-preview.html` 是唯一视觉验收面。**不写 DOM/RTL 单测**——用眼睛验收，用门禁脚本守质量。
 
 ### 步骤 4：验证 `/opsx:verify`
 
-四道门禁，任一失败打回 `apply` 对应阶段：
+八项门禁，任一失败打回 `apply` 对应阶段：
 
-| 门禁 | 内容 | 失败示例 |
-|------|------|----------|
-| 类型 | `tsc --noEmit` 零错误 | 属性名拼错 |
-| Token 纯净度 | 静态扫描三类禁令 | 内联 style / `#3b82f6` / `w-[317px]` |
-| 纯逻辑 TDD | Hook 与纯函数有测试且通过 | 分页计算无测试 |
-| 四态点检 | query 与 mutation 状态齐全 | 缺 Empty 或 Error |
+| # | 门禁 | 方式 |
+|---|------|------|
+| 0 | UI 变更必有 `ui-spec.md` + `sandbox-preview.html` | AUTO |
+| 1 | 四态与矩阵一致，CLS < 0.1 | MANUAL |
+| 2 | Token 纯净度（三条正则）+ WCAG 对比度 ≥4.5:1（大字与边界 ≥3:1） | AUTO |
+| 3 | 断点零横向滚动、长串折行、`+n` 展开 | MANUAL |
+| 4 | 状态机单测（仅纯逻辑，禁 RTL） | AUTO |
+| 5 | A11y CRITICAL：焦点环、`aria-label`、`aria-describedby`、`aria-hidden` | AUTO |
+| 6 | 热区 ≥44×44px、`cursor-pointer`、150–250ms、`motion-reduce:` | AUTO |
+| 7 | 反模式：零 Emoji 图标、未命中黑名单 | AUTO |
+| 8 | 与沙箱无显著视觉偏差 | MANUAL |
+
+执行 `bash scripts/onepress-gate.sh --change openspec/changes/<change>` 自动跑门禁 2/4/5/6/7，其余输出 `MANUAL`。
 
 输出 `openspec/changes/<change>/verify.md`，结论三选一：`PASS` / `PASS WITH WARNINGS` / `FAIL`。有 CRITICAL 不允许归档。
 
@@ -192,6 +187,10 @@ State Bar 一次只驱动一个状态（Idle / Loading / Empty / Error / Submitt
 3. 整个变更目录移入 `openspec/changes/archive/YYYY-MM-DD-<change>/`；
 4. 写 `finalize.md` 收尾回执。
 
+> **OpenCode 没有 `/opsx:archive`**：执行 `openspec archive <name> --yes` 后，用脚本补记组件行：
+> `bash scripts/onepress-registry-append.sh --root . --name <Name> --path <path> --archetype <Archetype> --props '<签名>'`
+> 脚本幂等，只向指定分区追加，不改动历史行。
+
 多个变更一起收：`/opsx:bulk-archive`。只想同步规范不归档：`/opsx:sync`。
 
 ---
@@ -200,18 +199,20 @@ State Bar 一次只驱动一个状态（Idle / Loading / Empty / Error / Submitt
 
 | 命令 | Qoder | OpenCode | Trae | Cursor | 用途 |
 |------|:----:|:--------:|:----:|:------:|------|
-| `/opsx:new <name>` | ✅ | ✅ | ✅ | ✅ | 契约初始化（proposal + design + ui_contract） |
+| `/opsx:new <name>` | ✅ | ✅ | ✅ | ✅ | 契约初始化（proposal + design + ui-spec + 沙箱） |
 | `/opsx:continue` | ✅ | 用 CLI | ✅ | ✅ | 生成下一个工件 |
 | `/opsx:ff` | ✅ | 用 CLI | ✅ | ✅ | 一次补齐全部工件 |
 | `/opsx:propose` | ✅ | 用 CLI | ✅ | ✅ | 一步生成完整提案 |
 | `/opsx:explore` | ✅ | — | ✅ | ✅ | 只讨论，不落文件 |
 | `/opsx:apply` | ✅ | ✅ | ✅ | ✅ | 两阶段实现 |
-| `/opsx:verify` | ✅ | ✅ | ✅ | ✅ | 四道门禁 |
+| `/opsx:verify` | ✅ | ✅ | ✅ | ✅ | 八道门禁 |
 | `/opsx:sync` | ✅ | 用 CLI | ✅ | ✅ | 仅同步 delta specs |
 | `/opsx:archive` | ✅ | 用 CLI | ✅ | ✅ | 归档 + 注册表增量 |
 | `/opsx:bulk-archive` | ✅ | 用 CLI | ✅ | ✅ | 批量归档 |
+| `/opsx:onboard` | ✅ | 用 CLI | ✅ | ✅ | 首次全流程引导（原生） |
+| `/opsx:update` | ✅ | 用 CLI | ✅ | ✅ | 修订规划工件（原生，实验性） |
 
-- **Qoder / Trae / Cursor**：`openspec init --tools qoder|trae|cursor` 已生成 10 个命令，onePress 只加技能与一行引用（Trae / Cursor 的斜杠命令名为 `/opsx-apply` 形式）。
+- **Qoder / Trae / Cursor**：`openspec init --tools qoder|trae|cursor` 已生成 12 个命令，onePress 只加技能与一行引用（Trae / Cursor 的斜杠命令名为 `/opsx-apply` 形式）。
 - **OpenCode**：本包只随附 `new` / `apply` / `verify` 三个命令；其余用 CLI 等价替代：
 
 ```bash
@@ -264,6 +265,7 @@ onePress/
 ├── README.md               # English README
 ├── VERSION                 # 版本号（升级判定基准）
 ├── ASSETS.md               # 资产清单（归属层级 + 覆盖策略）
+├── BLUEPRINT-V3.0.md       # V3.0 纲领（后续迭代基准，不安装）
 ├── INSTALL_PROMPT.md       # AI 安装入口（五段结构，脚本的等价兜底）
 ├── install.ps1             # Windows 安装器（探测/写入/自检/报告一条命令）
 ├── install.sh              # macOS / Linux 安装器
@@ -278,12 +280,12 @@ onePress/
 │   └── skills/onepress-discipline/SKILL.md
 ├── cursor/                 # Cursor harness 资产（1 文件）
 │   └── skills/onepress-discipline/SKILL.md
-├── openspec-schema/superspec/   # 分发给目标仓库的 schema（10 文件）
+├── openspec-schema/superspec/   # 分发给目标仓库的 schema（11 文件，含 templates/ui-spec.md）
 └── openspec/               # 本方案自身的规范工作区（不安装）
     ├── config.yaml         # schema: superspec
     ├── CHANGE_NAMING.md    # 变更命名规范
     ├── schemas/superspec/  # 与 openspec-schema/ 内容一致
-    ├── specs/              # 4 份主规范（18 requirements）
+    ├── specs/              # 主规范（份数与需求数随归档增长）
     └── changes/archive/    # 已归档变更（完整证据链）
 ```
 
@@ -301,7 +303,7 @@ A：多半是稀疏检出路径与实际布局不符（cone 模式对不存在�
 A：1.0.4 起 superspec 的 Superpowers 技能引用全部带内联兜底（brainstorm / plan / apply 2c / finalize 四处），技能缺失时 AI 会按兜底步骤自行产出 `plan.md`，不会中断。旧版本（schema version ≤ 4）升级重装即可；临时也可让 AI 直接按 `tasks.md` 拆 2–5 分钟微步骤写入 `plan.md`。
 
 **Q：目标仓库没有 OpenSpec？**
-A：安装能完成，但 `/opsx:*` 与 `ui_contract` 解析需要 OpenSpec。先 `openspec init --tools qoder|trae|cursor|opencode` 再安装。
+A：安装能完成，但 `/opsx:*` 与 `ui-spec.md` / `sandbox-preview.html` 的产出需要 OpenSpec。先 `openspec init --tools qoder|trae|cursor|opencode` 再安装。
 
 **Q：OpenCode 下没有 `/opsx:continue`、`/opsx:archive`？**
 A：本包只随附三个命令。其余用 `openspec status` / `openspec instructions` / `openspec archive` 等价操作，或自行补 `.opencode/commands/opsx-*.md`。

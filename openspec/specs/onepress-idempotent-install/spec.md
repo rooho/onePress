@@ -1,7 +1,7 @@
 # onepress-idempotent-install Specification
 
 ## Purpose
-TBD - created by archiving change req-261103-001-onepress-scheme-install. Update Purpose after archive.
+定义 onePress 安装器的幂等与升级语义：`onePress.lock` 清单、harness 级资产全量覆盖、项目级资产 Protect Local、本地未提交修改保护，以及 lock 缺失或损坏时的降级行为。
 
 ## Requirements
 

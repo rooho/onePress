@@ -27,7 +27,7 @@ TEMP_ROOT=""
 
 SKILL_REF='> onepress: 执行本命令时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。'
 
-SCHEMA_FILES="schema.yaml templates/apply.md templates/brainstorm.md templates/design.md templates/finalize.md templates/plan.md templates/proposal.md templates/spec.md templates/tasks.md templates/verify.md"
+SCHEMA_FILES="schema.yaml templates/apply.md templates/brainstorm.md templates/design.md templates/finalize.md templates/plan.md templates/proposal.md templates/spec.md templates/tasks.md templates/ui-spec.md templates/verify.md"
 
 OPENCODE_FILES="opencode/opencode.json opencode/agent/ux-architect.md opencode/commands/opsx-new.md opencode/commands/opsx-apply.md opencode/commands/opsx-verify.md opencode/skills/superpowers-tdd/SKILL.md"
 
@@ -350,6 +350,10 @@ init_ui_components() {
   local path="$target/$rel"
 
   if [ -f "$path" ]; then
+    if ! grep -qE '^\|.*适用骨架' "$path"; then
+      warn "$rel 为旧版表结构（缺「适用骨架」列），建议手工迁移表头为："
+      info '  | 组件名称 | 路径 | 适用骨架 (Archetype) | 核心 Props 签名 |'
+    fi
     skip "$rel（已存在，Protect Local 不覆盖）"
     return 0
   fi
@@ -368,22 +372,46 @@ init_ui_components() {
 
 ## 使用说明
 
-1. `/opsx:new` 起草 `ui_contract` 前 MUST 先检索本表，可复用的组件写入 `reuse_components`，不得重复造轮子。
-2. 新增组件必须补齐：组件名、文件路径、用途、关键 Props、状态覆盖（loading / empty / error / submitting）。
+1. `/opsx:new` 起草 `ui-spec.md` 前 MUST 先检索本表，可复用的组件写入第 1 节复用表，不得重复造轮子。
+2. 新增组件必须补齐：组件名称、路径、适用骨架 (Archetype)、核心 Props 签名。
 3. 组件分级：`base`（无业务语义，如 DataTable）、`domain`（含业务语义，如 RoleBadge）。
-4. 不收录纯布局容器与一次性页面片段。
+4. `适用骨架` 列取值：`Dashboard-Grid` / `Master-Detail` / `Standard-CRUD-Table` / `Step-Wizard` / `Settings-Split`；通用组件填 `通用`。
+5. 不收录纯布局容器与一次性页面片段。
 
 ## 基础组件（base）
 
-| 组件名 | 文件路径 | 用途 | 关键 Props | 状态覆盖 | 首次引入 |
-|--------|----------|------|-----------|----------|----------|
+| 组件名称 | 路径 | 适用骨架 (Archetype) | 核心 Props 签名 |
+|----------|------|----------------------|-----------------|
 
 ## 业务组件（domain）
 
-| 组件名 | 文件路径 | 用途 | 关键 Props | 状态覆盖 | 首次引入 |
-|--------|----------|------|-----------|----------|----------|
+| 组件名称 | 路径 | 适用骨架 (Archetype) | 核心 Props 签名 |
+|----------|------|----------------------|-----------------|
 UI_EOF
   ok "$rel（首装初始化）"
+}
+
+probe_uiux() {
+  local target="$1"
+  local py=0 skill=0 d h
+  command -v python3 >/dev/null 2>&1 && py=1
+  for d in .qoder/skills .opencode/skills .trae/skills .cursor/skills; do
+    if [ -f "$target/$d/ui-ux-pro-max/scripts/search.py" ]; then skill=1; break; fi
+  done
+  if [ "$py" = 1 ] && [ "$skill" = 1 ]; then
+    info 'ui-ux-pro-max：enabled（python3 与技能目录均就绪）'
+    return 0
+  fi
+  if [ "$py" != 1 ]; then
+    info 'ui-ux-pro-max：SKIP（未检测到 python3；检索步骤降级为手工填写 ui-spec.md）'
+  else
+    info 'ui-ux-pro-max：SKIP（未检测到技能目录；检索步骤降级为手工填写 ui-spec.md）'
+  fi
+  info '  启用设计检索（可选，需 Node.js + Python3）：'
+  info '    npm install -g ui-ux-pro-max-cli'
+  for h in $(printf '%s' "$SCOPE" | tr '+' ' '); do
+    info "    uipro init --ai $h --offline    # 只保留 .$h/skills/ui-ux-pro-max 目录，其余 6 个伴生技能可删"
+  done
 }
 
 confirm_openspec_schema() {
@@ -405,7 +433,7 @@ context: |
       - 每条需求 MUST 使用 RFC 2119 关键词（SHALL/MUST/SHOULD/MAY）
       - 每条需求 MUST 至少包含一个 GIVEN/WHEN/THEN 场景，且场景具体可测试
     design:
-      - 涉及页面与交互的变更 MUST 在 design.md 底部给出 ui_contract（archetype / reuse_components / schema_mapping / states_matrix / layout_tokens）
+      - UI 变更 MUST 在 proposal.md 首行给出 **UI Change**: yes|no；yes 时必须产出 ui-spec.md（六章节）与 sandbox-preview.html，且不得把契约写回 design.md
     tasks:
       - 每个任务为原子工作单元，可独立验证（跑测试、产生输出或肉眼点检）
 CFG_EOF
@@ -667,7 +695,7 @@ accept_skill_harness() {
   done
 
   if [ -f "$target/$harness_dir/skills/onepress-discipline/SKILL.md" ]; then
-    for kw in ui_contract Token 四态 无障碍 防呆; do
+    for kw in ui-spec.md ui_change sandbox-preview 44×44 prefers-reduced-motion 四态 无障碍 防呆; do
       grep -q "$kw" "$target/$harness_dir/skills/onepress-discipline/SKILL.md" || bad "$harness_dir/skills/onepress-discipline/SKILL.md 缺少铁律关键词：$kw"
     done
   fi
@@ -694,14 +722,17 @@ run_acceptance() {
 
   step '④ 验收自检'
 
-  local count=0
+  local count=0 expected=0
+  # shellcheck disable=SC2086
+  set -- $SCHEMA_FILES
+  expected=$#
   if [ -d "$target/openspec/schemas/superspec" ]; then
     count="$(find "$target/openspec/schemas/superspec" -type f | wc -l | tr -d ' ')"
   fi
-  if [ "$count" = "10" ]; then
-    info 'openspec/schemas/superspec 共 10 文件 ... OK'
+  if [ "$count" = "$expected" ]; then
+    info "openspec/schemas/superspec 共 $expected 文件（含 ui-spec.md）... OK"
   else
-    bad "openspec/schemas/superspec 文件数应为 10，实际 $count"
+    bad "openspec/schemas/superspec 文件数应为 $expected，实际 $count"
   fi
 
   if [ -f "$target/openspec/schemas/superspec/schema.yaml" ]; then
@@ -897,7 +928,10 @@ if [ "$DRY_RUN" != 1 ]; then
   run_acceptance "$PACK_ROOT" "$TARGET_ROOT" "$VERSION"
 fi
 
-step '⑤ 报告'
+step '⑤ 可选增强层探测'
+probe_uiux "$TARGET_ROOT"
+
+step '⑥ 报告'
 info "安装范围：harnesses: $SCOPE"
 info "安装类型：$INSTALL_KIND"
 WRITTEN_COUNT="$(printf '%s' "$WRITTEN" | grep -c . || true)"

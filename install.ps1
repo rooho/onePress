@@ -74,6 +74,7 @@ $script:SchemaFiles = @(
     'templates/proposal.md',
     'templates/spec.md',
     'templates/tasks.md',
+    'templates/ui-spec.md',
     'templates/verify.md'
 )
 
@@ -107,7 +108,7 @@ context: |
       - 每条需求 MUST 使用 RFC 2119 关键词（SHALL/MUST/SHOULD/MAY）
       - 每条需求 MUST 至少包含一个 GIVEN/WHEN/THEN 场景，且场景具体可测试
     design:
-      - 涉及页面与交互的变更 MUST 在 design.md 底部给出 ui_contract（archetype / reuse_components / schema_mapping / states_matrix / layout_tokens）
+      - UI 变更 MUST 在 proposal.md 首行给出 **UI Change**: yes|no；yes 时必须产出 ui-spec.md（六章节）与 sandbox-preview.html，且不得把契约写回 design.md
     tasks:
       - 每个任务为原子工作单元，可独立验证（跑测试、产生输出或肉眼点检）
 '@
@@ -119,20 +120,21 @@ $script:UiComponentsTemplate = @'
 
 ## 使用说明
 
-1. `/opsx:new` 起草 `ui_contract` 前 MUST 先检索本表，可复用的组件写入 `reuse_components`，不得重复造轮子。
-2. 新增组件必须补齐：组件名、文件路径、用途、关键 Props、状态覆盖（loading / empty / error / submitting）。
+1. `/opsx:new` 起草 `ui-spec.md` 前 MUST 先检索本表，可复用的组件写入第 1 节复用表，不得重复造轮子。
+2. 新增组件必须补齐：组件名称、路径、适用骨架 (Archetype)、核心 Props 签名。
 3. 组件分级：`base`（无业务语义，如 DataTable）、`domain`（含业务语义，如 RoleBadge）。
-4. 不收录纯布局容器与一次性页面片段。
+4. `适用骨架` 列取值：`Dashboard-Grid` / `Master-Detail` / `Standard-CRUD-Table` / `Step-Wizard` / `Settings-Split`；通用组件填 `通用`。
+5. 不收录纯布局容器与一次性页面片段。
 
 ## 基础组件（base）
 
-| 组件名 | 文件路径 | 用途 | 关键 Props | 状态覆盖 | 首次引入 |
-|--------|----------|------|-----------|----------|----------|
+| 组件名称 | 路径 | 适用骨架 (Archetype) | 核心 Props 签名 |
+|----------|------|----------------------|-----------------|
 
 ## 业务组件（domain）
 
-| 组件名 | 文件路径 | 用途 | 关键 Props | 状态覆盖 | 首次引入 |
-|--------|----------|------|-----------|----------|----------|
+| 组件名称 | 路径 | 适用骨架 (Archetype) | 核心 Props 签名 |
+|----------|------|----------------------|-----------------|
 '@
 
 function Write-Step {
@@ -626,6 +628,11 @@ function Initialize-UiComponents {
     $path = Join-Rel $TargetRoot $rel
 
     if (Test-Path -LiteralPath $path) {
+        $head = [System.IO.File]::ReadAllText($path, $script:Utf8NoBom)
+        if ($head -notmatch '(?m)^\|.*适用骨架') {
+            Write-Warn "$rel 为旧版表结构（缺「适用骨架」列），建议手工迁移表头为："
+            Write-Info '  | 组件名称 | 路径 | 适用骨架 (Archetype) | 核心 Props 签名 |'
+        }
         Write-Skip "$rel（已存在，Protect Local 不覆盖）"
         return
     }
@@ -752,9 +759,33 @@ function Test-SkillHarness {
     $skill = Join-Rel $TargetRoot "$HarnessDir/skills/onepress-discipline/SKILL.md"
     if (Test-Path -LiteralPath $skill) {
         $skillText = [System.IO.File]::ReadAllText($skill, $script:Utf8NoBom)
-        foreach ($rule in @('ui_contract', 'Token', '四态', '无障碍', '防呆')) {
+        foreach ($rule in @('ui-spec.md', 'ui_change', 'sandbox-preview', '44×44', 'prefers-reduced-motion', '四态', '无障碍', '防呆')) {
             if ($skillText -notmatch $rule) { Write-Fail "$HarnessDir/skills/onepress-discipline/SKILL.md 缺少铁律关键词：$rule" }
         }
+    }
+}
+
+function Probe-UiUx {
+    param([string]$TargetRoot)
+
+    $hasPy = $null -ne (Get-Command python3 -ErrorAction SilentlyContinue)
+    $hasSkill = $false
+    foreach ($d in @('.qoder/skills', '.opencode/skills', '.trae/skills', '.cursor/skills')) {
+        if (Test-Path -LiteralPath (Join-Rel $TargetRoot "$d/ui-ux-pro-max/scripts/search.py")) { $hasSkill = $true; break }
+    }
+    if ($hasPy -and $hasSkill) {
+        Write-Info 'ui-ux-pro-max：enabled（python3 与技能目录均就绪）'
+        return
+    }
+    if (-not $hasPy) {
+        Write-Info 'ui-ux-pro-max：SKIP（未检测到 python3；检索步骤降级为手工填写 ui-spec.md）'
+    } else {
+        Write-Info 'ui-ux-pro-max：SKIP（未检测到技能目录；检索步骤降级为手工填写 ui-spec.md）'
+    }
+    Write-Info '  启用设计检索（可选，需 Node.js + Python3）：'
+    Write-Info '    npm install -g ui-ux-pro-max-cli'
+    foreach ($h in ($scope -split '\+')) {
+        Write-Info "    uipro init --ai $h --offline    # 只保留 .$h/skills/ui-ux-pro-max 目录，其余 6 个伴生技能可删"
     }
 }
 
@@ -768,8 +799,9 @@ function Test-Acceptance {
     if (Test-Path -LiteralPath $schemaDir) {
         $schemaCount = @(Get-ChildItem -LiteralPath $schemaDir -Recurse -File).Count
     }
-    if ($schemaCount -eq 10) { Write-Ok 'openspec/schemas/superspec 共 10 文件' }
-    else { Write-Fail "openspec/schemas/superspec 文件数应为 10，实际 $schemaCount" }
+    $schemaExpected = $script:SchemaFiles.Count
+    if ($schemaCount -eq $schemaExpected) { Write-Ok "openspec/schemas/superspec 共 $schemaExpected 文件（含 ui-spec.md）" }
+    else { Write-Fail "openspec/schemas/superspec 文件数应为 $schemaExpected，实际 $schemaCount" }
 
     $schemaYaml = Join-Rel $TargetRoot 'openspec/schemas/superspec/schema.yaml'
     if (Test-Path -LiteralPath $schemaYaml) {
@@ -919,7 +951,10 @@ Write-LockFile -TargetRoot $targetRoot -Version $version -HarnessSet $harnessSet
 
 if (-not $DryRun) { Test-Acceptance -PackRoot $packRoot -TargetRoot $targetRoot -HarnessSet $harnessSet -Version $version }
 
-Write-Step '⑤ 报告'
+Write-Step '⑤ 可选增强层探测'
+Probe-UiUx -TargetRoot $targetRoot
+
+Write-Step '⑥ 报告'
 Write-Info "安装范围：harnesses: $scope"
 Write-Info "安装类型：$installKind"
 Write-Info "写入 $($script:Written.Count) 项，跳过 $($script:Skipped.Count) 项，失败 $($script:Failures.Count) 项"

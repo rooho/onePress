@@ -83,7 +83,9 @@ ok '安装器退出码为 0'
 
 SKILL="$WORK/.cursor/skills/onepress-discipline/SKILL.md"
 assert_file "$SKILL" '.cursor/skills/onepress-discipline/SKILL.md'
-assert_contains "$SKILL" 'ui_contract' '技能包含 ui_contract 契约'
+assert_contains "$SKILL" 'ui-spec.md' '技能包含 ui-spec.md 契约'
+assert_contains "$SKILL" 'sandbox-preview' '技能包含 sandbox-preview 沙箱'
+assert_contains "$SKILL" 'prefers-reduced-motion' '技能包含减少动效降级'
 assert_contains "$SKILL" '四态状态机' '技能包含四态状态机铁律'
 assert_contains "$SKILL" '无障碍基线' '技能包含无障碍基线铁律'
 assert_contains "$SKILL" '防呆与反馈闭环' '技能包含防呆与反馈闭环铁律'

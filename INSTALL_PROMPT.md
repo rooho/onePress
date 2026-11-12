@@ -63,7 +63,7 @@
 
 | 模板源路径 | 目标路径 |
 |-----------|---------|
-| `openspec-schema/superspec/**`（10 文件） | `openspec/schemas/superspec/`（schema.yaml + templates/ 9 文件） |
+| `openspec-schema/superspec/**`（11 文件） | `openspec/schemas/superspec/`（schema.yaml + templates/ 10 文件，含 `ui-spec.md`） |
 
 **仅 OpenCode（`HARNESS_SET` 含 `opencode` 时）**
 
@@ -109,13 +109,13 @@
 ### OpenSpec 配置对齐（始终执行）
 
 - 目标仓库存在 `openspec/config.yaml` 时，其顶层 `schema:` MUST 为 `superspec`（九工件序列 brainstorm→…→finalize 依赖它）。当前值不是 `superspec` 时，**只改这一行**，`context` / `rules` 等其余字段一字不动，并在报告中记一行 `config.yaml schema: <旧值> → superspec`。**改行时保留原换行风格**：CRLF 文件的该行末尾有 `\r`，不要一并删掉。
-- `openspec/config.yaml` 不存在时**必须创建**，最小内容为 `schema: superspec` + `context.rules`（specs / design / tasks 三组，design 组要求涉及页面的变更给出 ui_contract 五字段）。缺了它，本次安装提供不了九工件能力。
+- `openspec/config.yaml` 不存在时**必须创建**，最小内容为 `schema: superspec` + `context.rules`（specs / design / tasks 三组；design 组要求 UI 变更在 `proposal.md` 首行给出 `**UI Change**: yes|no`，`yes` 时产出 `ui-spec.md` 与 `sandbox-preview.html`）。缺了它，本次安装提供不了九工件能力。
 - **实测结论**：`openspec init` 在 `config.yaml` 已存在时**不会覆盖**（hash 不变），只有当文件缺失时才会新建为 `spec-driven`。因此正确顺序是：**先创建/对齐 config → 再 init → 再挂载技能引用**。
 
 ### 命令初始化（仅当 `HARNESS_SET` 含 `qoder`、`trae` 或 `cursor`，且对应 `commands/` 为空或不完整）
 
 - **不完整的判定（Trae / Cursor）**：`commands/` 中存在 `.md` 文件，但缺少 OpenSpec 标准命令（如 `opsx-continue.md`、`opsx-propose.md`、`opsx-archive.md`）；只有 `opsx-new.md` / `opsx-apply.md` / `opsx-verify.md` 三个文件即属此类（旧版 onePress 随包直出的命令）。
-- 判定为不完整时：先删除旧版随包命令 `commands/opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`（存在未提交修改的跳过并记录），再执行 `openspec init --tools qoder|trae|cursor --no-animation` 生成完整命令集（通常 10 个），**然后才做技能引用挂载**。漏掉这一步的结果是"技能已落盘但永不加载"，`/opsx:*` 全部不可用。
+- 判定为不完整时：先删除旧版随包命令 `commands/opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`（存在未提交修改的跳过并记录），再执行 `openspec init --tools qoder|trae|cursor --no-animation` 生成完整命令集（当前 OpenSpec 1.13 为 12 个），**然后才做技能引用挂载**。漏掉这一步的结果是"技能已落盘但永不加载"，`/opsx:*` 全部不可用。
 - `.qoder/commands/` 的命令位于 `commands/opsx/` 子目录，不适用上述扁平文件名判定；其非空即视为完整。
 - `openspec` 命令不可用时：在报告中明确写"技能存在但无挂载点，需先安装 OpenSpec CLI 并 init"，不得当作安装成功。
 - 已有完整命令集时**不重复 init**。
@@ -128,12 +128,56 @@
 
 ### 项目级（Protect Local）
 
-- `docs/ui-components.md`：**已存在则跳过**（输出 `skipped (exists)`）；不存在则以注册表模板初始化（表头 + 使用说明，无业务内容）。
+- `docs/ui-components.md`：**已存在则跳过**（输出 `skipped (exists)`）；不存在则以下列逐字模板初始化。若已存在但表头不含「适用骨架」，输出一条迁移 `WARN` 并附目标表头，**不得改写文件**。
+
+````markdown
+# UI 组件注册表
+
+> 本文件由 onePress 首次安装初始化，之后由 `/opsx:archive` 增量维护：每次归档把本次新建或改造的组件追加到对应分区，**只追加行，不重排、不删历史**。
+
+## 使用说明
+
+1. `/opsx:new` 起草 `ui-spec.md` 前 MUST 先检索本表，可复用的组件写入第 1 节复用表，不得重复造轮子。
+2. 新增组件必须补齐：组件名称、路径、适用骨架 (Archetype)、核心 Props 签名。
+3. 组件分级：`base`（无业务语义，如 DataTable）、`domain`（含业务语义，如 RoleBadge）。
+4. `适用骨架` 列取值：`Dashboard-Grid` / `Master-Detail` / `Standard-CRUD-Table` / `Step-Wizard` / `Settings-Split`；通用组件填 `通用`。
+5. 不收录纯布局容器与一次性页面片段。
+
+## 基础组件（base）
+
+| 组件名称 | 路径 | 适用骨架 (Archetype) | 核心 Props 签名 |
+|----------|------|----------------------|-----------------|
+
+## 业务组件（domain）
+
+| 组件名称 | 路径 | 适用骨架 (Archetype) | 核心 Props 签名 |
+|----------|------|----------------------|-----------------|
+````
+- `docs/design-system/projectbaseline/MASTER.md`：**已存在则跳过**（输出 `skipped (exists)`）；本文件由 `ui-ux-pro-max` 在项目初始化时一次性生成，安装器 MUST NOT 创建或改写它。
 - `openspec/changes/`：**永不触碰**。
 
 ### 本地未提交修改保护
 
 写入任一 harness 级文件前，若该文件在 `git status --porcelain` 中命中未提交修改，则**提示用户并跳过该文件**，继续安装其余文件；所有此类跳过项 MUST 在最终报告中列出。
+
+### 可选增强层探测（不安装，只探测）
+
+设计检索能力 `ui-ux-pro-max` 属于**可选增强层**。本次安装 MUST NOT 尝试安装它，MUST NOT 调用 `npm install` / `uipro init`，MUST NOT 发起任何网络请求。
+
+1. 判定条件（两者同时满足才视为可用）：
+   - `python3` 可执行（以 `command -v python3` 判定）；
+   - `HARNESS_SET` 中任一 harness 存在 `.<harness>/skills/ui-ux-pro-max/scripts/search.py`。
+2. 在报告第⑤段输出**且仅输出一行**结论：
+   - 可用：`ui-ux-pro-max：enabled（python3 与技能目录均就绪）`
+   - 不可用：`ui-ux-pro-max：SKIP（<未检测到 python3 | 未检测到技能目录>；检索步骤降级为手工填写 ui-spec.md）`
+3. `SKIP` MUST NOT 视为安装失败，MUST NOT 重试、MUST NOT 因此向用户索要额外权限。
+4. 输出 `SKIP` 时，紧随其后给出启用指引（按 `HARNESS_SET` 逐个 harness 展开，**只打印，不落盘**）：
+
+```text
+启用设计检索（可选，需 Node.js + Python3）：
+  npm install -g ui-ux-pro-max-cli
+  uipro init --ai <harness> --offline    # 只保留 .<harness>/skills/ui-ux-pro-max 目录，其余 6 个伴生技能可删
+```
 
 ## ③ 幂等与升级
 
@@ -194,8 +238,8 @@
 ### .qoder / .cursor 验收项（仅当 `HARNESS_SET` 含 `qoder` 或 `cursor`）
 
 - [ ] 对应目录（`.qoder/` 或 `.cursor/`）下 `skills/onepress-discipline/SKILL.md` 存在
-- [ ] 该 SKILL.md 包含五项铁律标题（ui_contract 契约先行 / Token 纯净度 / 四态状态机 / 无障碍基线 / 防呆与反馈闭环）
-- [ ] 该 SKILL.md 的 `ui_contract` 段落包含 `archetype`、`reuse_components`、`schema_mapping`、`states_matrix`、`layout_tokens` 五个字段
+- [ ] 该 SKILL.md 包含九条铁律标题（ui-spec 契约先行 / 需求分流 / 设计检索与降级 / 高保真沙箱与两阶段 / 八项门禁 / Token 纯净度 / 四态状态机 / 无障碍基线 / 防呆与反馈闭环）
+- [ ] 该 SKILL.md 包含 `ui-spec.md`、`sandbox-preview`、`ui_change`、`44×44`、`prefers-reduced-motion` 五个关键词
 - [ ] 该 SKILL.md 内容与模板包逐字一致
 - [ ] 既有 `commands/` 下命令文件主体未被改写（仅允许 frontmatter 后新增一行技能引用）
 - [ ] `commands/` **非空**，且其中每个命令文件均含一行 `onepress-discipline` 技能引用（为空即判定失败：技能存在但无挂载点）
@@ -203,17 +247,24 @@
 
 ### .trae 验收项（仅当 `HARNESS_SET` 含 `trae`）
 
-- [ ] `.trae/skills/onepress-discipline/SKILL.md` 存在，包含五项铁律与 `ui_contract` 五字段，且与模板包逐字一致
-- [ ] `.trae/commands/` **非空**（完整命令集通常 10 个），且其中每个命令文件均含一行 `onepress-discipline` 技能引用（为空即判定失败：技能存在但无挂载点）
+- [ ] `.trae/skills/onepress-discipline/SKILL.md` 存在，包含九条铁律与 `ui-spec.md` / `sandbox-preview` / `ui_change` / `44×44` / `prefers-reduced-motion` 关键词，且与模板包逐字一致
+- [ ] `.trae/commands/` **非空**（完整命令集通常 12 个），且其中每个命令文件均含一行 `onepress-discipline` 技能引用（为空即判定失败：技能存在但无挂载点）
 - [ ] 既有 `commands/` 下命令文件主体未被改写（仅允许 frontmatter 后新增一行技能引用）
 - [ ] 项目级资产未被覆盖：`docs/ui-components.md`（若安装前已存在）内容不变
 
 ### OpenSpec Schema 验收项
 
-- [ ] `openspec/schemas/superspec/schema.yaml` 与 `templates/` 9 个模板文件齐全（共 10 文件）
+- [ ] `openspec/schemas/superspec/schema.yaml` 与 `templates/` 10 个模板文件齐全（共 11 文件，含 `ui-spec.md`）
 - [ ] `openspec schemas` 可列出 `superspec (project)`
 - [ ] `openspec/config.yaml` 存在且顶层 `schema:` 为 `superspec`（缺失或值不符即判定失败）
 - [ ] `openspec/schemas/superspec/schema.yaml` 中每一处 `superpowers:<skill>` 引用都配有 `FALLBACK` 兜底说明（brainstorm / plan / apply / finalize 四处齐全），缺一处即判定失败——否则目标仓库没装 Superpowers 插件时，`/opsx:continue` 会停在 plan 步骤
+
+### 可选增强层验收项
+
+- [ ] 报告含**且仅含一行** `ui-ux-pro-max：enabled` 或 `ui-ux-pro-max：SKIP（<原因>）`
+- [ ] `SKIP` 时附有启用指引，且安装结论仍为成功（不计入失败项）
+- [ ] 本次安装未执行任何 `npm install` / `uipro init` / 网络请求
+- [ ] `docs/design-system/projectbaseline/MASTER.md` 若已存在，内容逐字节不变
 
 ### 安装范围验收项
 
@@ -222,7 +273,7 @@
 
 ### 模板包结构验收项
 
-- [ ] 模板包根条目均在白名单内：`VERSION`、`ASSETS.md`、`INSTALL_PROMPT.md`、`install.ps1`、`install.sh`、`README-ch.md`、`README.md`、`opencode/`、`qoder/`、`trae/`、`cursor/`、`openspec-schema/`、`openspec/`；出现白名单外条目即判定失败并输出违规路径
+- [ ] 模板包根条目均在白名单内：`VERSION`、`ASSETS.md`、`INSTALL_PROMPT.md`、`install.ps1`、`install.sh`、`README-ch.md`、`README.md`、`BLUEPRINT-V3.0.md`、`opencode/`、`qoder/`、`trae/`、`cursor/`、`openspec-schema/`、`scripts/`、`openspec/`；出现白名单外条目即判定失败并输出违规路径
 
 ## ⑤ 收尾
 

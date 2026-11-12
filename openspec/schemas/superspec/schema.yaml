@@ -122,6 +122,22 @@ artifacts:
 
       Focus on architecture and approach, not line-by-line implementation.
       Good design docs explain the "why" behind technical decisions.
+      UI CHANGE GATE (onePress):
+      Before writing design.md, read `**UI Change**: yes|no` from
+      proposal.md.
+      - If `no`: do NOT create ui-spec.md or sandbox-preview.html.
+      - If `yes`: also produce `openspec/changes/<name>/ui-spec.md`
+        from `templates/ui-spec.md` and fill all six sections:
+        1) component hierarchy, 2) design tokens (16 semantic color
+        channels + font pairing + xs..3xl density), 3) four-state
+        matrix, 4) responsive breakpoints and anti-breakage rules,
+        5) touch targets and micro-motion, 6) industry anti-patterns.
+        Then produce `openspec/changes/<name>/sandbox-preview.html`
+        (single file, inline CSS/JS, four-state buttons, Light/Dark
+        toggle, the same 16 CSS variables, a Google Fonts link, and a
+        prefers-reduced-motion fallback).
+      Do not inline a UI contract into design.md; ui-spec.md is the
+      single source of truth for UI decisions.
     requires:
       - brainstorm
 
@@ -235,6 +251,27 @@ artifacts:
     description: Post-implementation verification against specs, design, and tasks
     template: verify.md
     instruction: |
+      ONE PRESS GATES (all harnesses):
+      When the change has ui-spec.md, run these eight gates and record
+      PASS/FAIL/SKIP plus AUTO/MANUAL for each one:
+      0 contract presence: ui-spec.md and sandbox-preview.html exist
+      1 four-state matrix matches, Loading reserves space, CLS < 0.1 (MANUAL)
+      2 token purity (inline style / hardcoded colour / arbitrary px) and
+        WCAG contrast >= 4.5:1, >= 3:1 for large text and control borders (AUTO)
+      3 breakpoints: no horizontal scroll, long tokens wrap, chip/badge
+        can wrap or expose a +n disclosure (MANUAL)
+      4 state-machine unit tests only; RTL queries or DOM snapshots are a FAIL (AUTO)
+      5 a11y: focus-visible ring kept, icon buttons have aria-label, form
+        errors use aria-describedby, decorative icons use aria-hidden (AUTO)
+      6 interaction: hit area >= 44x44px, cursor-pointer, transitions
+        150-250ms, prefers-reduced-motion honoured (AUTO)
+      7 anti-patterns: no emoji icons, no entry from ui-spec section 6 (AUTO)
+      8 sandbox parity: implementation does not drift from sandbox-preview.html (MANUAL)
+      Prefer `bash scripts/onepress-gate.sh --change <change-dir>`: it
+      automates gates 2/4/5/6/7 and prints MANUAL for 1/3/8.
+      Any unconfirmed MANUAL gate means the verdict MUST NOT be PASS.
+      A CRITICAL FAIL blocks archiving.
+
       Use the Skill tool to invoke **openspec-verify-change** (the
       `/opsx:verify` slash command is its user-facing equivalent).
 
@@ -684,6 +721,17 @@ apply:
   requires: [plan]
   tracks: tasks.md
   instruction: |
+    SANDBOX-AS-PRODUCTION (onePress, UI changes only):
+    If `ui-spec.md` exists in this change, apply runs in two stages.
+    Stage 1: write the production view component directly from the
+    tokens in ui-spec.md sections 2 and 5 — 100% props-driven (data,
+    status, isSubmitting, callbacks all passed via props). Do NOT
+    translate sandbox-preview.html into components; the sandbox is a
+    visual reference only. Do NOT inject a floating in-app State Bar.
+    Stage 2: wire real data through hooks/containers. The UI structure
+    and class lists MUST NOT change.
+    Changes with `**UI Change**: no` skip both stages.
+
     Before implementing, set up an isolated workspace and executor:
 
     0. **Pre-flight — commit change artifacts to feature branch**:

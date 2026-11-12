@@ -18,3 +18,53 @@ Thumbs.db
 /.trae/
 /.cursor/
 /onePress.lock
+.gate-test/
+.install-e2e/
+.e2e-h/
+
+# ---------------------------------------------------------------- OS / 编辑器
+.DS_Store
+Thumbs.db
+desktop.ini
+.idea/
+.vscode/
+*.swp
+*~
+
+# ---------------------------------------------------------------- 运行时 / 构建
+node_modules/
+.pnpm-store/
+dist/
+build/
+.next/
+coverage/
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# ---------------------------------------------------------------- 本地环境变量
+.env
+.env.*
+!.env.example
+
+# ---------------------------------------------------------------- onePress 自测与临时安装工作区
+.gate-test/
+.install-e2e/
+.e2e-h/
+.dbg/
+
+# ---------------------------------------------------------------- 工具索引与缓存
+.codegraph/
+.worktrees/
+*.log
+*.tmp
+*.bak
+
+# ---------------------------------------------------------------- dogfood 时生成的本地产物
+# 目标仓库需提交 onePress.lock 与 docs/ui-components.md，本包自身不提交这些安装产物。
+.qoder/
+.opencode/
+.trae/
+.cursor/
+.reg-test/

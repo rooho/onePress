@@ -4,9 +4,9 @@
 
 onePress targets teams with **no dedicated designer**, where developers drive the work. It solves three concrete problems:
 
-1. **UI by guesswork** → AI derives a `ui_contract` (page archetype / field widgets / state matrix / layout tokens) from the feature description.
-2. **Delivery by vibes** → sandbox-as-production: ship a clickable UI scaffold first, verify it in 10 seconds with the floating State Bar, then wire the backend.
-3. **Quality by willpower** → second-level static gates (tsc + token purity scan + pure-logic Hook TDD + four-state check) before archive.
+1. **Design by guesswork** → AI consults a local design knowledge base and writes a six-section `ui-spec.md` (component hierarchy / 16-channel tokens / four-state matrix / responsive rules / micro-motion / anti-patterns).
+2. **Delivery by vibes** → a single-file `sandbox-preview.html` locks colour, type, density and motion — with four-state and Light/Dark toggles — before any production component is written.
+3. **Quality by willpower** → eight gates (token purity + WCAG contrast + anti-patterns + touch targets + a11y + pure-logic state tests + human checks) executed by `scripts/onepress-gate.sh`.
 
 First-class support for four harnesses: `.qoder/`, `.opencode/`, `.trae/` and `.cursor/`. Zero runtime dependencies — any model with file read/write access can install it.
 
@@ -18,6 +18,7 @@ First-class support for four harnesses: `.qoder/`, `.opencode/`, `.trae/` and `.
 |------|-------------|
 | Target repo | git initialized |
 | OpenSpec CLI | `npm install -g @fission-ai/openspec@latest` (Node 22.12+) |
+| Design retrieval (optional) | `npm install -g ui-ux-pro-max-cli` + `uipro init --ai <harness> --offline`; skipped gracefully when absent |
 | AI assistant | Qoder / OpenCode / Trae / Cursor / any agent with file and command access |
 
 ---
@@ -89,7 +90,7 @@ The unselected harness gets no directory created and no files written. `onePress
 | `.trae/commands/opsx-*.md` | One reference line added after frontmatter; body untouched | harness | Trae selected |
 | `.cursor/skills/onepress-discipline/SKILL.md` | Four iron rules + TDD discipline (Cursor carrier) | harness | Cursor selected |
 | `.cursor/commands/opsx-*.md` | One reference line added after frontmatter; body untouched | harness | Cursor selected |
-| `openspec/schemas/superspec/` | `schema.yaml` + 9 templates (10 files) | harness | always |
+| `openspec/schemas/superspec/` | `schema.yaml` + 10 templates incl. `ui-spec.md` (11 files) | harness | always |
 | `onePress.lock` | Version, install scope, protected assets | harness | always |
 | `docs/ui-components.md` | Component registry template (empty tables on first install) | project | always |
 
@@ -101,10 +102,10 @@ From zero to archive in 5 steps. **All `/opsx:*` commands run at the target repo
 
 | Step | Command | You provide | Output | Pass criteria |
 |------|---------|-------------|--------|---------------|
-| 1 Contract init | `/opsx:new <change>` | Feature description | `proposal.md`, `design.md` (+ `ui_contract`) | Contract fields map to backend schema |
+| 1 Contract init | `/opsx:new <change>` | Feature description | `proposal.md`, `design.md`, `ui-spec.md` + `sandbox-preview.html` (UI only) | Six sections complete; sandbox opens in Light/Dark |
 | 2 Complete artifacts | `/opsx:continue` ×N or `/opsx:ff` | — | `specs/`, `tasks.md`, `plan.md` | `openspec validate --strict` passes |
-| 3 Implement | `/opsx:apply` | — | Code + `apply.md` | Stage 1 State Bar acceptance |
-| 4 Verify | `/opsx:verify` | — | `verify.md` | All four gates green, no CRITICAL |
+| 3 Implement | `/opsx:apply` | — | Code + `apply.md` | Sandbox parity (Light + Dark) |
+| 4 Verify | `/opsx:verify` | — | `verify.md` | All eight gates green, no CRITICAL |
 | 5 Archive | `/opsx:archive` | — | Main specs updated, `finalize.md`, archived dir | Components appended to registry |
 
 ### Step 1 — Contract init `/opsx:new`
@@ -115,29 +116,16 @@ From zero to archive in 5 steps. **All `/opsx:*` commands run at the target repo
 
 What happens:
 
-1. `ux-architect` (subagent on OpenCode, inlined skill on Qoder) searches `docs/ui-components.md`; reusable components must appear in `reuse_components`;
-2. Backend fields map one-by-one to widgets and null-degradation rules;
-3. The page scaffold picks exactly one of five archetypes: `Dashboard-Grid` / `Master-Detail` / `Standard-CRUD-Table` / `Step-Wizard` / `Settings-Split`;
-4. The contract is written at the bottom of `openspec/changes/<change>/design.md`.
+1. `/opsx:new` first decides `**UI Change**: yes|no` from three rules (routes/pages; table columns, form fields or state display; destructive interactions) and writes the verdict on the first line of `proposal.md`;
+2. On `yes`, `ux-architect` reads `docs/design-system/projectbaseline/MASTER.md`, then runs a two-step retrieval (`--domain ux` first, then `--stack shadcn|html-tailwind`);
+3. Reusable components are pulled from `docs/ui-components.md` (four columns, keyed by archetype);
+4. A six-section `ui-spec.md` is written, followed by a single-file `sandbox-preview.html`.
 
-Contract example:
+`ui-spec.md` sections: component hierarchy / design tokens (16 colour channels + font pairing + `xs`–`3xl` density) / four-state matrix / responsive & anti-breakage / touch targets & micro-motion / industry anti-patterns.
 
-```yaml
-ui_contract:
-  archetype: "Standard-CRUD-Table"
-  reuse_components: ["DataTable", "RoleBadge"]
-  schema_mapping:
-    - field: "user.role"
-      widget: "Select"
-      rule: "required | default: member"
-  states_matrix:
-    query: { loading: "equal-height Skeleton", empty: "EmptyState + reset", error: "Alert + retry" }
-    mutation: { submitting: "disabled + Loader2", destructive_guard: "AlertDialog confirmation" }
-  layout_tokens:
-    container: "max-w-7xl mx-auto p-6 space-y-6"
-```
+**Human review point**: check `ui-spec.md` and the sandbox (Light + Dark) only — no production code exists yet.
 
-**Human review point**: check the contract only (field mapping, state matrix, reused components) — no code exists yet.
+**Optional accelerator**: `ui-ux-pro-max` supplies the local CSV knowledge base. If `python3` or the skill directory is missing, retrieval is recorded as `SKIP` and `ui-spec.md` is filled by hand — install and gates still work.
 
 ### Step 2 — Complete artifacts `/opsx:continue` / `/opsx:ff`
 
@@ -151,7 +139,7 @@ brainstorm → proposal → design → specs → tasks → plan → apply → ve
 |----------|---------|
 | `brainstorm.md` | Options compared, decision recorded |
 | `proposal.md` | Why, what, affected capabilities |
-| `design.md` | Decisions (D1…Dn) + risks + `ui_contract` at the bottom |
+| `design.md` | Decisions (D1…Dn) + risks (UI contract lives in `ui-spec.md`) |
 | `specs/<capability>/spec.md` | Delta spec: `### Requirement:` + `#### Scenario:` (GIVEN/WHEN/THEN) |
 | `tasks.md` | Atomic checkable tasks |
 | `plan.md` | 2–5 minute micro-steps |
@@ -163,21 +151,28 @@ Generate everything at once: `/opsx:ff`. Proposal only: `/opsx:propose`. Discuss
 
 | Stage | What | Output | Acceptance |
 |-------|------|--------|------------|
-| Stage 1 UI scaffold | Render pages from `ui_contract` (mock data + four states) | Clickable page + floating State Bar | Click every state button, confirm by eye in 10 seconds |
-| Stage 2 Schema wiring | Connect fields, error codes, permissions, submit logic | Real data flow | Validation and destructive-action confirmation work |
+| Stage 1 UI scaffold | Write the production view directly from `ui-spec.md` tokens (props-driven, four states) | Production component | Parity with `sandbox-preview.html` in Light + Dark |
+| Stage 2 Schema wiring | Connect fields, error codes, permissions, submit logic | Real data flow | Structure and class lists unchanged |
 
-The State Bar drives one state at a time (Idle / Loading / Empty / Error / Submitting). **No DOM unit tests** — verify by eye, guard quality with types and regex gates.
+There is no in-app State Bar: `sandbox-preview.html` is the single visual acceptance surface. **No DOM/RTL tests** — verify by eye, guard quality with the gate script.
 
 ### Step 4 — Verify `/opsx:verify`
 
-Four gates; any failure sends you back to the matching stage of `apply`:
+Eight gates; any failure sends you back to the matching stage of `apply`:
 
-| Gate | Content | Failure example |
-|------|---------|-----------------|
-| Types | `tsc --noEmit` with zero errors | Misspelled prop |
-| Token purity | Static scan of three prohibitions | inline style / `#3b82f6` / `w-[317px]` |
-| Pure-logic TDD | Hooks and pure functions tested and passing | Pagination math untested |
-| Four-state check | query and mutation states complete | Missing Empty or Error |
+| # | Gate | Mode |
+|---|------|------|
+| 0 | UI change ⇒ `ui-spec.md` + `sandbox-preview.html` present | AUTO |
+| 1 | Four states match the matrix, CLS < 0.1 | MANUAL |
+| 2 | Token purity (three regex scans) + WCAG contrast ≥4.5:1 (≥3:1 for large text/borders) | AUTO |
+| 3 | Breakpoints: zero horizontal scroll, safe wrapping, `+n` disclosure | MANUAL |
+| 4 | State-machine unit tests (pure logic only, RTL forbidden) | AUTO |
+| 5 | A11y CRITICAL: focus ring, `aria-label`, `aria-describedby`, `aria-hidden` | AUTO |
+| 6 | Touch targets ≥44×44px, `cursor-pointer`, 150–250ms, `motion-reduce:` | AUTO |
+| 7 | Anti-patterns: zero Emoji icons, no blacklisted entries | AUTO |
+| 8 | Sandbox parity: no visible drift vs `sandbox-preview.html` | MANUAL |
+
+Run `bash scripts/onepress-gate.sh --change openspec/changes/<change>` to execute gates 2/4/5/6/7 automatically; the rest are printed as `MANUAL`.
 
 Writes `openspec/changes/<change>/verify.md` with one of: `PASS` / `PASS WITH WARNINGS` / `FAIL`. CRITICAL issues block archiving.
 
@@ -192,6 +187,10 @@ Writes `openspec/changes/<change>/verify.md` with one of: `PASS` / `PASS WITH WA
 3. The change directory moves to `openspec/changes/archive/YYYY-MM-DD-<change>/`;
 4. `finalize.md` records the closeout.
 
+> **No `/opsx:archive` (OpenCode)**: after `openspec archive <name> --yes`, append the component row manually:
+> `bash scripts/onepress-registry-append.sh --root . --name <Name> --path <path> --archetype <Archetype> --props '<signature>'`
+> The script is idempotent and only appends to the chosen section.
+
 Batch: `/opsx:bulk-archive`. Sync specs only: `/opsx:sync`.
 
 ---
@@ -200,18 +199,20 @@ Batch: `/opsx:bulk-archive`. Sync specs only: `/opsx:sync`.
 
 | Command | Qoder | OpenCode | Trae | Cursor | Purpose |
 |---------|:-----:|:--------:|:----:|:------:|---------|
-| `/opsx:new <name>` | ✅ | ✅ | ✅ | ✅ | Contract init (proposal + design + ui_contract) |
+| `/opsx:new <name>` | ✅ | ✅ | ✅ | ✅ | Contract init (proposal + design + ui-spec + sandbox) |
 | `/opsx:continue` | ✅ | CLI | ✅ | ✅ | Produce the next artifact |
 | `/opsx:ff` | ✅ | CLI | ✅ | ✅ | Produce all remaining artifacts |
 | `/opsx:propose` | ✅ | CLI | ✅ | ✅ | Full proposal in one step |
 | `/opsx:explore` | ✅ | — | ✅ | ✅ | Discussion only, no files |
 | `/opsx:apply` | ✅ | ✅ | ✅ | ✅ | Two-stage implementation |
-| `/opsx:verify` | ✅ | ✅ | ✅ | ✅ | Four gates |
+| `/opsx:verify` | ✅ | ✅ | ✅ | ✅ | Eight gates |
 | `/opsx:sync` | ✅ | CLI | ✅ | ✅ | Sync delta specs only |
 | `/opsx:archive` | ✅ | CLI | ✅ | ✅ | Archive + registry append |
 | `/opsx:bulk-archive` | ✅ | CLI | ✅ | ✅ | Archive several changes |
+| `/opsx:onboard` | ✅ | CLI | ✅ | ✅ | Guided first-run walkthrough (native) |
+| `/opsx:update` | ✅ | CLI | ✅ | ✅ | Revise planning artifacts (native, experimental) |
 
-- **Qoder / Trae / Cursor**: `openspec init --tools qoder|trae|cursor` generates the 10 commands; onePress only adds the skill and a one-line reference (Trae / Cursor slash commands are `/opsx-apply`-style).
+- **Qoder / Trae / Cursor**: `openspec init --tools qoder|trae|cursor` generates 12 commands; onePress only adds the skill and a one-line reference (Trae / Cursor slash commands are `/opsx-apply`-style).
 - **OpenCode**: only `new` / `apply` / `verify` ship with this pack. Use the CLI for the rest:
 
 ```bash
@@ -264,6 +265,7 @@ onePress/
 ├── README.md               # English README (this file)
 ├── VERSION                 # Version (upgrade baseline)
 ├── ASSETS.md               # Asset manifest (layer + overwrite policy)
+├── BLUEPRINT-V3.0.md       # V3.0 blueprint (iteration baseline, not installed)
 ├── INSTALL_PROMPT.md       # AI install entry (five sections, script-equivalent fallback)
 ├── install.ps1             # Windows installer (detect/write/check/report in one command)
 ├── install.sh              # macOS / Linux installer
@@ -283,7 +285,7 @@ onePress/
     ├── config.yaml         # schema: superspec
     ├── CHANGE_NAMING.md    # Change naming convention
     ├── schemas/superspec/  # Identical to openspec-schema/
-    ├── specs/              # 4 main specs (18 requirements)
+    ├── specs/              # main specs (count grows with each archive)
     └── changes/archive/    # Archived changes (full evidence chain)
 ```
 
@@ -301,7 +303,7 @@ A: Usually the sparse-checkout path does not match the real layout (cone mode si
 A: Since 1.0.4 every Superpowers skill reference in superspec carries an inline fallback (brainstorm / plan / apply 2c / finalize), so a missing skill no longer halts the flow — the agent writes `plan.md` inline. On older versions (schema version ≤ 4) just upgrade and re-install; as a stopgap, have the agent split `tasks.md` into 2–5 minute micro-steps and write `plan.md` directly.
 
 **Q: The target repo has no OpenSpec?**
-A: Install still completes, but `/opsx:*` and `ui_contract` parsing require OpenSpec. Run `openspec init --tools qoder|trae|cursor|opencode` first.
+A: Install still completes, but `/opsx:*` and `ui-spec.md`/`sandbox-preview.html` generation require OpenSpec. Run `openspec init --tools qoder|trae|cursor|opencode` first.
 
 **Q: OpenCode lacks `/opsx:continue` and `/opsx:archive`?**
 A: Only three commands ship with the pack. Use `openspec status` / `openspec instructions` / `openspec archive` instead, or add your own `.opencode/commands/opsx-*.md`.
@@ -313,7 +315,7 @@ A: Yes — that is the default. The installer detects by directory: `.qoder/` on
 A: No — they are local environment config. Do commit `onePress.lock` and `docs/ui-components.md`.
 
 **Q: How do I confirm the install?**
-A: Check the exit code and the report — `0` plus the closing line `onePress v<version> 安装完成（harnesses: <scope>）` means success; skipped items and check results are already listed. To double-check yourself, three spots — `onePress.lock` exists with the matching `version`; every `.qoder/commands/`, `.trae/commands/` and `.cursor/commands/` file has one `onepress-discipline` reference line; `openspec/schemas/superspec/` has 10 files.
+A: Check the exit code and the report — `0` plus the closing line `onePress v<version> 安装完成（harnesses: <scope>）` means success; skipped items and check results are already listed. To double-check yourself, three spots — `onePress.lock` exists with the matching `version`; every `.qoder/commands/`, `.trae/commands/` and `.cursor/commands/` file has one `onepress-discipline` reference line; `openspec/schemas/superspec/` has 11 files (incl. `templates/ui-spec.md`).
 
 **Q: Will a re-install clobber my edits to tooling files?**
 A: No. Tracked files with uncommitted changes are reported and skipped; existing skill reference lines are skipped, and command bodies are never rewritten.
