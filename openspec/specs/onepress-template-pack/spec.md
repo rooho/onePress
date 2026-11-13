@@ -7,13 +7,13 @@
 
 ### Requirement: 模板包固定目录结构
 
-onePress 模板包 MUST 采用固定顶层结构：7 个功能条目 `VERSION`、`INSTALL_PROMPT.md`、`qoder/`、`opencode/`、`trae/`、`cursor/`、`openspec-schema/`，1 个工具条目 `scripts/`，4 个文档条目 `ASSETS.md`、`README-ch.md`、`README.md`、`BLUEPRINT-V3.0.md`，以及 1 个自托管条目 `openspec/`（本方案自身的规范工作区）。工具条目、文档条目与自托管条目 MUST NOT 被安装到目标仓库。任何新增 harness 资产 MUST 归入对应子目录，不得散落在包根。
+onePress 模板包 MUST 采用固定顶层结构：7 个功能条目 `VERSION`、`INSTALL_PROMPT.md`、`qoder/`、`opencode/`、`trae/`、`cursor/`、`openspec-schema/`，1 个工具条目 `scripts/`，3 个文档条目 `ASSETS.md`、`README-ch.md`、`README.md`，1 个纲领条目 `blueprint/`，以及 1 个自托管条目 `openspec/`（本方案自身的规范工作区）。工具条目、文档条目、纲领条目与自托管条目 MUST NOT 被安装到目标仓库。任何新增 harness 资产 MUST 归入对应子目录，不得散落在包根。
 
 #### Scenario: 包结构完整性校验
 
 - **GIVEN** 一个已构建的 onePress 模板包目录
-- **WHEN** 执行结构校验（检查 7 个功能条目、1 个工具条目、4 个文档条目与 1 个自托管条目是否存在）
-- **THEN** 校验通过且列出 `VERSION`、`INSTALL_PROMPT.md`、`qoder/`、`opencode/`、`trae/`、`cursor/`、`openspec-schema/`、`scripts/`、`ASSETS.md`、`README-ch.md`、`README.md`、`BLUEPRINT-V3.0.md`、`openspec/`
+- **WHEN** 执行结构校验（检查 7 个功能条目、1 个工具条目、3 个文档条目、1 个纲领条目与 1 个自托管条目是否存在）
+- **THEN** 校验通过且列出 `VERSION`、`INSTALL_PROMPT.md`、`qoder/`、`opencode/`、`trae/`、`cursor/`、`openspec-schema/`、`scripts/`、`ASSETS.md`、`README-ch.md`、`README.md`、`blueprint/`、`openspec/`
 
 #### Scenario: 散落资产被拒绝
 

@@ -268,7 +268,10 @@ onePress/
 ├── README.md               # English README (this file)
 ├── VERSION                 # Version (upgrade baseline)
 ├── ASSETS.md               # Asset manifest (layer + overwrite policy)
-├── BLUEPRINT-V3.0.md       # V3.0 blueprint (iteration baseline, not installed)
+├── blueprint/              # Iteration blueprints (not installed)
+│   ├── README.md           # Version status: V3.0 implemented, V3.1 next
+│   ├── BLUEPRINT-V3.0.md   # V3.0 baseline (implemented)
+│   └── BLUEPRINT-V3.1.md   # V3.1 repairs + pre-code review gates (planned)
 ├── INSTALL_PROMPT.md       # AI install entry (five sections, script-equivalent fallback)
 ├── install.ps1             # Windows installer (detect/write/check/report in one command)
 ├── install.sh              # macOS / Linux installer

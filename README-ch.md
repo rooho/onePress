@@ -268,7 +268,10 @@ onePress/
 ├── README.md               # English README
 ├── VERSION                 # 版本号（升级判定基准）
 ├── ASSETS.md               # 资产清单（归属层级 + 覆盖策略）
-├── BLUEPRINT-V3.0.md       # V3.0 纲领（后续迭代基准，不安装）
+├── blueprint/              # 迭代纲领（不安装）
+│   ├── README.md           # 版本进度：V3.0 已实现，V3.1 待实现
+│   ├── BLUEPRINT-V3.0.md   # V3.0 基线（已实现）
+│   └── BLUEPRINT-V3.1.md   # V3.1 修复 + 编码前评审门禁（待实现）
 ├── INSTALL_PROMPT.md       # AI 安装入口（五段结构，脚本的等价兜底）
 ├── install.ps1             # Windows 安装器（探测/写入/自检/报告一条命令）
 ├── install.sh              # macOS / Linux 安装器

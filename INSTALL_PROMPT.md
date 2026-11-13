@@ -273,7 +273,7 @@
 
 ### 模板包结构验收项
 
-- [ ] 模板包根条目均在白名单内：`VERSION`、`ASSETS.md`、`INSTALL_PROMPT.md`、`install.ps1`、`install.sh`、`README-ch.md`、`README.md`、`BLUEPRINT-V3.0.md`、`opencode/`、`qoder/`、`trae/`、`cursor/`、`openspec-schema/`、`scripts/`、`openspec/`；出现白名单外条目即判定失败并输出违规路径
+- [ ] 模板包根条目均在白名单内：`VERSION`、`ASSETS.md`、`INSTALL_PROMPT.md`、`install.ps1`、`install.sh`、`README-ch.md`、`README.md`、`blueprint/`、`opencode/`、`qoder/`、`trae/`、`cursor/`、`openspec-schema/`、`scripts/`、`openspec/`；出现白名单外条目即判定失败并输出违规路径
 
 ## ⑤ 收尾
 

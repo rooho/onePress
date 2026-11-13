@@ -20,8 +20,8 @@
 | `scripts/onepress-gate.sh` | installer | 不安装（八项门禁执行体，在模板包侧运行） |
 | `scripts/onepress-registry-append.sh` | installer | 不安装（归档后补记注册表，供无 `/opsx:archive` 的环境使用） |
 | `scripts/verify-gate.sh` / `verify-trae.sh` / `verify-cursor.sh` / `verify-carriers.sh` | installer | 不安装（模板包自测；`verify-carriers.sh` 校验三份 carrier 归一化等价 + 编码 + 要点关键词） |
-| `README-ch.md` / `README.md` / `BLUEPRINT-V3.0.md` | docs | 不安装（仅仓库说明，不写入目标仓库） |
-| `BLUEPRINT-V3.0.md` | docs | 不安装（V3.0 纲领，后续迭代基准，不写入目标仓库） |
+| `README-ch.md` / `README.md` | docs | 不安装（仅仓库说明，不写入目标仓库） |
+| `blueprint/**`（`README.md` 索引 + `BLUEPRINT-V3.0.md` / `BLUEPRINT-V3.1.md`） | docs | 不安装（迭代纲领与版本进度，不写入目标仓库） |
 | `openspec/**`（自托管工作区） | self-host | 不安装（本方案自身的 config、CHANGE_NAMING、specs 与变更归档） |
 | `docs/ui-components.md`（注册表模板） | project | 存在即跳过（Protect Local） |
 | `openspec/changes/`（业务变更契约） | project | 永不触碰 |
