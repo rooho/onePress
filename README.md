@@ -17,7 +17,7 @@ First-class support for four harnesses: `.qoder/`, `.opencode/`, `.trae/` and `.
 | Item | Requirement |
 |------|-------------|
 | Target repo | git initialized |
-| OpenSpec CLI | `npm install -g @fission-ai/openspec@latest` (Node 22.12+) |
+| OpenSpec CLI | `npm install -g @fission-ai/openspec@latest` (**>= 2.0.0**; on 1.x use onePress v1.1.0 instead) |
 | Design retrieval (optional) | `npm install -g ui-ux-pro-max-cli` + `uipro init --ai <harness> --offline`; skipped gracefully when absent |
 | AI assistant | Qoder / OpenCode / Trae / Cursor / any agent with file and command access |
 
@@ -83,13 +83,13 @@ The unselected harness gets no directory created and no files written. `onePress
 
 | Target path | Contents | Layer | Installed when |
 |-------------|----------|-------|----------------|
-| `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/opsx-{new,apply,verify,review}.md`, `skills/superpowers-tdd/` | harness | OpenCode selected |
+| `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/opsx-review.md`, `skills/superpowers-tdd/` | harness | OpenCode selected |
 | `.qoder/skills/onepress-discipline/SKILL.md` | Ten iron rules (contract / triage / retrieval / sandbox / gates / token / states / a11y / anti-mistake / pre-code review) + TDD discipline | harness | Qoder selected |
-| `.qoder/commands/opsx/*.md` | One reference line added after frontmatter; body untouched | harness | Qoder selected |
+| `.agents/skills/openspec-*/SKILL.md` (12) | OpenSpec 2.0 workflow skills; one reference line added after frontmatter, body untouched | harness | always (shared by all harnesses) |
 | `.trae/skills/onepress-discipline/SKILL.md` | Ten iron rules + TDD discipline (Trae carrier) | harness | Trae selected |
-| `.trae/commands/opsx-*.md` | One reference line added after frontmatter; body untouched | harness | Trae selected |
+| `.trae/commands/opsx-review.md` | onePress-managed review command (slash entry `/opsx:review`) | harness | Trae selected |
 | `.cursor/skills/onepress-discipline/SKILL.md` | Ten iron rules + TDD discipline (Cursor carrier) | harness | Cursor selected |
-| `.cursor/commands/opsx-*.md` | One reference line added after frontmatter; body untouched | harness | Cursor selected |
+| `.cursor/commands/opsx-review.md` | onePress-managed review command (slash entry `/opsx:review`) | harness | Cursor selected |
 | `openspec/schemas/superspec/` | `schema.yaml` + 11 templates incl. `ui-spec.md` + `review-rubric.md` (12 files) | harness | always |
 | `onePress.lock` | Version, install scope, protected assets | harness | always |
 | `docs/ui-components.md` | Component registry template (four columns, empty tables on first install) | project | always |
@@ -100,25 +100,25 @@ The unselected harness gets no directory created and no files written. `onePress
 
 ## 2. The full development workflow
 
-From zero to archive in 5 steps. **All `/opsx:*` commands run at the target repo root** (the directory containing `openspec/`).
+From zero to archive in 5 steps. **All `/openspec-*` skills run at the target repo root** (the directory containing `openspec/`; OpenSpec 2.0 skills delivery).
 
 | Step | Command | You provide | Output | Pass criteria |
 |------|---------|-------------|--------|---------------|
-| 1 Contract init | `/opsx:new <change>` | Feature description | `proposal.md`, `design.md`, `ui-spec.md` + `sandbox-preview.html` (UI only) | Six sections complete; sandbox opens in Light/Dark |
-| 2 Complete artifacts | `/opsx:continue` ×N or `/opsx:ff` | — | `specs/`, `tasks.md`, `plan.md` | `openspec validate --strict` passes |
-| 3 Implement | `/opsx:apply` | — | Code + `apply.md` | Sandbox parity (Light + Dark) |
-| 4 Verify | `/opsx:verify` | — | `verify.md` | All eight gates green, no CRITICAL |
-| 5 Archive | `/opsx:archive` | — | Main specs updated, `finalize.md`, archived dir | Components appended to registry |
+| 1 Contract init | `/openspec-new-change <change>` | Feature description | `proposal.md`, `design.md`, `ui-spec.md` + `sandbox-preview.html` (UI only) | Six sections complete; sandbox opens in Light/Dark |
+| 2 Complete artifacts | `/openspec-continue-change` ×N or `/openspec-ff-change` | — | `specs/`, `tasks.md`, `plan.md` | `openspec validate --strict` passes |
+| 3 Implement | `/openspec-apply-change` | — | Code + `apply.md` | Sandbox parity (Light + Dark) |
+| 4 Verify | `/openspec-verify-change` | — | `verify.md` | All eight gates green, no CRITICAL |
+| 5 Archive | `/openspec-archive-change` | — | Main specs updated, `finalize.md`, archived dir | Components appended to registry |
 
-### Step 1 — Contract init `/opsx:new`
+### Step 1 — Contract init `/openspec-new-change`
 
 ```text
-/opsx:new feat-261103-001-user-role-permission
+/openspec-new-change feat-261103-001-user-role-permission
 ```
 
 What happens:
 
-1. `/opsx:new` first decides `**UI Change**: yes|no` from three rules (routes/pages; table columns, form fields or state display; destructive interactions) and writes the verdict on the first line of `proposal.md`;
+1. `/openspec-new-change` first decides `**UI Change**: yes|no` from three rules (routes/pages; table columns, form fields or state display; destructive interactions) and writes the verdict on the first line of `proposal.md`;
 2. On `yes`, `ux-architect` reads `docs/design-system/projectbaseline/MASTER.md`, then runs a two-step retrieval (`--domain ux` first, then `--stack shadcn|html-tailwind`);
 3. Reusable components are pulled from `docs/ui-components.md` (four columns, keyed by archetype);
 4. A six-section `ui-spec.md` is written, followed by a single-file `sandbox-preview.html`.
@@ -129,9 +129,9 @@ What happens:
 
 **Optional accelerator**: `ui-ux-pro-max` supplies the local CSV knowledge base. If `python3` or the skill directory is missing, retrieval is recorded as `SKIP` and `ui-spec.md` is filled by hand — install and gates still work.
 
-### Step 2 — Complete artifacts `/opsx:continue` / `/opsx:ff`
+### Step 2 — Complete artifacts `/openspec-continue-change` / `/openspec-ff-change`
 
-superspec defines 9 DAG artifacts; `/opsx:continue` produces **one per invocation**. UI changes additionally produce the conditional pair in the last row:
+superspec defines 9 DAG artifacts; `/openspec-continue-change` produces **one per invocation**. UI changes additionally produce the conditional pair in the last row:
 
 ```text
 brainstorm → proposal → design → specs → tasks → plan → apply → verify → finalize
@@ -148,9 +148,9 @@ brainstorm → proposal → design → specs → tasks → plan → apply → ve
 | `plan.md` | 2–5 minute micro-steps |
 | `apply.md` / `verify.md` / `finalize.md` | Implementation receipt / verification report / closeout receipt |
 
-Generate everything at once: `/opsx:ff`. Proposal only: `/opsx:propose`. Discussion without writing files: `/opsx:explore`.
+Generate everything at once: `/openspec-ff-change`. Proposal only: `/openspec-propose`. Discussion without writing files: `/openspec-explore`.
 
-### Step 3 — Implement `/opsx:apply` (two stages)
+### Step 3 — Implement `/openspec-apply-change` (two stages)
 
 | Stage | What | Output | Acceptance |
 |-------|------|--------|------------|
@@ -159,7 +159,7 @@ Generate everything at once: `/opsx:ff`. Proposal only: `/opsx:propose`. Discuss
 
 There is no in-app State Bar: `sandbox-preview.html` is the single visual acceptance surface. **No DOM/RTL tests** — verify by eye, guard quality with the gate script.
 
-### Step 4 — Verify `/opsx:verify`
+### Step 4 — Verify `/openspec-verify-change`
 
 Eight gates; any failure sends you back to the matching stage of `apply`:
 
@@ -179,10 +179,10 @@ Run `bash scripts/onepress-gate.sh --change openspec/changes/<change>` to execut
 
 Writes `openspec/changes/<change>/verify.md` with one of: `PASS` / `PASS WITH WARNINGS` / `FAIL`. CRITICAL issues block archiving.
 
-### Step 5 — Archive `/opsx:archive`
+### Step 5 — Archive `/openspec-archive-change`
 
 ```text
-/opsx:archive
+/openspec-archive-change
 ```
 
 1. Delta specs sync into `openspec/specs/<capability>/spec.md` (main specs);
@@ -190,11 +190,11 @@ Writes `openspec/changes/<change>/verify.md` with one of: `PASS` / `PASS WITH WA
 3. The change directory moves to `openspec/changes/archive/YYYY-MM-DD-<change>/`;
 4. `finalize.md` records the closeout.
 
-> **No `/opsx:archive` (OpenCode)**: after `openspec archive <name> --yes`, append the component row manually:
+> **OpenCode behaves like every other harness**: run `/openspec-archive-change` directly; append the component row afterwards if needed:
 > `bash scripts/onepress-registry-append.sh --root . --name <Name> --path <path> --archetype <Archetype> --props '<signature>'`
 > The script is idempotent and only appends to the chosen section.
 
-Batch: `/opsx:bulk-archive`. Sync specs only: `/opsx:sync`.
+Batch: `/openspec-bulk-archive-change`. Sync specs only: `/openspec-sync-specs`.
 
 ---
 
@@ -202,21 +202,21 @@ Batch: `/opsx:bulk-archive`. Sync specs only: `/opsx:sync`.
 
 | Command | Qoder | OpenCode | Trae | Cursor | Purpose |
 |---------|:-----:|:--------:|:----:|:------:|---------|
-| `/opsx:new <name>` | ✅ | ✅ | ✅ | ✅ | Contract init (proposal + design + ui-spec + sandbox) |
-| `/opsx:continue` | ✅ | CLI | ✅ | ✅ | Produce the next artifact |
-| `/opsx:ff` | ✅ | CLI | ✅ | ✅ | Produce all remaining artifacts |
-| `/opsx:propose` | ✅ | CLI | ✅ | ✅ | Full proposal in one step |
-| `/opsx:explore` | ✅ | — | ✅ | ✅ | Discussion only, no files |
-| `/opsx:apply` | ✅ | ✅ | ✅ | ✅ | Two-stage implementation |
-| `/opsx:verify` | ✅ | ✅ | ✅ | ✅ | Eight gates |
-| `/opsx:sync` | ✅ | CLI | ✅ | ✅ | Sync delta specs only |
-| `/opsx:archive` | ✅ | CLI | ✅ | ✅ | Archive + registry append |
-| `/opsx:bulk-archive` | ✅ | CLI | ✅ | ✅ | Archive several changes |
-| `/opsx:onboard` | ✅ | CLI | ✅ | ✅ | Guided first-run walkthrough (native) |
-| `/opsx:update` | ✅ | CLI | ✅ | ✅ | Revise planning artifacts (native, experimental) |
+| `/openspec-new-change <name>` | ✅ | ✅ | ✅ | ✅ | Contract init (proposal + design + ui-spec + sandbox) |
+| `/openspec-continue-change` | ✅ | CLI | ✅ | ✅ | Produce the next artifact |
+| `/openspec-ff-change` | ✅ | CLI | ✅ | ✅ | Produce all remaining artifacts |
+| `/openspec-propose` | ✅ | CLI | ✅ | ✅ | Full proposal in one step |
+| `/openspec-explore` | ✅ | — | ✅ | ✅ | Discussion only, no files |
+| `/openspec-apply-change` | ✅ | ✅ | ✅ | ✅ | Two-stage implementation |
+| `/openspec-verify-change` | ✅ | ✅ | ✅ | ✅ | Eight gates |
+| `/openspec-sync-specs` | ✅ | CLI | ✅ | ✅ | Sync delta specs only |
+| `/openspec-archive-change` | ✅ | ✅ | ✅ | ✅ | Archive + registry append |
+| `/openspec-bulk-archive-change` | ✅ | CLI | ✅ | ✅ | Archive several changes |
+| `/openspec-onboard` | ✅ | CLI | ✅ | ✅ | Guided first-run walkthrough (native) |
+| `/openspec-update-change` | ✅ | CLI | ✅ | ✅ | Revise planning artifacts (native, experimental) |
 
-- **Qoder / Trae / Cursor**: `openspec init --tools qoder|trae|cursor` generates 12 commands; onePress only adds the skill and a one-line reference (Trae / Cursor slash commands are `/opsx-apply`-style).
-- **OpenCode**: only `new` / `apply` / `verify` ship with this pack. Use the CLI for the rest:
+- **Qoder / Trae / Cursor**: OpenSpec 2.0 installs all 12 skills into `.agents/skills/`; the installer mounts one `onepress-discipline` reference line after each `SKILL.md` frontmatter and ships one managed `/opsx:review` command.
+- **OpenCode**: shares the same `.agents/skills/` and ships one managed `commands/opsx-review.md`; `new` / `apply` / `verify` commands are no longer shipped:
 
 ```bash
 openspec status --change <name> --json          # progress and next step
@@ -256,7 +256,7 @@ Full details: `studio/openspec/CHANGE_NAMING.md`.
 
 Upgrade = re-run the script (`.\install.ps1` / `./install.sh`) with the new pack; `onePress.lock`'s `version` decides "fresh install" vs "upgrade", and stale managed files from the older version are cleaned using the lock manifest. A missing or corrupt lock means fresh install — project-level assets stay protected.
 
-Uninstall: remove everything except `protectedAssets` from `onePress.lock` (`.opencode/`, `.qoder/skills/onepress-discipline/`, `.trae/skills/onepress-discipline/`, `.trae/commands/opsx-*`, `.cursor/skills/onepress-discipline/`, `openspec/schemas/superspec/`), keeping `docs/ui-components.md` and `openspec/changes/`.
+Uninstall: remove everything except `protectedAssets` from `onePress.lock` (`.opencode/`, `.qoder/skills/onepress-discipline/`, `.trae/skills/onepress-discipline/`, `.trae/commands/opsx-review.md`, `.cursor/skills/onepress-discipline/`, `openspec/schemas/superspec/`), keeping `docs/ui-components.md` and `openspec/changes/`; `.agents/skills/` belongs to the OpenSpec CLI and is left in place (run `openspec update` to drop the reference lines).
 
 ---
 
@@ -271,10 +271,10 @@ onePress/                    # release pack root (generated from studio/pack/)
 ├── INSTALL_PROMPT.md       # AI install entry (five sections, script-equivalent fallback)
 ├── install.ps1             # Windows installer (detect/write/check/report in one command)
 ├── install.sh              # macOS / Linux installer
-├── opencode/               # OpenCode harness assets (7 files)
+├── opencode/               # OpenCode harness assets (4 files)
 │   ├── opencode.json
 │   ├── agent/ux-architect.md
-│   ├── commands/opsx-{new,apply,verify,review}.md
+│   ├── commands/opsx-review.md
 │   └── skills/superpowers-tdd/SKILL.md
 ├── qoder/                  # Qoder harness assets (2 files)
 │   ├── skills/onepress-discipline/SKILL.md
@@ -301,14 +301,14 @@ onePress/                    # release pack root (generated from studio/pack/)
 **Q: The agent cannot find `INSTALL_PROMPT.md` after cloning?**
 A: Usually the sparse-checkout path does not match the real layout (cone mode silently checks out nothing, no error). Have it verify with `git ls-tree -r --name-only HEAD`, then fall back to `git sparse-checkout disable` (the pack is only KB-sized). This is already covered in the install block above, so it normally self-recovers.
 
-**Q: `/opsx:continue` stops at the plan step saying `superpowers:writing-plans` is unavailable?**
+**Q: `/openspec-continue-change` stops at the plan step saying `superpowers:writing-plans` is unavailable?**
 A: Since 1.0.4 every Superpowers skill reference in superspec carries an inline fallback (brainstorm / plan / apply 2c / finalize), so a missing skill no longer halts the flow — the agent writes `plan.md` inline. On older versions (schema version ≤ 4) just upgrade and re-install; as a stopgap, have the agent split `tasks.md` into 2–5 minute micro-steps and write `plan.md` directly.
 
 **Q: The target repo has no OpenSpec?**
-A: Install still completes, but `/opsx:*` and `ui-spec.md`/`sandbox-preview.html` generation require OpenSpec. Run `openspec init --tools qoder|trae|cursor|opencode` first.
+A: Install still completes, but `/openspec-*` skills and `ui-spec.md`/`sandbox-preview.html` generation require OpenSpec. Run `openspec init --tools qoder|trae|cursor|opencode` first.
 
-**Q: OpenCode lacks `/opsx:continue` and `/opsx:archive`?**
-A: Only three commands ship with the pack. Use `openspec status` / `openspec instructions` / `openspec archive` instead, or add your own `.opencode/commands/opsx-*.md`.
+**Q: Where are the workflow skills on OpenCode?**
+A: OpenSpec 2.0 installs them into `.agents/skills/openspec-*`, shared by all four harnesses; this pack only adds `commands/opsx-review.md`. If they are missing, run `openspec init --tools opencode` or `openspec update`.
 
 **Q: Can I install only one harness?**
 A: Yes — that is the default. The installer detects by directory: `.qoder/` only → Qoder only, `.trae/` only → Trae only, `.cursor/` only → Cursor only, several present → every detected harness, none → it asks first. You can also pass `--harness trae,cursor`. To add another harness later, re-run the install; only that harness is written and the existing one is untouched.

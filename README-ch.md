@@ -17,7 +17,7 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 | 项 | 要求 |
 |----|------|
 | 目标仓库 | 已初始化 git |
-| OpenSpec CLI | `npm install -g @fission-ai/openspec@latest`（Node 22.12+） |
+| OpenSpec CLI | `npm install -g @fission-ai/openspec@latest`（**>= 2.0.0**；1.x 环境请改用 onePress v1.1.0） |
 | 设计检索（可选） | `npm install -g ui-ux-pro-max-cli` + `uipro init --ai <harness> --offline`；缺失时自动降级 |
 | AI 助手 | Qoder / OpenCode / Trae / Cursor / 任意具备文件读写与命令执行能力的 Agent |
 
@@ -83,13 +83,13 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 
 | 目标仓库路径 | 内容 | 层级 | 安装条件 |
 |--------------|------|------|----------|
-| `.opencode/` | `opencode.json`、`agent/ux-architect.md`、`commands/opsx-{new,apply,verify,review}.md`、`skills/superpowers-tdd/` | harness | 仅选中 OpenCode |
+| `.opencode/` | `opencode.json`、`agent/ux-architect.md`、`commands/opsx-review.md`、`skills/superpowers-tdd/` | harness | 仅选中 OpenCode |
 | `.qoder/skills/onepress-discipline/SKILL.md` | 十条铁律（契约 / 分流 / 检索 / 沙箱 / 门禁 / Token / 四态 / 无障碍 / 防呆 / 编码前评审）+ TDD 纪律 | harness | 仅选中 Qoder |
-| `.qoder/commands/opsx/*.md` | 仅在 frontmatter 后**新增一行**技能引用，主体不改 | harness | 仅选中 Qoder |
+| `.agents/skills/openspec-*/SKILL.md`（12 个） | OpenSpec 2.0 工作流技能；仅在 frontmatter 后**新增一行**技能引用，正文不改 | harness | 始终（四 harness 共享） |
 | `.trae/skills/onepress-discipline/SKILL.md` | 十条铁律 + TDD 纪律（Trae 载体） | harness | 仅选中 Trae |
-| `.trae/commands/opsx-*.md` | 仅在 frontmatter 后**新增一行**技能引用，主体不改 | harness | 仅选中 Trae |
+| `.trae/commands/opsx-review.md` | onePress 托管评审命令（斜杠入口 `/opsx:review`） | harness | 仅选中 Trae |
 | `.cursor/skills/onepress-discipline/SKILL.md` | 十条铁律 + TDD 纪律（Cursor 载体） | harness | 仅选中 Cursor |
-| `.cursor/commands/opsx-*.md` | 仅在 frontmatter 后**新增一行**技能引用，主体不改 | harness | 仅选中 Cursor |
+| `.cursor/commands/opsx-review.md` | onePress 托管评审命令（斜杠入口 `/opsx:review`） | harness | 仅选中 Cursor |
 | `openspec/schemas/superspec/` | `schema.yaml` + 11 模板（共 12 文件，含 `ui-spec.md` 与 `review-rubric.md`） | harness | 始终 |
 | `onePress.lock` | 版本、安装范围与受保护资产清单 | harness | 始终 |
 | `docs/ui-components.md` | 组件注册表模板（四列，首次安装初始化为空表） | project | 始终 |
@@ -100,25 +100,25 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 
 ## 二、完整开发流程
 
-一条需求从零到归档，共 5 步。**所有 `/opsx:*` 命令都在目标仓库根目录执行**（即包含 `openspec/` 的那一层）。
+一条需求从零到归档，共 5 步。**所有 `/openspec-*` 技能都在目标仓库根目录执行**（即包含 `openspec/` 的那一层；OpenSpec 2.0 skills 交付形态）。
 
 | 步骤 | 命令 | 你提供 | 产物 | 通过标准 |
 |------|------|--------|------|----------|
-| 1 契约初始化 | `/opsx:new <change>` | 功能描述 | `proposal.md`、`design.md`、`ui-spec.md` + `sandbox-preview.html`（仅 UI 变更） | 六章节齐全，沙箱 Light/Dark 可打开 |
-| 2 补全工件 | `/opsx:continue` ×N 或 `/opsx:ff` | — | `specs/`、`tasks.md`、`plan.md` | `openspec validate --strict` 通过 |
-| 3 实现 | `/opsx:apply` | — | 代码 + `apply.md` | 与沙箱 Light + Dark 对齐 |
-| 4 验证 | `/opsx:verify` | — | `verify.md` | 八门禁全绿，无 CRITICAL |
-| 5 归档 | `/opsx:archive` | — | 主 specs 更新 + `finalize.md` + 归档目录 | 组件已增量写入注册表 |
+| 1 契约初始化 | `/openspec-new-change <change>` | 功能描述 | `proposal.md`、`design.md`、`ui-spec.md` + `sandbox-preview.html`（仅 UI 变更） | 六章节齐全，沙箱 Light/Dark 可打开 |
+| 2 补全工件 | `/openspec-continue-change` ×N 或 `/openspec-ff-change` | — | `specs/`、`tasks.md`、`plan.md` | `openspec validate --strict` 通过 |
+| 3 实现 | `/openspec-apply-change` | — | 代码 + `apply.md` | 与沙箱 Light + Dark 对齐 |
+| 4 验证 | `/openspec-verify-change` | — | `verify.md` | 八门禁全绿，无 CRITICAL |
+| 5 归档 | `/openspec-archive-change` | — | 主 specs 更新 + `finalize.md` + 归档目录 | 组件已增量写入注册表 |
 
-### 步骤 1：契约初始化 `/opsx:new`
+### 步骤 1：契约初始化 `/openspec-new-change`
 
 ```text
-/opsx:new feat-261103-001-user-role-permission
+/openspec-new-change feat-261103-001-user-role-permission
 ```
 
 做的事：
 
-1. `/opsx:new` 先按三条规则判定 `**UI Change**: yes|no`（路由/页面；表格列、表单字段或状态展示；破坏性交互），并把结论写到 `proposal.md` 首行；
+1. `/openspec-new-change` 先按三条规则判定 `**UI Change**: yes|no`（路由/页面；表格列、表单字段或状态展示；破坏性交互），并把结论写到 `proposal.md` 首行；
 2. `yes` 时 `ux-architect` 读取 `docs/design-system/projectbaseline/MASTER.md`，再执行双步检索（先 `--domain ux`，后 `--stack shadcn|html-tailwind`）；
 3. 从 `docs/ui-components.md`（四列，按"适用骨架"检索）拉取可复用组件；
 4. 生成六章节 `ui-spec.md`，随后生成单文件 `sandbox-preview.html`。
@@ -129,9 +129,9 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 
 **可选加速器**：`ui-ux-pro-max` 提供本地 CSV 知识库。`python3` 或技能目录缺失时，检索记为 `SKIP`，`ui-spec.md` 改为手工填写——安装与门禁照常工作。
 
-### 步骤 2：补全工件 `/opsx:continue` / `/opsx:ff`
+### 步骤 2：补全工件 `/openspec-continue-change` / `/openspec-ff-change`
 
-superspec 的工件序列共 9 个 DAG 工件，`/opsx:continue` **每次只产出一个**；UI 变更额外产出末行这对条件文件：
+superspec 的工件序列共 9 个 DAG 工件，`/openspec-continue-change` **每次只产出一个**；UI 变更额外产出末行这对条件文件：
 
 ```text
 brainstorm → proposal → design → specs → tasks → plan → apply → verify → finalize
@@ -148,9 +148,9 @@ brainstorm → proposal → design → specs → tasks → plan → apply → ve
 | `plan.md` | 2–5 分钟粒度的微步骤 |
 | `apply.md` / `verify.md` / `finalize.md` | 实现回执 / 验证报告 / 收尾回执 |
 
-想一次性补齐：`/opsx:ff`；只想先看完整提案：`/opsx:propose`；只想讨论不落文件：`/opsx:explore`。
+想一次性补齐：`/openspec-ff-change`；只想先看完整提案：`/openspec-propose`；只想讨论不落文件：`/openspec-explore`。
 
-### 步骤 3：实现 `/opsx:apply`（两阶段）
+### 步骤 3：实现 `/openspec-apply-change`（两阶段）
 
 | 阶段 | 做什么 | 产出 | 验收 |
 |------|--------|------|------|
@@ -159,7 +159,7 @@ brainstorm → proposal → design → specs → tasks → plan → apply → ve
 
 不再注入 in-app State Bar：`sandbox-preview.html` 是唯一视觉验收面。**不写 DOM/RTL 单测**——用眼睛验收，用门禁脚本守质量。
 
-### 步骤 4：验证 `/opsx:verify`
+### 步骤 4：验证 `/openspec-verify-change`
 
 八项门禁，任一失败打回 `apply` 对应阶段：
 
@@ -179,10 +179,10 @@ brainstorm → proposal → design → specs → tasks → plan → apply → ve
 
 输出 `openspec/changes/<change>/verify.md`，结论三选一：`PASS` / `PASS WITH WARNINGS` / `FAIL`。有 CRITICAL 不允许归档。
 
-### 步骤 5：归档 `/opsx:archive`
+### 步骤 5：归档 `/openspec-archive-change`
 
 ```text
-/opsx:archive
+/openspec-archive-change
 ```
 
 1. 把 delta specs 同步进 `openspec/specs/<capability>/spec.md`（主规范）；
@@ -190,11 +190,11 @@ brainstorm → proposal → design → specs → tasks → plan → apply → ve
 3. 整个变更目录移入 `openspec/changes/archive/YYYY-MM-DD-<change>/`；
 4. 写 `finalize.md` 收尾回执。
 
-> **OpenCode 没有 `/opsx:archive`**：执行 `openspec archive <name> --yes` 后，用脚本补记组件行：
+> **OpenCode 与其它 harness 一致**：直接执行 `/openspec-archive-change`；归档后如需补记组件行：
 > `bash scripts/onepress-registry-append.sh --root . --name <Name> --path <path> --archetype <Archetype> --props '<签名>'`
 > 脚本幂等，只向指定分区追加，不改动历史行。
 
-多个变更一起收：`/opsx:bulk-archive`。只想同步规范不归档：`/opsx:sync`。
+多个变更一起收：`/openspec-bulk-archive-change`。只想同步规范不归档：`/openspec-sync-specs`。
 
 ---
 
@@ -202,21 +202,21 @@ brainstorm → proposal → design → specs → tasks → plan → apply → ve
 
 | 命令 | Qoder | OpenCode | Trae | Cursor | 用途 |
 |------|:----:|:--------:|:----:|:------:|------|
-| `/opsx:new <name>` | ✅ | ✅ | ✅ | ✅ | 契约初始化（proposal + design + ui-spec + 沙箱） |
-| `/opsx:continue` | ✅ | 用 CLI | ✅ | ✅ | 生成下一个工件 |
-| `/opsx:ff` | ✅ | 用 CLI | ✅ | ✅ | 一次补齐全部工件 |
-| `/opsx:propose` | ✅ | 用 CLI | ✅ | ✅ | 一步生成完整提案 |
-| `/opsx:explore` | ✅ | — | ✅ | ✅ | 只讨论，不落文件 |
-| `/opsx:apply` | ✅ | ✅ | ✅ | ✅ | 两阶段实现 |
-| `/opsx:verify` | ✅ | ✅ | ✅ | ✅ | 八道门禁 |
-| `/opsx:sync` | ✅ | 用 CLI | ✅ | ✅ | 仅同步 delta specs |
-| `/opsx:archive` | ✅ | 用 CLI | ✅ | ✅ | 归档 + 注册表增量 |
-| `/opsx:bulk-archive` | ✅ | 用 CLI | ✅ | ✅ | 批量归档 |
-| `/opsx:onboard` | ✅ | 用 CLI | ✅ | ✅ | 首次全流程引导（原生） |
-| `/opsx:update` | ✅ | 用 CLI | ✅ | ✅ | 修订规划工件（原生，实验性） |
+| `/openspec-new-change <name>` | ✅ | ✅ | ✅ | ✅ | 契约初始化（proposal + design + ui-spec + 沙箱） |
+| `/openspec-continue-change` | ✅ | 用 CLI | ✅ | ✅ | 生成下一个工件 |
+| `/openspec-ff-change` | ✅ | 用 CLI | ✅ | ✅ | 一次补齐全部工件 |
+| `/openspec-propose` | ✅ | 用 CLI | ✅ | ✅ | 一步生成完整提案 |
+| `/openspec-explore` | ✅ | — | ✅ | ✅ | 只讨论，不落文件 |
+| `/openspec-apply-change` | ✅ | ✅ | ✅ | ✅ | 两阶段实现 |
+| `/openspec-verify-change` | ✅ | ✅ | ✅ | ✅ | 八道门禁 |
+| `/openspec-sync-specs` | ✅ | 用 CLI | ✅ | ✅ | 仅同步 delta specs |
+| `/openspec-archive-change` | ✅ | ✅ | ✅ | ✅ | 归档 + 注册表增量 |
+| `/openspec-bulk-archive-change` | ✅ | 用 CLI | ✅ | ✅ | 批量归档 |
+| `/openspec-onboard` | ✅ | 用 CLI | ✅ | ✅ | 首次全流程引导（原生） |
+| `/openspec-update-change` | ✅ | 用 CLI | ✅ | ✅ | 修订规划工件（原生，实验性） |
 
-- **Qoder / Trae / Cursor**：`openspec init --tools qoder|trae|cursor` 已生成 12 个原生命令，另由安装器直投 1 个托管 `/opsx:review`；onePress 只加技能与一行引用（Trae / Cursor 的斜杠命令名为 `/opsx-apply` 形式）。
-- **OpenCode**：本包只随附 `new` / `apply` / `verify` 三个命令；其余用 CLI 等价替代：
+- **Qoder / Trae / Cursor**：OpenSpec 2.0 将 12 个技能统一安装到 `.agents/skills/`，安装器在每个 `SKILL.md` 的 frontmatter 后挂载一行 `onepress-discipline` 引用；另直投 1 个托管 `/opsx:review` 命令。
+- **OpenCode**：与其它 harness 共用 `.agents/skills/`，另随附 1 个托管 `commands/opsx-review.md`；不再直投 `new` / `apply` / `verify` 命令：
 
 ```bash
 openspec status --change <name> --json          # 看进度与下一步
@@ -256,7 +256,7 @@ openspec archive <name> --yes                   # 归档并同步 specs
 
 升级 = 用新版本模板包重跑一次脚本（`.\install.ps1` / `./install.sh`），`onePress.lock` 里的 `version` 决定"全新安装 / 升级"；旧版本遗留的受管文件会按 lock 清单清理。lock 缺失或损坏 → 按全新安装处理，但项目级资产仍受保护。
 
-卸载：删除 `onePress.lock` 中 `protectedAssets` 之外的安装产物（`.opencode/`、`.qoder/skills/onepress-discipline/`、`.trae/skills/onepress-discipline/`、`.trae/commands/opsx-*`、`.cursor/skills/onepress-discipline/`、`openspec/schemas/superspec/`），保留 `docs/ui-components.md` 与 `openspec/changes/`。
+卸载：删除 `onePress.lock` 中 `protectedAssets` 之外的安装产物（`.opencode/`、`.qoder/skills/onepress-discipline/`、`.trae/skills/onepress-discipline/`、`.trae/commands/opsx-review.md`、`.cursor/skills/onepress-discipline/`、`openspec/schemas/superspec/`），保留 `docs/ui-components.md` 与 `openspec/changes/`；`.agents/skills/` 归 OpenSpec CLI 所有，卸载不删除（可执行 `openspec update` 去除引用行）。
 
 ---
 
@@ -271,10 +271,10 @@ onePress/                    # 发布包根目录（由 studio/pack/ 生成）
 ├── INSTALL_PROMPT.md       # AI 安装入口（五段结构，脚本的等价兜底）
 ├── install.ps1             # Windows 安装器（探测/写入/自检/报告一条命令）
 ├── install.sh              # macOS / Linux 安装器
-├── opencode/               # OpenCode harness 资产（7 文件）
+├── opencode/               # OpenCode harness 资产（4 文件）
 │   ├── opencode.json
 │   ├── agent/ux-architect.md
-│   ├── commands/opsx-{new,apply,verify,review}.md
+│   ├── commands/opsx-review.md
 │   └── skills/superpowers-tdd/SKILL.md
 ├── qoder/                  # Qoder harness 资产（2 文件）
 │   ├── skills/onepress-discipline/SKILL.md
@@ -301,14 +301,14 @@ onePress/                    # 发布包根目录（由 studio/pack/ 生成）
 **Q：AI 说克隆下来找不到 `INSTALL_PROMPT.md`？**
 A：多半是稀疏检出路径与实际布局不符（cone 模式对不存在的路径静默空检出、不报错）。让它先 `git ls-tree -r --name-only HEAD` 核对真实布局，再 `git sparse-checkout disable` 全量检出（包体仅 KB 级）。这条已写进上面的安装提示词，正常情况下它会自己兜住。
 
-**Q：没装 Superpowers 插件，`/opsx:continue` 卡在 plan 步骤报 `superpowers:writing-plans` 不可用？**
+**Q：没装 Superpowers 插件，`/openspec-continue-change` 卡在 plan 步骤报 `superpowers:writing-plans` 不可用？**
 A：1.0.4 起 superspec 的 Superpowers 技能引用全部带内联兜底（brainstorm / plan / apply 2c / finalize 四处），技能缺失时 AI 会按兜底步骤自行产出 `plan.md`，不会中断。旧版本（schema version ≤ 4）升级重装即可；临时也可让 AI 直接按 `tasks.md` 拆 2–5 分钟微步骤写入 `plan.md`。
 
 **Q：目标仓库没有 OpenSpec？**
-A：安装能完成，但 `/opsx:*` 与 `ui-spec.md` / `sandbox-preview.html` 的产出需要 OpenSpec。先 `openspec init --tools qoder|trae|cursor|opencode` 再安装。
+A：安装能完成，但 `/openspec-*` 技能与 `ui-spec.md` / `sandbox-preview.html` 的产出需要 OpenSpec。先 `openspec init --tools qoder|trae|cursor|opencode` 再安装。
 
-**Q：OpenCode 下没有 `/opsx:continue`、`/opsx:archive`？**
-A：本包只随附三个命令。其余用 `openspec status` / `openspec instructions` / `openspec archive` 等价操作，或自行补 `.opencode/commands/opsx-*.md`。
+**Q：OpenCode 下工作流技能在哪里？**
+A：OpenSpec 2.0 统一安装到 `.agents/skills/openspec-*`，四 harness 共享；本包仅额外随附 `commands/opsx-review.md`。若技能缺失，执行 `openspec init --tools opencode` 或 `openspec update` 补齐。
 
 **Q：能不能只装某一个平台？**
 A：能，且默认就是这样。安装器按目录探测判定：只有 `.qoder/` 只装 Qoder，只有 `.trae/` 只装 Trae，只有 `.cursor/` 只装 Cursor，多个目录存在则对应多套都装，一个都没有会先问你。也可以用 `--harness trae,cursor` 显式指定。事后想补装另一个环境，再跑一次安装即可，只会增量写那一套，已装的不受影响。

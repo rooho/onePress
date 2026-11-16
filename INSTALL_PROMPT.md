@@ -1,6 +1,8 @@
 ﻿# onePress 安装提示词（INSTALL_PROMPT.md）
 
 > 本文件是 onePress 的 AI 侧安装入口。**首选 `install.ps1` / `install.sh`（一条命令完成同样的五段）；在没有脚本执行能力时，才把本文件完整内容交给任意具备文件读写能力的大模型**，它会按以下五段执行安装。**执行者只需通用文件读写能力，无需 Node.js、Python 或任何运行时。**
+>
+> **平台前提**：本版本要求 **OpenSpec >= 2.0.0**（skills 交付形态）。1.x 环境请改用 onePress v1.1.0。
 
 ## ⓿ 最快路径（MUST 优先尝试）
 
@@ -15,7 +17,7 @@
 <pack-root>/install.sh --target <target-repo-root> --harness <qoder|opencode|trae|cursor|both|all|逗号组合>
 ```
 
-它会在数秒内完成 ①~⑤ 的全部工作（探测 / 写入 / config 对齐 / 命令初始化 / 挂载 / lock / 自检），退出码 `0` 即成功。把它的报告原样转述给用户即可，不要重复校验。
+它会在数秒内完成 ①~⑤ 的全部工作（探测 / 写入 / config 对齐 / skills 初始化 / 挂载 / lock / 自检），退出码 `0` 即成功。把它的报告原样转述给用户即可，不要重复校验。
 
 **只有**脚本无法执行（无 shell、无执行权限、环境禁止运行命令）时，才继续按下面 ①~⑤ 手工安装，且手工产出必须与脚本逐字节一致。
 
@@ -23,7 +25,15 @@
 
 1. 确认当前目录为目标仓库根（存在 `.git/` 或已初始化 git）。
 
-2. **判定目标 harness（决定安装范围，必须先做，禁止跳过）**：
+2. **校验 OpenSpec CLI 版本（MUST 最先做）**：运行 `openspec --version`，取首个 `major.minor.patch`；主版本小于 2 或无法解析时**立即中止**，并同时给出两条路径：
+
+   ```text
+   OpenSpec CLI 版本不满足：当前 <版本>，要求 >= 2.0.0。
+   升级：npm install -g @fission-ai/openspec@latest
+   或改用 onePress v1.1.0（OpenSpec 1.x 命令形态）。
+   ```
+
+3. **判定目标 harness（决定安装范围，必须先做，禁止跳过）**：
 
    | 探测结果 | 安装范围 `HARNESS_SET` |
    |----------|------------------------|
@@ -34,32 +44,29 @@
    | 多个目录存在 | 对应多个 harness 的集合 |
    | 一个都不存在 | **询问用户**"本仓库使用哪个 AI 编码环境？Qoder / OpenCode / Trae / Cursor / 全部"，按回答确定，**禁止默认全装** |
 
+   - **注意**：OpenSpec 2.0 的 `.agents/skills/` 为四 harness 共享，**不能**用它的存在与否反推 harness；`openspec init --tools qoder` 也不会创建 `.qoder/` 目录。
    - **自身环境佐证**：你在 Qoder 中运行 → 倾向 Qoder；在 OpenCode 中运行 → 倾向 OpenCode；在 Trae 中运行 → 倾向 Trae；在 Cursor 中运行 → 倾向 Cursor。佐证与目录探测冲突时，以用户确认为准。
    - 判定结论 MUST 在报告首行写明，后续 ②③④ 全部以 `HARNESS_SET` 为准。
    - **未选中的 harness：不得创建其目录、不得写入任何文件、不得挂载引用。**
 
-3. 探测现状并记录：
-   - `.qoder/` 是否存在；若存在，其 `commands/` 与 `skills/` 下有哪些文件。
-   - `.opencode/` 是否存在；若存在，其 `commands/`、`agent/`、`skills/` 下有哪些文件。
-   - `.trae/` 是否存在；若存在，其 `commands/` 与 `skills/` 下有哪些文件。
-   - `.cursor/` 是否存在；若存在，其 `commands/` 与 `skills/` 下有哪些文件。
+4. 探测现状并记录：
+   - `.qoder/`、`.opencode/`、`.trae/`、`.cursor/` 是否存在及其 `commands/`、`skills/`、`agent/` 下的文件。
+   - `.agents/skills/` 是否已存在；`openspec-<slug>/SKILL.md` 12 个是否齐全（slug 清单：`apply-change`、`archive-change`、`bulk-archive-change`、`continue-change`、`explore`、`ff-change`、`new-change`、`onboard`、`propose`、`sync-specs`、`update-change`、`verify-change`）。
    - `onePress.lock` 是否存在且可解析（JSON）；存在且版本小于本包 `VERSION` 则本次为**升级**，缺失/损坏则按**全新安装**处理。
    - `docs/ui-components.md` 是否已存在（决定 Protect Local 行为）。
-4. 记录安装前的 `git status --porcelain`，识别哪些 harness 文件存在**未提交的本地修改**。
+5. 记录安装前的 `git status --porcelain`，识别哪些 harness 文件存在**未提交的本地修改**。
 
 ## ② 分层安装
 
 **红线（违反任一条立即中止安装并报告）：**
 
 1. 禁止覆盖项目级资产：`docs/ui-components.md`、`openspec/changes/` 及其下任何文件。
-2. 禁止修改目标仓库的业务代码与既有业务文档（仅允许写入 `HARNESS_SET` 内的 `.qoder/`、`.opencode/`、`.trae/`、`.cursor/`、`openspec/schemas/`、`scripts/onepress-gate.sh`、`scripts/sandbox-preflight.spec.ts`、`onePress.lock`、`docs/ui-components.md`（首装初始化））。
-3. 禁止删除用户本地文件（升级时仅允许删除将被全量覆盖的 harness 目录内的旧文件）。
+2. 禁止修改目标仓库的业务代码与既有业务文档（仅允许写入 `HARNESS_SET` 内的 `.qoder/`、`.opencode/`、`.trae/`、`.cursor/`、`openspec/schemas/`、`scripts/onepress-gate.sh`、`scripts/sandbox-preflight.spec.ts`、`onePress.lock`、`docs/ui-components.md`（首装初始化）、`.agents/skills/`（**仅允许插入技能引用行，禁止改写技能正文**））。
+3. 禁止删除用户本地文件（升级时仅允许删除将被全量覆盖的 harness 目录内的旧文件与 OpenSpec 1.x 生成物）。
 
 **逐字写入约束：模板包内所有文件必须逐字写入目标路径，禁止改写、精简或重排内容；无法逐字写入时中止并报告。**
 
-### Harness 级（全量覆盖）
-
-**通用（与 IDE 无关，始终安装）**
+### 通用（与 IDE 无关，始终安装）
 
 | 模板源路径 | 目标路径 |
 |-----------|---------|
@@ -67,15 +74,36 @@
 | `scripts/onepress-gate.sh` | `scripts/onepress-gate.sh`（tooling 层，门禁 0.5） |
 | `scripts/sandbox-preflight.spec.ts` | `scripts/sandbox-preflight.spec.ts`（tooling 层，L1 可选） |
 
+### skills 初始化（始终执行，先于挂载）
+
+`.agents/skills/openspec-<slug>/SKILL.md` 12 个齐全 → 跳过；缺失或不完整 → 在目标仓库根执行：
+
+```bash
+openspec init --tools <HARNESS_SET 逗号串> --no-animation
+```
+
+- `<HARNESS_SET 逗号串>` 按实际范围拼接，如 `qoder`、`qoder,opencode`；四 harness 共享同一 `.agents/skills/`。
+- `openspec init` 创建 `openspec/config.yaml` 时**不得覆盖**已存在的配置（安装器已在下一步先创建/对齐 config）。
+- skills 不完整且无 openspec CLI 时：报告中明确写"技能存在但无挂载点"，不得当作安装成功。
+
+### 技能引用挂载（始终执行，紧跟 skills 初始化）
+
+对 `.agents/skills/openspec-<slug>/SKILL.md`（12 个）逐个在 YAML frontmatter 之后插入一行（若该行已存在则跳过）：
+
+```
+> onepress: 执行本技能时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。
+```
+
+约束：**仅允许新增这一行**，技能正文其余内容一字不得改动；无 YAML frontmatter 的技能跳过并告警；升级时 MUST 重新执行本步骤（`openspec update` 会覆盖 `.agents/skills`，引用行可能丢失）。
+
+### Harness 级（全量覆盖）
+
 **仅 OpenCode（`HARNESS_SET` 含 `opencode` 时）**
 
 | 模板源路径 | 目标路径 |
 |-----------|---------|
 | `opencode/opencode.json` | `.opencode/opencode.json` |
 | `opencode/agent/ux-architect.md` | `.opencode/agent/ux-architect.md` |
-| `opencode/commands/opsx-new.md` | `.opencode/commands/opsx-new.md` |
-| `opencode/commands/opsx-apply.md` | `.opencode/commands/opsx-apply.md` |
-| `opencode/commands/opsx-verify.md` | `.opencode/commands/opsx-verify.md` |
 | `opencode/commands/opsx-review.md` | `.opencode/commands/opsx-review.md` |
 | `opencode/skills/superpowers-tdd/SKILL.md` | `.opencode/skills/superpowers-tdd/SKILL.md` |
 
@@ -102,29 +130,20 @@
 
 写入顺序：先创建目录，再逐文件写入。未选中的 harness 目录**保持不存在或原样不动**。
 
-### Qoder / Trae / Cursor 命令技能挂载（仅当 `HARNESS_SET` 含 `qoder`、`trae` 或 `cursor`）
+### OpenSpec 1.x 命令清理（仅升级时命中）
 
-对目标仓库 `.qoder/commands/`、`.trae/commands/` 或 `.cursor/commands/` 下每个已存在的命令文件（含子目录），在 YAML frontmatter 之后插入一行（若该行已存在则跳过）：
+按 `HARNESS_SET` 清理旧命令（存在未提交修改的跳过并记录）：
 
-```
-> onepress: 执行本命令时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。
-```
+- Qoder：`.qoder/commands/opsx/*.md`，**保留** `review.md`（onePress 托管）。
+- OpenCode / Trae / Cursor：`commands/opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`。
 
-约束：**仅允许新增这一行**，命令正文其余内容一字不得改动；命令文件不存在时跳过，**不得新建清单外命令文件**（onePress 托管的 `opsx-review.md` 由安装器直投，不属于本挂载步骤）。
+清理后不得重建任何 `/opsx:*` 工作流命令；工作流一律由 `.agents/skills/openspec-*` 承载。
 
 ### OpenSpec 配置对齐（始终执行）
 
 - 目标仓库存在 `openspec/config.yaml` 时，其顶层 `schema:` MUST 为 `superspec`（九工件序列 brainstorm→…→finalize 依赖它）。当前值不是 `superspec` 时，**只改这一行**，`context` / `rules` 等其余字段一字不动，并在报告中记一行 `config.yaml schema: <旧值> → superspec`。**改行时保留原换行风格**：CRLF 文件的该行末尾有 `\r`，不要一并删掉。
 - `openspec/config.yaml` 不存在时**必须创建**，最小内容为 `schema: superspec` + `context.rules`（specs / design / tasks 三组；design 组要求 UI 变更在 `proposal.md` 首行给出 `**UI Change**: yes|no`，`yes` 时产出 `ui-spec.md` 与 `sandbox-preview.html`）。缺了它，本次安装提供不了九工件能力。
-- **实测结论**：`openspec init` 在 `config.yaml` 已存在时**不会覆盖**（hash 不变），只有当文件缺失时才会新建为 `spec-driven`。因此正确顺序是：**先创建/对齐 config → 再 init → 再挂载技能引用**。
-
-### 命令初始化（仅当 `HARNESS_SET` 含 `qoder`、`trae` 或 `cursor`，且对应 `commands/` 为空或不完整）
-
-- **不完整的判定（Trae / Cursor）**：`commands/` 中存在 `.md` 文件，但缺少 OpenSpec 标准命令（如 `opsx-continue.md`、`opsx-propose.md`、`opsx-archive.md`）；只有 `opsx-new.md` / `opsx-apply.md` / `opsx-verify.md` 三个文件即属此类（旧版 onePress 随包直出的命令）。
-- 判定为不完整时：先删除旧版随包命令 `commands/opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`（存在未提交修改的跳过并记录），再执行 `openspec init --tools qoder|trae|cursor --no-animation` 生成完整命令集（当前 OpenSpec 1.13 为 12 个），**然后才做技能引用挂载**。漏掉这一步的结果是"技能已落盘但永不加载"，`/opsx:*` 全部不可用。
-- `.qoder/commands/` 的命令位于 `commands/opsx/` 子目录，不适用上述扁平文件名判定；其非空即视为完整。
-- `openspec` 命令不可用时：在报告中明确写"技能存在但无挂载点，需先安装 OpenSpec CLI 并 init"，不得当作安装成功。
-- 已有完整命令集时**不重复 init**。
+- 顺序：**先创建/对齐 config → 再 `openspec init` → 再挂载技能引用**。`openspec init` 在 `config.yaml` 已存在时不会覆盖。
 
 ### 文档与发布仓边界（不安装）
 
@@ -139,11 +158,11 @@
 ````markdown
 # UI 组件注册表
 
-> 本文件由 onePress 首次安装初始化，之后由 `/opsx:archive` 增量维护：每次归档把本次新建或改造的组件追加到对应分区，**只追加行，不重排、不删历史**。
+> 本文件由 onePress 首次安装初始化，之后由 `/openspec-archive-change` 增量维护：每次归档把本次新建或改造的组件追加到对应分区，**只追加行，不重排、不删历史**。
 
 ## 使用说明
 
-1. `/opsx:new` 起草 `ui-spec.md` 前 MUST 先检索本表，可复用的组件写入第 1 节复用表，不得重复造轮子。
+1. `/openspec-new-change` 起草 `ui-spec.md` 前 MUST 先检索本表，可复用的组件写入第 1 节复用表，不得重复造轮子。
 2. 新增组件必须补齐：组件名称、路径、适用骨架 (Archetype)、核心 Props 签名。
 3. 组件分级：`base`（无业务语义，如 DataTable）、`domain`（含业务语义，如 RoleBadge）。
 4. `适用骨架` 列取值：`Dashboard-Grid` / `Master-Detail` / `Standard-CRUD-Table` / `Step-Wizard` / `Settings-Split`；通用组件填 `通用`。
@@ -191,8 +210,8 @@
 
 ```json
 {
-  "version": "1.0.0",
-  "installedAt": "2026-11-03T00:00:00Z",
+  "version": "2.0.0",
+  "installedAt": "2026-11-16T00:00:00Z",
   "harnesses": {
     "qoder": true,
     "opencode": false,
@@ -202,11 +221,18 @@
   "protectedAssets": [
     "docs/ui-components.md",
     "openspec/changes/"
+  ],
+  "files": [
+    "openspec/schemas/superspec/schema.yaml",
+    ".qoder/skills/onepress-discipline/SKILL.md",
+    ".qoder/commands/opsx/review.md",
+    "scripts/onepress-gate.sh"
   ]
 }
 ```
 
-`harnesses` 按**实际安装范围**填写：本次装哪个写 `true`，未装写 `false`（上例为仅 Qoder 环境）。
+- `harnesses` 按**实际安装范围**填写：本次装哪个写 `true`，未装写 `false`。
+- `files` MUST 只记录 onePress 实际写入的文件（纯路径，无中文后缀）；`.agents/skills/**` 归 OpenSpec CLI 所有，**MUST NOT 纳入 `files`**。
 
 ### 安装范围与增量
 
@@ -217,13 +243,15 @@
 ### 三档升级策略
 
 1. **Harness 核心全量覆盖（仅限已启用的 harness）**：升级时先删除**该 harness** 目录中由 onePress 管理的旧文件，再按第②段逐字写入，杜绝旧版本残留；未启用的 harness 目录不读不写。删除范围：
-   - OpenCode：`commands/`、`skills/`、`opencode.json`
-   - Trae：`skills/onepress-discipline/`、lock 中记录的命令文件，以及旧版随包直出的 `commands/opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`（**lock 未记录也要删**，否则会阻塞 `openspec init` 而只剩 3 个命令）；`commands/opsx-review.md` 属 onePress 托管命令，升级时由安装器覆盖
+   - OpenCode：`commands/`（`opsx-review.md` 除外）、`skills/`、`opencode.json`
+   - Trae：`skills/onepress-discipline/`、lock 中记录的命令文件，以及旧版随包直出的 `commands/opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`（**lock 未记录也要删**）
    - Cursor：`skills/onepress-discipline/`、`commands/opsx-review.md`
-   - Qoder：`skills/onepress-discipline/`、`commands/opsx/review.md`
+   - Qoder：`skills/onepress-discipline/`、`.qoder/commands/opsx/*.md`（保留 `review.md`）
    - 通用：`openspec/schemas/superspec/`
+   - **`.agents/skills/`：只允许插入引用行，禁止删除或改写技能正文。**
 2. **项目级 Protect Local**：存在即跳过，仅首装初始化。
 3. **本地修改保护**：未提交修改默认跳过并提示。
+4. **升级后重放挂载**：文件写入与清理完成后，MUST 重新执行 12 个 `SKILL.md` 的引用行挂载检查。
 
 ### lock 缺失 / 损坏降级
 
@@ -237,7 +265,8 @@
 ### .opencode 验收项（仅当 `HARNESS_SET` 含 `opencode`）
 
 - [ ] `.opencode/opencode.json` 存在且为合法 JSON
-- [ ] `.opencode/commands/` 下存在 `opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`、`opsx-review.md` 四个文件（复数目录 `commands/`）
+- [ ] `.opencode/commands/opsx-review.md` 存在且与模板包逐字节一致
+- [ ] `.opencode/commands/` 下**不存在** `opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`
 - [ ] `.opencode/agent/ux-architect.md` frontmatter 含 `mode` 字段
 - [ ] `.opencode/skills/superpowers-tdd/SKILL.md` frontmatter `name: superpowers-tdd` 与目录名一致，`description` 长度 1–1024 字符
 - [ ] `.opencode/skills/superpowers-tdd/SKILL.md` 内容与模板包逐字一致
@@ -248,24 +277,32 @@
 - [ ] 该 SKILL.md 包含十条铁律标题（ui-spec 契约先行 / 需求分流 / 设计检索与降级 / 高保真沙箱与两阶段 / 八项门禁 / Token 纯净度 / 四态状态机 / 无障碍基线 / 防呆与反馈闭环 / 编码前三级评审）
 - [ ] 该 SKILL.md 包含 `ui-spec.md`、`sandbox-preview`、`ui_change`、`44×44`、`prefers-reduced-motion`、`Review-Status`、`review.md` 七个关键词
 - [ ] 该 SKILL.md 内容与模板包逐字一致
-- [ ] 既有 `commands/` 下命令文件主体未被改写（仅允许 frontmatter 后新增一行技能引用）
-- [ ] `commands/` **非空**，且其中每个命令文件均含一行 `onepress-discipline` 技能引用（为空即判定失败：技能存在但无挂载点）
 - [ ] 对应目录下 `commands` 中存在 onePress 托管 review 命令（Qoder：`commands/opsx/review.md`；Cursor：`commands/opsx-review.md`），且与模板包逐字节一致
+- [ ] `.agents/skills/` 下 12 个 `openspec-<slug>/SKILL.md` 全部存在，且每个文件均含一行 `onepress-discipline` 技能引用
+- [ ] Qoder：`.qoder/commands/opsx/` 下除 `review.md` 外无其他 `*.md`（未提交修改受保护保留者除外）
 - [ ] 项目级资产未被覆盖：`docs/ui-components.md`（若安装前已存在）内容不变
 
 ### .trae 验收项（仅当 `HARNESS_SET` 含 `trae`）
 
 - [ ] `.trae/skills/onepress-discipline/SKILL.md` 存在，包含十条铁律与 `ui-spec.md` / `sandbox-preview` / `ui_change` / `44×44` / `prefers-reduced-motion` / `Review-Status` / `review.md` 关键词，且与模板包逐字一致
-- [ ] `.trae/commands/` **非空**（完整命令集通常 12 个，另加托管 `opsx-review.md`），且其中每个命令文件均含一行 `onepress-discipline` 技能引用（为空即判定失败：技能存在但无挂载点）
-- [ ] 既有 `commands/` 下命令文件主体未被改写（仅允许 frontmatter 后新增一行技能引用）
+- [ ] `.trae/commands/opsx-review.md` 存在且与模板包逐字节一致
+- [ ] `.trae/commands/` 下不存在 `opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`
+- [ ] `.agents/skills/` 下 12 个技能均含一行 `onepress-discipline` 技能引用
 - [ ] 项目级资产未被覆盖：`docs/ui-components.md`（若安装前已存在）内容不变
+
+### 共享 skills 挂载验收（任一 harness 安装即执行）
+
+- [ ] `.agents/skills/openspec-{apply-change,archive-change,bulk-archive-change,continue-change,explore,ff-change,new-change,onboard,propose,sync-specs,update-change,verify-change}/SKILL.md` 共 12 个文件存在
+- [ ] 每个 `SKILL.md` 均含 `onepress-discipline` 引用行
+- [ ] 引用行位于 frontmatter 之后，除该行外技能正文未被改写
 
 ### OpenSpec Schema 验收项
 
 - [ ] `openspec/schemas/superspec/schema.yaml` 与 `templates/` 11 个模板文件齐全（共 12 文件，含 `ui-spec.md` 与 `review-rubric.md`）
 - [ ] `openspec schemas` 可列出 `superspec (project)`
 - [ ] `openspec/config.yaml` 存在且顶层 `schema:` 为 `superspec`（缺失或值不符即判定失败）
-- [ ] `openspec/schemas/superspec/schema.yaml` 中每一处 `superpowers:<skill>` 引用都配有 `FALLBACK` 兜底说明（brainstorm / plan / apply / finalize 四处齐全），缺一处即判定失败——否则目标仓库没装 Superpowers 插件时，`/opsx:continue` 会停在 plan 步骤
+- [ ] `openspec/schemas/superspec/schema.yaml` 中每一处 `superpowers:<skill>` 引用都配有 `FALLBACK` 兜底说明（brainstorm / plan / apply / finalize 四处齐全），缺一处即判定失败
+- [ ] `schema.yaml` 中 `/opsx:` 仅允许出现 `/opsx:review`；不得出现 `/opsx:continue`、`/opsx:apply`、`/opsx:verify`、`/opsx:archive`、`/opsx:propose`
 
 ### 可选增强层验收项
 
@@ -279,14 +316,16 @@
 ### 安装范围验收项
 
 - [ ] `onePress.lock` 的 `harnesses` 与本次 `HARNESS_SET` 完全一致（未安装的 harness 为 `false`）
+- [ ] `onePress.lock` 的 `files` 不包含任何 `.agents/skills/` 路径
 - [ ] 未安装的 harness：其目录不存在，或原有文件内容未被本次安装改动
 
 ### 模板包结构验收项
 
 - [ ] 模板包根条目均在白名单内：`VERSION`、`ASSETS.md`、`INSTALL_PROMPT.md`、`install.ps1`、`install.sh`、`README-ch.md`、`README.md`、`opencode/`、`qoder/`、`trae/`、`cursor/`、`openspec-schema/`、`scripts/`；出现白名单外条目即判定失败并输出违规路径
+- [ ] `opencode/commands/` 仅含 `opsx-review.md`
 
 ## ⑤ 收尾
 
 1. 按第③段结构写入 `onePress.lock`（`installedAt` 用当前 ISO 时间；`harnesses` 按实际安装范围填写）。
-2. 输出安装报告，**首行写明安装范围**（`HARNESS_SET`，例如 `harnesses: qoder`），随后给出：安装类型（全新/升级/单 harness 增量/lock 重建）、逐文件写入结果、跳过项清单（本地修改 / 已存在 / 未安装 harness）、验收自检结果。
+2. 输出安装报告，**首行写明安装范围**（`HARNESS_SET`，例如 `harnesses: qoder`），随后给出：安装类型（全新/升级/单 harness 增量/lock 重建）、OpenSpec CLI 版本、逐文件写入结果、技能挂载计数（mounted / skipped）、跳过项清单（本地修改 / 已存在 / 未安装 harness）、验收自检结果。
 3. 报告结束语：`onePress v<version> 安装完成（harnesses: <范围>）`。

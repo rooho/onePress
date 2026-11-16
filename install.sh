@@ -25,11 +25,13 @@ ASSUME_YES=0
 NO_INIT=0
 TEMP_ROOT=""
 
-SKILL_REF='> onepress: 执行本命令时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。'
+SKILL_REF='> onepress: 执行本技能时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。'
 
 SCHEMA_FILES="schema.yaml templates/apply.md templates/brainstorm.md templates/design.md templates/finalize.md templates/plan.md templates/proposal.md templates/review-rubric.md templates/spec.md templates/tasks.md templates/ui-spec.md templates/verify.md"
 
-OPENCODE_FILES="opencode/opencode.json opencode/agent/ux-architect.md opencode/commands/opsx-new.md opencode/commands/opsx-apply.md opencode/commands/opsx-verify.md opencode/commands/opsx-review.md opencode/skills/superpowers-tdd/SKILL.md"
+OPENCODE_FILES="opencode/opencode.json opencode/agent/ux-architect.md opencode/commands/opsx-review.md opencode/skills/superpowers-tdd/SKILL.md"
+
+SKILL_SLUGS="apply-change archive-change bulk-archive-change continue-change explore ff-change new-change onboard propose sync-specs update-change verify-change"
 
 QODER_FILES="qoder/skills/onepress-discipline/SKILL.md"
 
@@ -46,6 +48,7 @@ CURSOR_COMMAND_FILES="cursor/commands/opsx-review.md"
 TOOLING_FILES="scripts/onepress-gate.sh scripts/sandbox-preflight.spec.ts"
 
 WRITTEN=""
+LOCK_FILES=""
 SKIPPED=""
 FAILURES=""
 PROTECTED=""
@@ -263,11 +266,13 @@ copy_file() {
   if [ "$DRY_RUN" = 1 ]; then
     info "would write $dst_rel"
     WRITTEN="$WRITTEN$dst_rel"$'\n'
+    LOCK_FILES="$LOCK_FILES$dst_rel"$'\n'
     return 0
   fi
 
   mkdir -p "$(dirname "$dst")"
   cp -f "$src" "$dst"
+  LOCK_FILES="$LOCK_FILES$dst_rel"$'\n'
   ok "$dst_rel"
 }
 
@@ -285,37 +290,40 @@ copy_command_files() {
 
 mount_skill_reference() {
   local target="$1"
-  local harness_dir="$2"
-  local cmd_dir="$target/$harness_dir/commands"
+  local skills_dir="$target/.agents/skills"
+  local found=0 mounted=0 skipped=0
 
-  if [ ! -d "$cmd_dir" ]; then
-    skip "$harness_dir/commands/ 不存在，跳过技能挂载（不新建命令文件）"
+  if [ ! -d "$skills_dir" ]; then
+    skip ".agents/skills/ 不存在，跳过技能挂载（由 openspec init 创建）"
     return 0
   fi
 
-  local found=0
   while IFS= read -r file; do
     [ -n "$file" ] || continue
-    found=1
+    found=$((found + 1))
     local rel="${file#"$target"/}"
 
     if grep -q 'onepress-discipline' "$file" 2>/dev/null; then
+      skipped=$((skipped + 1))
       skip "$rel（已含技能引用）"
       continue
     fi
     if in_list "$rel" "$MODIFIED"; then
+      skipped=$((skipped + 1))
       skip "$rel（已跟踪文件存在未提交修改，保持原样）"
       continue
     fi
     if [ "$(head -n 1 "$file" | tr -d '\r')" != "---" ] && [ "$(head -n 1 "$file" | tr -d '\r' | sed 's/^\xEF\xBB\xBF//')" != "---" ]; then
       warn "$rel 无 YAML frontmatter，跳过技能挂载"
       MOUNT_SKIPPED="$MOUNT_SKIPPED$rel"$'\n'
+      skipped=$((skipped + 1))
       continue
     fi
 
     if [ "$DRY_RUN" = 1 ]; then
       info "would mount $rel (+1 line)"
       WRITTEN="$WRITTEN$rel (+1 line)"$'\n'
+      mounted=$((mounted + 1))
       continue
     fi
 
@@ -358,10 +366,15 @@ mount_skill_reference() {
 
     rm -f "$body"
     mv -f "$tmp" "$file"
+    mounted=$((mounted + 1))
     ok "$rel（+1 行技能引用）"
-  done < <(find "$cmd_dir" -type f -name '*.md' | sort)
+  done < <(find "$skills_dir" -type f -path '*/openspec-*/SKILL.md' | sort)
 
-  [ "$found" = 1 ] || skip "$harness_dir/commands/ 下没有命令文件，跳过技能挂载"
+  if [ "$found" = 0 ]; then
+    skip ".agents/skills/openspec-*/SKILL.md 不存在，跳过技能挂载"
+    return 0
+  fi
+  info "技能挂载：mounted $mounted / skipped $skipped（共 $found 个技能）"
 }
 
 init_ui_components() {
@@ -381,6 +394,7 @@ init_ui_components() {
   if [ "$DRY_RUN" = 1 ]; then
     info "would create $rel"
     WRITTEN="$WRITTEN$rel"$'\n'
+    LOCK_FILES="$LOCK_FILES$rel"$'\n'
     return 0
   fi
 
@@ -388,11 +402,11 @@ init_ui_components() {
   cat > "$path" <<'UI_EOF'
 # UI 组件注册表
 
-> 本文件由 onePress 首次安装初始化，之后由 `/opsx:archive` 增量维护：每次归档把本次新建或改造的组件追加到对应分区，**只追加行，不重排、不删历史**。
+> 本文件由 onePress 首次安装初始化，之后由 `/openspec-archive-change` 增量维护：每次归档把本次新建或改造的组件追加到对应分区，**只追加行，不重排、不删历史**。
 
 ## 使用说明
 
-1. `/opsx:new` 起草 `ui-spec.md` 前 MUST 先检索本表，可复用的组件写入第 1 节复用表，不得重复造轮子。
+1. `/openspec-new-change` 起草 `ui-spec.md` 前 MUST 先检索本表，可复用的组件写入第 1 节复用表，不得重复造轮子。
 2. 新增组件必须补齐：组件名称、路径、适用骨架 (Archetype)、核心 Props 签名。
 3. 组件分级：`base`（无业务语义，如 DataTable）、`domain`（含业务语义，如 RoleBadge）。
 4. `适用骨架` 列取值：`Dashboard-Grid` / `Master-Detail` / `Standard-CRUD-Table` / `Step-Wizard` / `Settings-Split`；通用组件填 `通用`。
@@ -408,6 +422,7 @@ init_ui_components() {
 | 组件名称 | 路径 | 适用骨架 (Archetype) | 核心 Props 签名 |
 |----------|------|----------------------|-----------------|
 UI_EOF
+  LOCK_FILES="$LOCK_FILES$rel"$'\n'
   ok "$rel（首装初始化）"
 }
 
@@ -496,87 +511,108 @@ CFG_EOF
   info "openspec/config.yaml schema: $current → superspec（保留原换行与其余字段）"
 }
 
-# 判断 commands/ 是否已是 openspec 生成的完整命令集（缺任一标准命令即视为不完整）
-harness_command_set_complete() {
-  local cmd_dir="$1"
-  local id
-  for id in continue ff propose archive; do
-    [ -f "$cmd_dir/opsx-$id.md" ] || return 1
+# OpenSpec CLI 版本门控：主版本 >= 2 才允许安装
+check_openspec_version() {
+  local out major
+
+  if ! command -v openspec >/dev/null 2>&1; then
+    die '未检测到 openspec CLI（要求 >= 2.0.0）。安装：npm install -g @fission-ai/openspec@latest；或改用 onePress v1.1.0。'
+  fi
+
+  out="$(openspec --version 2>/dev/null | head -n 1)"
+  major="$(printf '%s' "$out" | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -n 1 | cut -d. -f1 || true)"
+
+  if [ -z "$major" ] || [ "$major" -lt 2 ]; then
+    die "OpenSpec CLI 版本不满足：当前 '${out:-未知}'，要求 >= 2.0.0。升级：npm install -g @fission-ai/openspec@latest；或改用 onePress v1.1.0。"
+  fi
+  info "OpenSpec CLI：$out（>= 2.0.0）... OK"
+}
+
+# 12 个 OpenSpec 2.0 技能是否齐全
+skills_complete() {
+  local target="$1"
+  local slug
+  for slug in $SKILL_SLUGS; do
+    [ -f "$target/.agents/skills/openspec-$slug/SKILL.md" ] || return 1
   done
   return 0
 }
 
-# 清理旧版本随包直出的命令（会阻塞 openspec init，导致只剩 3 个命令）
+# 缺失时用 openspec init 补齐 .agents/skills（2.0 唯一工作流载体）
+ensure_skills() {
+  local target="$1"
+  local tools_csv="$2"
+
+  if skills_complete "$target"; then
+    info ".agents/skills/openspec-*（12 个）齐全 ... OK"
+    return 0
+  fi
+
+  if [ "$NO_INIT" = 1 ]; then
+    warn ".agents/skills 不完整且指定了 --no-init：技能将\"存在但永不加载\"，需手动 openspec init 后重跑"
+    return 0
+  fi
+
+  if [ "$DRY_RUN" = 1 ]; then
+    info "would run: openspec init --tools $tools_csv --no-animation"
+    return 0
+  fi
+
+  local out
+  if ! out="$(cd "$target" && openspec init --tools "$tools_csv" --no-animation 2>&1)"; then
+    warn "openspec init 失败：$(printf '%s' "$out" | tail -n 3)"
+    return 0
+  fi
+
+  if skills_complete "$target"; then
+    info "openspec init 生成 .agents/skills/openspec-*（12 个）"
+  else
+    warn ".agents/skills 仍不完整，请检查 openspec init 输出"
+  fi
+}
+
+# 清理 OpenSpec 1.x 遗留命令（仅限已启用 harness；未提交修改受保护）
 remove_legacy_commands() {
   local target="$1"
   local harness_dir="$2"
   local rel path
 
-  for rel in opsx-new.md opsx-apply.md opsx-verify.md; do
-    path="$target/$harness_dir/commands/$rel"
-    [ -f "$path" ] || continue
-    if in_list "$harness_dir/commands/$rel" "$MODIFIED"; then
-      warn "保留未提交修改，不清理旧版命令：$harness_dir/commands/$rel"
-      continue
-    fi
-    if [ "$DRY_RUN" = 1 ]; then
-      info "would remove legacy $harness_dir/commands/$rel"
-      continue
-    fi
-    rm -f "$path"
-    info "清理旧版随包命令：$harness_dir/commands/$rel"
-  done
-}
-
-init_harness_commands() {
-  local target="$1"
-  local harness_dir="$2"
-  local tool="$3"
-  local cmd_dir="$target/$harness_dir/commands"
-  local count=0
-
-  if [ -d "$cmd_dir" ]; then
-    count="$(find "$cmd_dir" -type f -name '*.md' | wc -l | tr -d ' ')"
-  fi
-  if [ "$count" -gt 0 ]; then
-    # qoder 的命令集在 commands/opsx/ 子目录，不能用扁平文件名判断完整性
-    if [ "$tool" = "qoder" ] || harness_command_set_complete "$cmd_dir"; then
-      info "$harness_dir/commands/ 已有 $count 个命令文件 ... OK"
-      return 0
-    fi
-    warn "$harness_dir/commands/ 仅 $count 个命令且命令集不完整，按旧版残留处理"
-    remove_legacy_commands "$target" "$harness_dir"
-    if [ "$DRY_RUN" != 1 ]; then
-      count="$(find "$cmd_dir" -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
-    fi
-    if [ "$count" -gt 0 ]; then
-      info "$harness_dir/commands/ 保留 $count 个既有命令，仅补齐 openspec 标准命令"
-    fi
-  fi
-
-  if [ "$NO_INIT" = 1 ]; then
-    warn "$harness_dir/commands/ 命令集不完整且指定了 --no-init：技能将\"存在但永不加载\"，需手动 openspec init 后重跑"
-    return 0
-  fi
-
-  if ! command -v openspec >/dev/null 2>&1; then
-    warn "$harness_dir/commands/ 命令集不完整且未检测到 openspec CLI：技能将\"存在但永不加载\"。请先安装 OpenSpec CLI 并执行 openspec init --tools $tool 后重跑本脚本"
-    return 0
-  fi
-
-  if [ "$DRY_RUN" = 1 ]; then
-    info "would run: openspec init --tools $tool --no-animation"
-    return 0
-  fi
-
-  local out
-  if ! out="$(cd "$target" && openspec init --tools "$tool" --no-animation 2>&1)"; then
-    warn "openspec init 失败：$(printf '%s' "$out" | tail -n 3)"
-    return 0
-  fi
-
-  count="$(find "$cmd_dir" -type f -name '*.md' 2>/dev/null | wc -l | tr -d ' ')"
-  info "openspec init 生成 $count 个 $harness_dir/commands 命令（config.yaml 已存在，未被 init 覆盖）"
+  case "$harness_dir" in
+    .qoder)
+      [ -d "$target/.qoder/commands/opsx" ] || return 0
+      for path in "$target/.qoder/commands/opsx"/*.md; do
+        [ -f "$path" ] || continue
+        case "$path" in */review.md) continue ;; esac
+        rel=".qoder/commands/opsx/$(basename "$path")"
+        if in_list "$rel" "$MODIFIED"; then
+          warn "保留未提交修改，不清理 1.x 命令：$rel"
+          continue
+        fi
+        if [ "$DRY_RUN" = 1 ]; then
+          info "would remove legacy $rel"
+          continue
+        fi
+        rm -f "$path"
+        info "清理 1.x 命令：$rel"
+      done
+      ;;
+    *)
+      for rel in "$harness_dir/commands/opsx-new.md" "$harness_dir/commands/opsx-apply.md" "$harness_dir/commands/opsx-verify.md"; do
+        path="$target/$rel"
+        [ -f "$path" ] || continue
+        if in_list "$rel" "$MODIFIED"; then
+          warn "保留未提交修改，不清理 1.x 命令：$rel"
+          continue
+        fi
+        if [ "$DRY_RUN" = 1 ]; then
+          info "would remove legacy $rel"
+          continue
+        fi
+        rm -f "$path"
+        info "清理 1.x 命令：$rel"
+      done
+      ;;
+  esac
 }
 
 lock_files() {
@@ -601,7 +637,7 @@ build_will_write() {
   local rel
   WILL_WRITE=""
   for rel in $SCHEMA_FILES; do
-    WILL_WRITE="$WILL_WRITEopenspec/schemas/superspec/$rel"$'\n'
+    WILL_WRITE="${WILL_WRITE}openspec/schemas/superspec/$rel"$'\n'
   done
   if [ "$USE_OPENCODE" = 1 ]; then
     for rel in $OPENCODE_FILES; do
@@ -678,7 +714,7 @@ write_lock() {
   [ "$USE_TRAE" = 1 ] && trae_bool="true" || trae_bool="false"
   [ "$USE_CURSOR" = 1 ] && cursor_bool="true" || cursor_bool="false"
 
-  files_json="$(printf '%s' "$WRITTEN" | grep -v '(+1 line)' | grep -v '^$' | sed 's/.*/    "&",/' | sed '$ s/,$//')"
+  files_json="$(printf '%s' "$LOCK_FILES" | grep -v '^$' | grep -v '^\.agents/skills/' | sort -u | sed 's/.*/    "&",/' | sed '$ s/,$//')"
 
   if [ "$DRY_RUN" = 1 ]; then
     info 'would write onePress.lock'
@@ -714,7 +750,7 @@ accept_skill_harness() {
   local harness_dir="$3"
   local tool="$4"
   local files="$5"
-  local rel dst_rel file frel kw cmd_count
+  local rel dst_rel kw
 
   for rel in $files; do
     dst_rel="$harness_dir/${rel#$tool/}"
@@ -731,20 +767,52 @@ accept_skill_harness() {
       grep -q "$kw" "$target/$harness_dir/skills/onepress-discipline/SKILL.md" || bad "$harness_dir/skills/onepress-discipline/SKILL.md 缺少铁律关键词：$kw"
     done
   fi
+}
 
-  if [ -d "$target/$harness_dir/commands" ]; then
-    cmd_count="$(find "$target/$harness_dir/commands" -type f -name '*.md' | wc -l | tr -d ' ')"
-    [ "$cmd_count" -gt 0 ] || bad "$harness_dir/commands/ 为空：/opsx:* 命令不可用（技能存在但无挂载点）"
-    while IFS= read -r file; do
-      [ -n "$file" ] || continue
-      frel="${file#"$target"/}"
-      if in_list "$frel" "$MOUNT_SKIPPED"; then
-        skip "$frel（无 frontmatter，挂载跳过，不计入失败）"
-        continue
+# 验收 .agents/skills 挂载面（四 harness 共享）
+accept_skills_mount() {
+  local target="$1"
+  local slug rel count=0 legacy h
+
+  for slug in $SKILL_SLUGS; do
+    rel=".agents/skills/openspec-$slug/SKILL.md"
+    if [ ! -f "$target/$rel" ]; then
+      bad "缺失技能文件：$rel"
+      continue
+    fi
+    grep -q 'onepress-discipline' "$target/$rel" || bad "未挂载技能引用：$rel"
+    count=$((count + 1))
+  done
+
+  [ "$count" = 12 ] && info ".agents/skills 挂载面：12/12 技能含引用行 ... OK"
+
+  if [ "$USE_QODER" = 1 ] && [ -d "$target/.qoder/commands/opsx" ]; then
+    while IFS= read -r legacy; do
+      [ -n "$legacy" ] || continue
+      legacy="${legacy#"$target"/}"
+      if in_list "$legacy" "$MODIFIED"; then
+        skip "$legacy（未提交修改，受保护保留，不计入失败）"
+      else
+        bad "1.x 命令残留：$legacy"
       fi
-      grep -q 'onepress-discipline' "$file" || bad "未挂载技能引用：$frel"
-    done < <(find "$target/$harness_dir/commands" -type f -name '*.md')
+    done < <(find "$target/.qoder/commands/opsx" -type f -name '*.md' ! -name 'review.md' 2>/dev/null)
   fi
+
+  for h in .trae .cursor .opencode; do
+    case "$h" in
+      .trae)    [ "$USE_TRAE" = 1 ] || continue ;;
+      .cursor)  [ "$USE_CURSOR" = 1 ] || continue ;;
+      .opencode) [ "$USE_OPENCODE" = 1 ] || continue ;;
+    esac
+    for rel in "$h/commands/opsx-new.md" "$h/commands/opsx-apply.md" "$h/commands/opsx-verify.md"; do
+      [ -f "$target/$rel" ] || continue
+      if in_list "$rel" "$MODIFIED"; then
+        skip "$rel（未提交修改，受保护保留，不计入失败）"
+      else
+        bad "1.x 命令残留：$rel"
+      fi
+    done
+  done
 }
 
 run_acceptance() {
@@ -804,6 +872,10 @@ run_acceptance() {
     fi
   fi
 
+  if [ "$USE_QODER$USE_OPENCODE$USE_TRAE$USE_CURSOR" != "0000" ]; then
+    accept_skills_mount "$target"
+  fi
+
   if [ "$USE_QODER" = 1 ]; then
     accept_skill_harness "$pack" "$target" .qoder qoder "$QODER_FILES"
     [ -f "$target/.qoder/commands/opsx/review.md" ] || bad '缺失 .qoder/commands/opsx/review.md'
@@ -841,6 +913,9 @@ run_acceptance() {
     local lock_version
     lock_version="$(lock_value "$target/onePress.lock" version)"
     [ "$lock_version" = "$version" ] || bad "lock version 应为 $version，实际 $lock_version"
+    if grep -q '\.agents/skills/' "$target/onePress.lock"; then
+      bad 'onePress.lock 不应记录 .agents/skills 文件'
+    fi
   else
     bad 'onePress.lock 缺失'
   fi
@@ -878,6 +953,8 @@ PACK_ROOT="$(resolve_source "$SOURCE")" || exit 1
 VERSION="$(tr -d '\r\n' < "$PACK_ROOT/VERSION")"
 info "模板包：$PACK_ROOT（v$VERSION）"
 info "目标仓库：$TARGET_ROOT"
+
+check_openspec_version
 
 resolve_harness "$HARNESS" "$TARGET_ROOT"
 SCOPE=""
@@ -953,22 +1030,34 @@ init_ui_components "$TARGET_ROOT"
 
 confirm_openspec_schema "$TARGET_ROOT"
 
+TOOLS_CSV=""
+[ "$USE_QODER" = 1 ] && TOOLS_CSV="${TOOLS_CSV:+$TOOLS_CSV,}qoder"
+[ "$USE_OPENCODE" = 1 ] && TOOLS_CSV="${TOOLS_CSV:+$TOOLS_CSV,}opencode"
+[ "$USE_TRAE" = 1 ] && TOOLS_CSV="${TOOLS_CSV:+$TOOLS_CSV,}trae"
+[ "$USE_CURSOR" = 1 ] && TOOLS_CSV="${TOOLS_CSV:+$TOOLS_CSV,}cursor"
+ensure_skills "$TARGET_ROOT" "$TOOLS_CSV"
+
 if [ "$USE_QODER" = 1 ]; then
-  init_harness_commands "$TARGET_ROOT" .qoder qoder
+  remove_legacy_commands "$TARGET_ROOT" .qoder
   copy_command_files "$TARGET_ROOT" "$QODER_COMMAND_FILES"
-  mount_skill_reference "$TARGET_ROOT" .qoder
 fi
 
 if [ "$USE_TRAE" = 1 ]; then
-  init_harness_commands "$TARGET_ROOT" .trae trae
+  remove_legacy_commands "$TARGET_ROOT" .trae
   copy_command_files "$TARGET_ROOT" "$TRAE_COMMAND_FILES"
-  mount_skill_reference "$TARGET_ROOT" .trae
 fi
 
 if [ "$USE_CURSOR" = 1 ]; then
-  init_harness_commands "$TARGET_ROOT" .cursor cursor
+  remove_legacy_commands "$TARGET_ROOT" .cursor
   copy_command_files "$TARGET_ROOT" "$CURSOR_COMMAND_FILES"
-  mount_skill_reference "$TARGET_ROOT" .cursor
+fi
+
+if [ "$USE_OPENCODE" = 1 ]; then
+  remove_legacy_commands "$TARGET_ROOT" .opencode
+fi
+
+if [ -n "$TOOLS_CSV" ]; then
+  mount_skill_reference "$TARGET_ROOT"
 fi
 
 step '③ 写入 onePress.lock'

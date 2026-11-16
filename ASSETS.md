@@ -9,9 +9,6 @@
 | `VERSION` | harness | 全量覆盖（随版本升级） |
 | `opencode/opencode.json` | harness | 全量覆盖 |
 | `opencode/agent/ux-architect.md` | harness | 全量覆盖 |
-| `opencode/commands/opsx-new.md` | harness | 全量覆盖 |
-| `opencode/commands/opsx-apply.md` | harness | 全量覆盖 |
-| `opencode/commands/opsx-verify.md` | harness | 全量覆盖 |
 | `opencode/commands/opsx-review.md` | harness | 全量覆盖（编码前三级评审命令） |
 | `opencode/skills/superpowers-tdd/SKILL.md` | harness | 全量覆盖 |
 | `qoder/skills/onepress-discipline/SKILL.md` | harness | 全量覆盖 |
@@ -23,7 +20,7 @@
 | `openspec-schema/superspec/**`（12 文件，含 `templates/ui-spec.md` 与 `templates/review-rubric.md`） | harness | 全量覆盖 |
 | `scripts/onepress-gate.sh` | tooling | 安装到目标仓库 `scripts/`（门禁 0.5 执行体；用户自建同名文件跳过） |
 | `scripts/sandbox-preflight.spec.ts` | tooling | 安装到目标仓库 `scripts/`（L1 可选层；缺 Playwright 记 SKIP） |
-| `scripts/onepress-registry-append.sh` | installer | 不安装（归档后补记注册表，供无 `/opsx:archive` 的环境使用；仍随发布包分发） |
+| `scripts/onepress-registry-append.sh` | installer | 不安装（归档后补记注册表，供无 `/openspec-archive-change` 的环境使用；仍随发布包分发） |
 | `README-ch.md` / `README.md` | docs | 不安装（仅仓库说明，不写入目标仓库） |
 | `docs/ui-components.md`（注册表模板） | project | 存在即跳过（Protect Local） |
 | `openspec/changes/`（业务变更契约） | project | 永不触碰 |
@@ -35,4 +32,6 @@
 - `openspec-schema/**`（12 文件，含 `templates/ui-spec.md` 与 `templates/review-rubric.md`）、`onePress.lock`、`docs/ui-components.md` 与 harness 无关，始终处理；
 - `scripts/onepress-gate.sh` 与 `scripts/sandbox-preflight.spec.ts` 属 tooling 层，始终安装到目标仓库 `scripts/`；其余 `scripts/*` 仅模板包自用；
 - `docs/design-system/projectbaseline/MASTER.md` 属项目级，存在即跳过（Protect Local）。
+- `.agents/skills/openspec-*`（12 个）由 OpenSpec CLI 生成并归其所有；安装器仅在 `SKILL.md` 的 frontmatter 后插入一行 `onepress-discipline` 引用，不纳入 `onePress.lock` 的 `files`。
+- 发布包 `VERSION` = `2.0.0`，要求 OpenSpec >= 2.0.0；1.x 环境请使用 onePress v1.1.0。
 - 未选中的 harness：不创建目录、不写文件、不挂载引用；lock 中对应项记 `false`。

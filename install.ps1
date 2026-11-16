@@ -55,13 +55,30 @@ $ErrorActionPreference = 'Stop'
 
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $script:Written = New-Object System.Collections.ArrayList
+$script:LockFiles = New-Object System.Collections.ArrayList
 $script:Skipped = New-Object System.Collections.ArrayList
 $script:Failures = New-Object System.Collections.ArrayList
 $script:Protected = @{}
 $script:MountSkipped = @{}
 $script:TempRoot = $null
 
-$script:SkillRefLine = '> onepress: 执行本命令时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。'
+$script:SkillRefLine = '> onepress: 执行本技能时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。'
+
+# OpenSpec 2.0 工作流技能（.agents/skills/openspec-<slug>/SKILL.md）
+$script:SkillSlugs = @(
+    'apply-change',
+    'archive-change',
+    'bulk-archive-change',
+    'continue-change',
+    'explore',
+    'ff-change',
+    'new-change',
+    'onboard',
+    'propose',
+    'sync-specs',
+    'update-change',
+    'verify-change'
+)
 
 # 模板包内需要安装的文件（显式清单，避免递归拷贝带入意外文件）
 $script:SchemaFiles = @(
@@ -82,9 +99,6 @@ $script:SchemaFiles = @(
 $script:OpenCodeFiles = @(
     'opencode/opencode.json',
     'opencode/agent/ux-architect.md',
-    'opencode/commands/opsx-new.md',
-    'opencode/commands/opsx-apply.md',
-    'opencode/commands/opsx-verify.md',
     'opencode/commands/opsx-review.md',
     'opencode/skills/superpowers-tdd/SKILL.md'
 )
@@ -129,11 +143,11 @@ context: |
 $script:UiComponentsTemplate = @'
 # UI 组件注册表
 
-> 本文件由 onePress 首次安装初始化，之后由 `/opsx:archive` 增量维护：每次归档把本次新建或改造的组件追加到对应分区，**只追加行，不重排、不删历史**。
+> 本文件由 onePress 首次安装初始化，之后由 `/openspec-archive-change` 增量维护：每次归档把本次新建或改造的组件追加到对应分区，**只追加行，不重排、不删历史**。
 
 ## 使用说明
 
-1. `/opsx:new` 起草 `ui-spec.md` 前 MUST 先检索本表，可复用的组件写入第 1 节复用表，不得重复造轮子。
+1. `/openspec-new-change` 起草 `ui-spec.md` 前 MUST 先检索本表，可复用的组件写入第 1 节复用表，不得重复造轮子。
 2. 新增组件必须补齐：组件名称、路径、适用骨架 (Archetype)、核心 Props 签名。
 3. 组件分级：`base`（无业务语义，如 DataTable）、`domain`（含业务语义，如 RoleBadge）。
 4. `适用骨架` 列取值：`Dashboard-Grid` / `Master-Detail` / `Standard-CRUD-Table` / `Step-Wizard` / `Settings-Split`；通用组件填 `通用`。
@@ -316,6 +330,22 @@ function Resolve-Harness {
     return $set
 }
 
+function Check-OpenSpecVersion {
+    $cmd = Get-Command openspec -CommandType Application -ErrorAction SilentlyContinue
+    if (-not $cmd) {
+        Stop-Install '未检测到 openspec CLI（要求 >= 2.0.0）。安装：npm install -g @fission-ai/openspec@latest；或改用 onePress v1.1.0。'
+    }
+
+    $out = ''
+    try { $out = [string](& openspec --version 2>$null | Select-Object -First 1) } catch { $out = '' }
+    $m = [regex]::Match($out, '[0-9]+\.[0-9]+\.[0-9]+')
+    if (-not $m.Success -or [int]($m.Value.Split('.')[0]) -lt 2) {
+        $shown = if ($out) { $out.Trim() } else { '未知' }
+        Stop-Install "OpenSpec CLI 版本不满足：当前 '$shown'，要求 >= 2.0.0。升级：npm install -g @fission-ai/openspec@latest；或改用 onePress v1.1.0。"
+    }
+    Write-Info "OpenSpec CLI：$($out.Trim())（>= 2.0.0）"
+}
+
 function Get-GitStatusPaths {
     param([string]$TargetRoot)
 
@@ -425,6 +455,7 @@ function Copy-PackFile {
     if ($DryRun) {
         Write-Info "would write $($Item.Target)"
         [void]$script:Written.Add($Item.Target)
+        [void]$script:LockFiles.Add($Item.Target)
         return
     }
 
@@ -436,23 +467,27 @@ function Copy-PackFile {
     Copy-Item -LiteralPath $srcPath -Destination $dstPath -Force
     Write-Ok $Item.Target
     [void]$script:Written.Add($Item.Target)
+    [void]$script:LockFiles.Add($Item.Target)
 }
 
 function Mount-SkillReference {
-    param([string]$TargetRoot, [string]$HarnessDir, [hashtable]$GitStatus)
+    param([string]$TargetRoot, [hashtable]$GitStatus)
 
-    $cmdDir = Join-Path (Join-Path $TargetRoot $HarnessDir) 'commands'
-    if (-not (Test-Path -LiteralPath $cmdDir)) {
-        Write-Skip "$HarnessDir/commands/ 不存在，跳过技能挂载（不新建命令文件）"
+    $skillsDir = Join-Path $TargetRoot '.agents/skills'
+    if (-not (Test-Path -LiteralPath $skillsDir)) {
+        Write-Skip '.agents/skills/ 不存在，跳过技能挂载（由 openspec init 创建）'
         return
     }
 
-    $files = Get-ChildItem -LiteralPath $cmdDir -Recurse -File -Filter '*.md'
-    if (-not $files) {
-        Write-Skip "$HarnessDir/commands/ 下没有命令文件，跳过技能挂载"
+    $files = @(Get-ChildItem -LiteralPath $skillsDir -Recurse -File -Filter 'SKILL.md' |
+        Where-Object { $_.FullName -match '[\\/]openspec-[^\\/]+[\\/]SKILL\.md$' })
+    if ($files.Count -eq 0) {
+        Write-Skip '.agents/skills/openspec-*/SKILL.md 不存在，跳过技能挂载'
         return
     }
 
+    $mounted = 0
+    $skipped = 0
     foreach ($file in $files) {
         $rel = Convert-ToRel -Root $TargetRoot -FullPath $file.FullName
         $text = [System.IO.File]::ReadAllText($file.FullName, $script:Utf8NoBom)
@@ -460,10 +495,12 @@ function Mount-SkillReference {
         $hasBom = ($head.Length -ge 3 -and $head[0] -eq 0xEF -and $head[1] -eq 0xBB -and $head[2] -eq 0xBF)
 
         if ($text -match 'onepress-discipline') {
+            $skipped++
             Write-Skip "$rel（已含技能引用）"
             continue
         }
         if ($GitStatus.modified.ContainsKey($rel)) {
+            $skipped++
             Write-Skip "$rel（已跟踪文件存在未提交修改，保持原样）"
             continue
         }
@@ -472,6 +509,7 @@ function Mount-SkillReference {
         if (-not $match.Success) {
             Write-Warn "$rel 无 YAML frontmatter，跳过技能挂载"
             $script:MountSkipped[$rel] = $true
+            $skipped++
             continue
         }
 
@@ -484,6 +522,7 @@ function Mount-SkillReference {
         if ($DryRun) {
             Write-Info "would mount $rel (+1 line)"
             [void]$script:Written.Add("$rel (+1 line)")
+            $mounted++
             continue
         }
 
@@ -491,7 +530,10 @@ function Mount-SkillReference {
         [System.IO.File]::WriteAllText($file.FullName, $text.Insert($insertAt, $insert), $outEnc)
         Write-Ok "$rel（+1 行技能引用）"
         [void]$script:Written.Add("$rel (+1 line)")
+        $mounted++
     }
+
+    Write-Info "技能挂载：mounted $mounted / skipped $skipped（共 $($files.Count) 个技能）"
 }
 
 function Confirm-OpenSpecSchema {
@@ -538,74 +580,31 @@ function Confirm-OpenSpecSchema {
     Write-Ok "openspec/config.yaml schema: $current → superspec（保留原换行与其余字段）"
 }
 
-function Test-HarnessCommandSetComplete {
-    param([string]$CmdDir)
+function Test-SkillsComplete {
+    param([string]$TargetRoot)
 
-    foreach ($id in @('continue', 'ff', 'propose', 'archive')) {
-        if (-not (Test-Path -LiteralPath (Join-Path $CmdDir "opsx-$id.md"))) { return $false }
+    foreach ($slug in $script:SkillSlugs) {
+        $rel = ".agents/skills/openspec-$slug/SKILL.md"
+        if (-not (Test-Path -LiteralPath (Join-Rel $TargetRoot $rel))) { return $false }
     }
     return $true
 }
 
-function Remove-LegacyCommands {
-    param([string]$TargetRoot, [string]$HarnessDir, $ModifiedFiles)
+function Ensure-Skills {
+    param([string]$TargetRoot, [string]$ToolsCsv)
 
-    foreach ($name in @('opsx-new.md', 'opsx-apply.md', 'opsx-verify.md')) {
-        $rel = "$HarnessDir/commands/$name"
-        $path = Join-Rel $TargetRoot $rel
-        if (-not (Test-Path -LiteralPath $path)) { continue }
-        if ($ModifiedFiles -and $ModifiedFiles.ContainsKey($rel)) {
-            Write-Warn "保留未提交修改，不清理旧版命令：$rel"
-            continue
-        }
-        if ($DryRun) {
-            Write-Info "would remove legacy $rel"
-            continue
-        }
-        Remove-Item -LiteralPath $path -Force
-        Write-Info "清理旧版随包命令：$rel"
-    }
-}
-
-function Initialize-HarnessCommands {
-    param([string]$TargetRoot, [string]$HarnessDir, [string]$Tool, $ModifiedFiles = @{})
-
-    $cmdDir = Join-Path (Join-Path $TargetRoot $HarnessDir) 'commands'
-    $existing = @()
-    if (Test-Path -LiteralPath $cmdDir) {
-        $existing = @(Get-ChildItem -LiteralPath $cmdDir -Recurse -File -Filter '*.md' -ErrorAction SilentlyContinue)
-    }
-
-    if ($existing.Count -gt 0) {
-        # qoder 的命令集在 commands/opsx/ 子目录，不能用扁平文件名判断完整性
-        if ($Tool -eq 'qoder' -or (Test-HarnessCommandSetComplete $cmdDir)) {
-            Write-Ok "$HarnessDir/commands/ 已有 $($existing.Count) 个命令文件"
-            return
-        }
-        Write-Warn "$HarnessDir/commands/ 仅 $($existing.Count) 个命令且命令集不完整，按旧版残留处理"
-        Remove-LegacyCommands -TargetRoot $TargetRoot -HarnessDir $HarnessDir -ModifiedFiles $ModifiedFiles
-        if ($DryRun) {
-            Write-Info "would run: openspec init --tools $Tool --no-animation"
-            return
-        }
-        $existing = @(Get-ChildItem -LiteralPath $cmdDir -Recurse -File -Filter '*.md' -ErrorAction SilentlyContinue)
-        if ($existing.Count -gt 0) {
-            Write-Info "$HarnessDir/commands/ 保留 $($existing.Count) 个既有命令，仅补齐 openspec 标准命令"
-        }
-    }
-
-    if ($NoInit) {
-        Write-Warn "$HarnessDir/commands/ 命令集不完整且指定了 -NoInit：技能将`"存在但永不加载`"，需手动 openspec init 后重跑"
+    if (Test-SkillsComplete $TargetRoot) {
+        Write-Info '.agents/skills/openspec-*（12 个）齐全'
         return
     }
 
-    if (-not (Get-Command openspec -CommandType Application -ErrorAction SilentlyContinue)) {
-        Write-Warn "$HarnessDir/commands/ 命令集不完整且未检测到 openspec CLI：技能将`"存在但永不加载`"。请先安装 OpenSpec CLI 并执行 openspec init --tools $Tool 后重跑本脚本"
+    if ($NoInit) {
+        Write-Warn '.agents/skills 不完整且指定了 -NoInit：技能将`"存在但永不加载`"，需手动 openspec init 后重跑'
         return
     }
 
     if ($DryRun) {
-        Write-Info "would run: openspec init --tools $Tool --no-animation"
+        Write-Info "would run: openspec init --tools $ToolsCsv --no-animation"
         return
     }
 
@@ -615,7 +614,7 @@ function Initialize-HarnessCommands {
     $ErrorActionPreference = 'Continue'
     try {
         # openspec 会把 node 警告写到 stderr；在 Stop 策略下会被当成终止错误，故整体重定向到文件
-        & openspec init --tools $Tool --no-animation *> $logPath
+        & openspec init --tools $ToolsCsv --no-animation *> $logPath
         $code = $LASTEXITCODE
     } finally {
         $ErrorActionPreference = $previousEap
@@ -634,8 +633,51 @@ function Initialize-HarnessCommands {
         return
     }
 
-    $created = @(Get-ChildItem -LiteralPath $cmdDir -Recurse -File -Filter '*.md' -ErrorAction SilentlyContinue)
-    Write-Ok "openspec init 生成 $($created.Count) 个 $HarnessDir/commands 命令（config.yaml 已存在，未被 init 覆盖）"
+    if (Test-SkillsComplete $TargetRoot) {
+        Write-Ok 'openspec init 生成 .agents/skills/openspec-*（12 个）'
+    } else {
+        Write-Warn '.agents/skills 仍不完整，请检查 openspec init 输出'
+    }
+}
+
+function Remove-LegacyCommands {
+    param([string]$TargetRoot, [string]$HarnessDir, $ModifiedFiles)
+
+    if ($HarnessDir -eq '.qoder') {
+        $opsxDir = Join-Path (Join-Path $TargetRoot '.qoder') 'commands/opsx'
+        if (-not (Test-Path -LiteralPath $opsxDir)) { return }
+        foreach ($file in @(Get-ChildItem -LiteralPath $opsxDir -File -Filter '*.md' -ErrorAction SilentlyContinue)) {
+            if ($file.Name -eq 'review.md') { continue }
+            $rel = ".qoder/commands/opsx/$($file.Name)"
+            if ($ModifiedFiles -and $ModifiedFiles.ContainsKey($rel)) {
+                Write-Warn "保留未提交修改，不清理 1.x 命令：$rel"
+                continue
+            }
+            if ($DryRun) {
+                Write-Info "would remove legacy $rel"
+                continue
+            }
+            Remove-Item -LiteralPath $file.FullName -Force
+            Write-Info "清理 1.x 命令：$rel"
+        }
+        return
+    }
+
+    foreach ($name in @('opsx-new.md', 'opsx-apply.md', 'opsx-verify.md')) {
+        $rel = "$HarnessDir/commands/$name"
+        $path = Join-Rel $TargetRoot $rel
+        if (-not (Test-Path -LiteralPath $path)) { continue }
+        if ($ModifiedFiles -and $ModifiedFiles.ContainsKey($rel)) {
+            Write-Warn "保留未提交修改，不清理 1.x 命令：$rel"
+            continue
+        }
+        if ($DryRun) {
+            Write-Info "would remove legacy $rel"
+            continue
+        }
+        Remove-Item -LiteralPath $path -Force
+        Write-Info "清理 1.x 命令：$rel"
+    }
 }
 
 function Initialize-UiComponents {
@@ -657,6 +699,7 @@ function Initialize-UiComponents {
     if ($DryRun) {
         Write-Info "would create $rel"
         [void]$script:Written.Add($rel)
+        [void]$script:LockFiles.Add($rel)
         return
     }
 
@@ -667,6 +710,7 @@ function Initialize-UiComponents {
     [System.IO.File]::WriteAllText($path, ($script:UiComponentsTemplate + "`n"), $script:Utf8NoBom)
     Write-Ok "$rel（首装初始化）"
     [void]$script:Written.Add($rel)
+    [void]$script:LockFiles.Add($rel)
 }
 
 function Read-Lock {
@@ -739,7 +783,7 @@ function Write-LockFile {
             cursor   = [bool]$HarnessSet.cursor
         }
         protectedAssets = @('docs/ui-components.md', 'openspec/changes/')
-        files           = @($script:Written | Where-Object { $_ -notlike '*(+1 line)*' -and $_ -ne 'onePress.lock' })
+        files           = @($script:LockFiles | Where-Object { $_ -and $_ -notlike '.agents/skills/*' } | Sort-Object -Unique)
     }
 
     $json = ($lock | ConvertTo-Json -Depth 5) + "`n"
@@ -756,28 +800,55 @@ function Write-LockFile {
 function Test-SkillHarness {
     param([string]$TargetRoot, [string]$HarnessDir)
 
-    $cmdDir = Join-Path (Join-Path $TargetRoot $HarnessDir) 'commands'
-    if (Test-Path -LiteralPath $cmdDir) {
-        $cmdFiles = @(Get-ChildItem -LiteralPath $cmdDir -Recurse -File -Filter '*.md')
-        if ($cmdFiles.Count -eq 0) {
-            Write-Fail "$HarnessDir/commands/ 为空：/opsx:* 命令不可用（技能存在但无挂载点）"
-        }
-        foreach ($file in $cmdFiles) {
-            $rel = Convert-ToRel -Root $TargetRoot -FullPath $file.FullName
-            if ($script:MountSkipped.ContainsKey($rel)) {
-                Write-Skip "$rel（无 frontmatter，挂载跳过，不计入失败）"
-                continue
-            }
-            $text = [System.IO.File]::ReadAllText($file.FullName, $script:Utf8NoBom)
-            if ($text -notmatch 'onepress-discipline') { Write-Fail "未挂载技能引用：$rel" }
-        }
-    }
-
     $skill = Join-Rel $TargetRoot "$HarnessDir/skills/onepress-discipline/SKILL.md"
     if (Test-Path -LiteralPath $skill) {
         $skillText = [System.IO.File]::ReadAllText($skill, $script:Utf8NoBom)
         foreach ($rule in @('ui-spec.md', 'ui_change', 'sandbox-preview', '44×44', 'prefers-reduced-motion', '四态', '无障碍', '防呆')) {
             if ($skillText -notmatch $rule) { Write-Fail "$HarnessDir/skills/onepress-discipline/SKILL.md 缺少铁律关键词：$rule" }
+        }
+    }
+}
+
+function Test-SkillsMount {
+    param([string]$TargetRoot, [hashtable]$HarnessSet)
+
+    $count = 0
+    foreach ($slug in $script:SkillSlugs) {
+        $rel = ".agents/skills/openspec-$slug/SKILL.md"
+        $path = Join-Rel $TargetRoot $rel
+        if (-not (Test-Path -LiteralPath $path)) { Write-Fail "缺失技能文件：$rel"; continue }
+        $text = [System.IO.File]::ReadAllText($path, $script:Utf8NoBom)
+        if ($text -notmatch 'onepress-discipline') { Write-Fail "未挂载技能引用：$rel" }
+        $count++
+    }
+    if ($count -eq $script:SkillSlugs.Count) {
+        Write-Ok ".agents/skills 挂载面：$count/$($script:SkillSlugs.Count) 技能含引用行"
+    }
+
+    if ($HarnessSet.qoder) {
+        $opsxDir = Join-Path (Join-Path $TargetRoot '.qoder') 'commands/opsx'
+        if (Test-Path -LiteralPath $opsxDir) {
+            foreach ($file in @(Get-ChildItem -LiteralPath $opsxDir -File -Filter '*.md' -ErrorAction SilentlyContinue)) {
+                if ($file.Name -eq 'review.md') { continue }
+                $rel = ".qoder/commands/opsx/$($file.Name)"
+                if ($gitStatus.modified.ContainsKey($rel)) { Write-Skip "$rel（未提交修改，受保护保留，不计入失败）" }
+                else { Write-Fail "1.x 命令残留：$rel" }
+            }
+        }
+    }
+
+    foreach ($h in @('.trae', '.cursor', '.opencode')) {
+        $enabled = switch ($h) {
+            '.trae' { $HarnessSet.trae }
+            '.cursor' { $HarnessSet.cursor }
+            '.opencode' { $HarnessSet.opencode }
+        }
+        if (-not $enabled) { continue }
+        foreach ($name in @('opsx-new.md', 'opsx-apply.md', 'opsx-verify.md')) {
+            $rel = "$h/commands/$name"
+            if (-not (Test-Path -LiteralPath (Join-Rel $TargetRoot $rel))) { continue }
+            if ($gitStatus.modified.ContainsKey($rel)) { Write-Skip "$rel（未提交修改，受保护保留，不计入失败）" }
+            else { Write-Fail "1.x 命令残留：$rel" }
         }
     }
 }
@@ -873,6 +944,10 @@ function Test-Acceptance {
         }
     }
 
+    if ($HarnessSet.qoder -or $HarnessSet.opencode -or $HarnessSet.trae -or $HarnessSet.cursor) {
+        Test-SkillsMount -TargetRoot $TargetRoot -HarnessSet $HarnessSet
+    }
+
     $configPath = Join-Rel $TargetRoot 'openspec/config.yaml'
     if (Test-Path -LiteralPath $configPath) {
         $configText = [System.IO.File]::ReadAllText($configPath, $script:Utf8NoBom)
@@ -894,6 +969,9 @@ function Test-Acceptance {
             if ([bool]$lock.harnesses.opencode -ne [bool]$HarnessSet.opencode) { Write-Fail 'lock.harnesses.opencode 与安装范围不一致' }
             if ([bool]$lock.harnesses.trae -ne [bool]$HarnessSet.trae) { Write-Fail 'lock.harnesses.trae 与安装范围不一致' }
             if ([bool]$lock.harnesses.cursor -ne [bool]$HarnessSet.cursor) { Write-Fail 'lock.harnesses.cursor 与安装范围不一致' }
+            if (@($lock.files | Where-Object { $_ -like '.agents/skills/*' }).Count -gt 0) {
+                Write-Fail 'onePress.lock 不应记录 .agents/skills 文件'
+            }
         } catch {
             Write-Fail 'onePress.lock 无法解析'
         }
@@ -921,6 +999,8 @@ $packRoot = Resolve-PackSource -Path $Source
 $version = (Get-Content -LiteralPath (Join-Path $packRoot 'VERSION') -Raw -Encoding UTF8).Trim()
 Write-Info "模板包：$packRoot（v$version）"
 Write-Info "目标仓库：$targetRoot"
+
+Check-OpenSpecVersion
 
 $harnessSet = Resolve-Harness -Choice $Harness -TargetRoot $targetRoot -AssumeYes:$Yes
 $scope = (@('qoder', 'opencode', 'trae', 'cursor') | Where-Object { $harnessSet[$_] }) -join '+'
@@ -973,28 +1053,36 @@ Initialize-UiComponents -TargetRoot $targetRoot
 
 Confirm-OpenSpecSchema -TargetRoot $targetRoot
 
+$toolsCsv = (@('qoder', 'opencode', 'trae', 'cursor') | Where-Object { $harnessSet[$_] }) -join ','
+Ensure-Skills -TargetRoot $targetRoot -ToolsCsv $toolsCsv
+
 if ($harnessSet.qoder) {
-    Initialize-HarnessCommands -TargetRoot $targetRoot -HarnessDir '.qoder' -Tool 'qoder' -ModifiedFiles $gitStatus.modified
+    Remove-LegacyCommands -TargetRoot $targetRoot -HarnessDir '.qoder' -ModifiedFiles $gitStatus.modified
     foreach ($item in $commandPlan) {
         if ($item.Target -like '.qoder/*') { Copy-PackFile -PackRoot $packRoot -TargetRoot $targetRoot -GitStatus $gitStatus -ManagedFiles $managedFiles -Item $item }
     }
-    Mount-SkillReference -TargetRoot $targetRoot -HarnessDir '.qoder' -GitStatus $gitStatus
 }
 
 if ($harnessSet.trae) {
-    Initialize-HarnessCommands -TargetRoot $targetRoot -HarnessDir '.trae' -Tool 'trae' -ModifiedFiles $gitStatus.modified
+    Remove-LegacyCommands -TargetRoot $targetRoot -HarnessDir '.trae' -ModifiedFiles $gitStatus.modified
     foreach ($item in $commandPlan) {
         if ($item.Target -like '.trae/*') { Copy-PackFile -PackRoot $packRoot -TargetRoot $targetRoot -GitStatus $gitStatus -ManagedFiles $managedFiles -Item $item }
     }
-    Mount-SkillReference -TargetRoot $targetRoot -HarnessDir '.trae' -GitStatus $gitStatus
 }
 
 if ($harnessSet.cursor) {
-    Initialize-HarnessCommands -TargetRoot $targetRoot -HarnessDir '.cursor' -Tool 'cursor' -ModifiedFiles $gitStatus.modified
+    Remove-LegacyCommands -TargetRoot $targetRoot -HarnessDir '.cursor' -ModifiedFiles $gitStatus.modified
     foreach ($item in $commandPlan) {
         if ($item.Target -like '.cursor/*') { Copy-PackFile -PackRoot $packRoot -TargetRoot $targetRoot -GitStatus $gitStatus -ManagedFiles $managedFiles -Item $item }
     }
-    Mount-SkillReference -TargetRoot $targetRoot -HarnessDir '.cursor' -GitStatus $gitStatus
+}
+
+if ($harnessSet.opencode) {
+    Remove-LegacyCommands -TargetRoot $targetRoot -HarnessDir '.opencode' -ModifiedFiles $gitStatus.modified
+}
+
+if ($toolsCsv) {
+    Mount-SkillReference -TargetRoot $targetRoot -GitStatus $gitStatus
 }
 
 Write-Step '③ 写入 onePress.lock'
