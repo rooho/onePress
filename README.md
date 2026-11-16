@@ -49,7 +49,7 @@ Common options (equivalent on both sides):
 ./install.sh --harness qoder --target ~/repo --dry-run --source ~/pack
 ```
 
-The script does six things in one go: **detect harness → layered write → align OpenSpec config → write `onePress.lock` → self-check → report**. "Align config" means: create `openspec/config.yaml` (`schema: superspec`) when missing, rewrite only that line when the value is wrong (CRLF preserved), and run `openspec init --tools qoder|trae|cursor` automatically when the corresponding `.qoder/commands/`, `.trae/commands/` or `.cursor/commands/` is empty. Checks cover layout, verbatim content, all 10 schema files, `schema: superspec`, non-empty commands with reference lines, and lock/scope consistency; any failure aborts with a reason. Exit code `0` = success, `1` = failure. Nothing to verify by hand.
+The script does six things in one go: **detect harness → layered write → align OpenSpec config → write `onePress.lock` → self-check → report**. "Align config" means: create `openspec/config.yaml` (`schema: superspec`) when missing, rewrite only that line when the value is wrong (CRLF preserved), and run `openspec init --tools qoder|trae|cursor` automatically when the corresponding `.qoder/commands/`, `.trae/commands/` or `.cursor/commands/` is empty. Checks cover layout, verbatim content, all 12 schema files, `schema: superspec`, non-empty commands with reference lines, and lock/scope consistency; any failure aborts with a reason. Exit code `0` = success, `1` = failure. Nothing to verify by hand.
 
 > Measured: `openspec init` does **not** overwrite an existing `config.yaml`, so the order "align config → init → mount" is safe. Use `-NoInit` / `--no-init` to disable the automatic init.
 
@@ -83,14 +83,14 @@ The unselected harness gets no directory created and no files written. `onePress
 
 | Target path | Contents | Layer | Installed when |
 |-------------|----------|-------|----------------|
-| `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/opsx-{new,apply,verify}.md`, `skills/superpowers-tdd/` | harness | OpenCode selected |
-| `.qoder/skills/onepress-discipline/SKILL.md` | Nine iron rules (contract / triage / retrieval / sandbox / gates / token / states / a11y / anti-mistake) + TDD discipline | harness | Qoder selected |
+| `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/opsx-{new,apply,verify,review}.md`, `skills/superpowers-tdd/` | harness | OpenCode selected |
+| `.qoder/skills/onepress-discipline/SKILL.md` | Ten iron rules (contract / triage / retrieval / sandbox / gates / token / states / a11y / anti-mistake / pre-code review) + TDD discipline | harness | Qoder selected |
 | `.qoder/commands/opsx/*.md` | One reference line added after frontmatter; body untouched | harness | Qoder selected |
-| `.trae/skills/onepress-discipline/SKILL.md` | Nine iron rules + TDD discipline (Trae carrier) | harness | Trae selected |
+| `.trae/skills/onepress-discipline/SKILL.md` | Ten iron rules + TDD discipline (Trae carrier) | harness | Trae selected |
 | `.trae/commands/opsx-*.md` | One reference line added after frontmatter; body untouched | harness | Trae selected |
-| `.cursor/skills/onepress-discipline/SKILL.md` | Nine iron rules + TDD discipline (Cursor carrier) | harness | Cursor selected |
+| `.cursor/skills/onepress-discipline/SKILL.md` | Ten iron rules + TDD discipline (Cursor carrier) | harness | Cursor selected |
 | `.cursor/commands/opsx-*.md` | One reference line added after frontmatter; body untouched | harness | Cursor selected |
-| `openspec/schemas/superspec/` | `schema.yaml` + 10 templates incl. `ui-spec.md` (11 files) | harness | always |
+| `openspec/schemas/superspec/` | `schema.yaml` + 11 templates incl. `ui-spec.md` + `review-rubric.md` (12 files) | harness | always |
 | `onePress.lock` | Version, install scope, protected assets | harness | always |
 | `docs/ui-components.md` | Component registry template (four columns, empty tables on first install) | project | always |
 
@@ -317,7 +317,7 @@ A: Yes — that is the default. The installer detects by directory: `.qoder/` on
 A: No — they are local environment config. Do commit `onePress.lock` and `docs/ui-components.md`.
 
 **Q: How do I confirm the install?**
-A: Check the exit code and the report — `0` plus the closing line `onePress v<version> 安装完成（harnesses: <scope>）` means success; skipped items and check results are already listed. To double-check yourself, three spots — `onePress.lock` exists with the matching `version`; every `.qoder/commands/`, `.trae/commands/` and `.cursor/commands/` file has one `onepress-discipline` reference line; `openspec/schemas/superspec/` has 11 files (incl. `templates/ui-spec.md`).
+A: Check the exit code and the report — `0` plus the closing line `onePress v<version> 安装完成（harnesses: <scope>）` means success; skipped items and check results are already listed. To double-check yourself, three spots — `onePress.lock` exists with the matching `version`; every `.qoder/commands/`, `.trae/commands/` and `.cursor/commands/` file has one `onepress-discipline` reference line; `openspec/schemas/superspec/` has 12 files (incl. `templates/ui-spec.md` and `templates/review-rubric.md`).
 
 **Q: Will a re-install clobber my edits to tooling files?**
 A: No. Tracked files with uncommitted changes are reported and skipped; existing skill reference lines are skipped, and command bodies are never rewritten.
