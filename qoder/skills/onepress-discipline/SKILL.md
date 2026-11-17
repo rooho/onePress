@@ -49,7 +49,7 @@ Tailwind v4 项目 MUST 在 `:root` / `.dark` 定义变量，并在 `@theme inli
 
 ## 铁律 6：需求分流
 
-`/opsx:new` MUST 先判定需求类型，把结论写入 `proposal.md` 的 `**UI Change**: yes|no` 行（内部字段名 `ui_change`）。命中任一条即 `yes`：① 新增或修改路由、页面；② 新增或修改表格列、表单字段、状态展示；③ 涉及删除/覆盖等破坏性操作的交互变更。
+`/openspec-new-change` MUST 先判定需求类型，把结论写入 `proposal.md` 的 `**UI Change**: yes|no` 行（内部字段名 `ui_change`）。命中任一条即 `yes`：① 新增或修改路由、页面；② 新增或修改表格列、表单字段、状态展示；③ 涉及删除/覆盖等破坏性操作的交互变更。
 
 `no` 时 MUST NOT 生成 `ui-spec.md`、MUST NOT 生成 `sandbox-preview.html`、MUST NOT 触发设计检索，直接走标准后端 TDD。
 
@@ -97,7 +97,7 @@ python3 .qoder/skills/ui-ux-pro-max/scripts/search.py "data table empty state sh
 
 ## 铁律 9：八项门禁（0–8 + 0.5）
 
-`/opsx:verify` MUST 逐项记录 `PASS` / `FAIL` / `SKIP` 与 `AUTO` / `MANUAL`：
+`/openspec-verify-change` MUST 逐项记录 `PASS` / `FAIL` / `SKIP` 与 `AUTO` / `MANUAL`：
 
 | # | 门禁 | 方式 |
 |---|------|------|
@@ -118,14 +118,31 @@ python3 .qoder/skills/ui-ux-pro-max/scripts/search.py "data table empty state sh
 
 ## 铁律 10：编码前三级评审（/opsx:review）
 
-UI 变更 MUST 在 `/opsx:apply` 之前执行 `/opsx:review <change-name>`，按 L1 → L2 → L3 推进，并把结果写入 `review.md`：
+UI 变更 MUST 在 `/openspec-apply-change` 之前执行 `/opsx:review <change-name>`，按 L1 → L2 → L3 推进，并把结果写入 `review.md`：
 
 - **L1 确定性预检**：Playwright + `@axe-core/playwright` 遍历 4 态 × 2 主题 8 视图；WCAG 2.2 A/AA 零 violations；热区 ≥44×44（项目标准，行内文本链接豁免）；375/768/1024/1280 零横向溢出；变量声明块外零 Hex、零 Emoji；CLS 以 `PerformanceObserver` 采样（代理指标）。依赖缺失记 `L1: SKIP`，不阻断。
 - **L2 冷上下文盲审**：输入仅 `MASTER.md`、`ui-spec.md`、`sandbox-preview.html`、`review-rubric.md`；主判据 `P0 = 0 且 P1 = 0`，单层列表 ≤8、单决策点 ≤4；每条 finding MUST 引用章节或选择器，无证据不计分；Critique 40 / Audit 20 为观察模式；最多 3 轮，超限 `ESCALATE`。
-- **L3 人类批注与锁定**：沙箱 `Alt/⌘ + Click` 输出"选择器 + 类名 + HTML 片段 + 批注"，经 `/opsx:update` 回写；只有人类可把 `ui-spec.md` 的 `Review-Status` 改为 `APPROVED`，Agent MUST NOT 自签。
-- `review.md` MUST 含 `Round` / `L1` / `L2` / `L3` / `Critique` / `Audit` / `P0`–`P3` 与带证据列的 `Findings` 表；`Review-Status` 非 `APPROVED` 时 `/opsx:apply` MUST 停止。
+- **L3 人类批注与锁定**：沙箱 `Alt/⌘ + Click` 输出"选择器 + 类名 + HTML 片段 + 批注"，经 `/openspec-update-change` 回写；只有人类可把 `ui-spec.md` 的 `Review-Status` 改为 `APPROVED`，Agent MUST NOT 自签。
+- `review.md` MUST 含 `Round` / `L1` / `L2` / `L3` / `Critique` / `Audit` / `P0`–`P3` 与带证据列的 `Findings` 表；`Review-Status` 非 `APPROVED` 时 `/openspec-apply-change` MUST 停止。
 
 ## TDD 纪律
 
 - 仅对纯逻辑层（数据转换、Zod 校验、状态机函数）执行 TDD：先写失败测试，再写实现。
 - DOM 渲染单测不做，四态验收靠沙箱对照肉眼点检。
+
+## 铁律 11：TDD 与根因调试（V3.2）
+
+- **TDD 铁律**：含逻辑修改的任务 MUST 先写失败测试并实际运行、取得 RED 输出，之后才允许写生产代码；声称 GREEN 但无 RED 运行记录时，MUST 删除该生产代码并退回 RED。纯文档/配置任务 MUST 在 `apply.md` 记录 `TDD: N/A (<reason>)`。
+- **根因调试铁律**：出现非预期失败或连续两次修复无效时 MUST 停止打补丁，按「证据收集 → 数据流回溯 → 单一假设 → 最小实验」四阶段溯源；假设被证伪后 MUST 回退到原始错误状态再重新假设，诊断记录写入 `apply.md` 的 `Root-Cause Log`。
+- **实时证据**：每个任务完成时 MUST 在 `apply.md` 粘贴真实命令输出与退出码；MUST NOT 使用「应该能通过」「看起来正确」等推测性措辞。
+
+## 铁律 12：验证双锁（V3.2）
+
+- **证据报告**：`/openspec-verify-change` 之前 MUST 存在 `verification-evidence.md`（`verify-report` 工件），含实测命令、退出码、通过数与 `Critical: 0` / `Important: 0`；`bash scripts/onepress-evidence-lint.sh --change <change-name>` MUST 退出 0。
+- **冷上下文盲审**：`verify-report` MUST 在 `BASE_SHA..HEAD_SHA` 上执行一次只读代码盲审，输入仅 diff + `design.md` + `tasks.md` + `specs/**`；协议见 `openspec/schemas/superspec/templates/code-reviewer.md`；有子代理则派生零历史子代理，否则生成 `code-review-packet.md` 交人类新会话评审。`Critical`/`Important` > 0 MUST 回到 apply 修复。
+- **反馈处置**：MUST NOT 表演性同意；逐条对照代码接受或以证据反驳；`Minor` 记录但不阻断。
+
+## 铁律 13：任务精准拆分与防御性设计（V3.2）
+
+- `tasks.md` 每条任务 MUST 为 2–5 分钟粒度，MUST 标注反引号文件路径与验证命令；逻辑任务 MUST 内嵌 `RED` / `GREEN` / `REFACTOR` 三个勾选；纯文档/配置任务 MUST 写 `TDD: N/A (<reason>)`。
+- `design.md`（若产出）MUST 含 ADR（Context / Decision / Alternatives / Rationale / Consequences）、3–5 条 Non-Goals 与 Risks / Trade-offs；`specs/**` 每条需求 MUST 含 Given/When/Then 场景。

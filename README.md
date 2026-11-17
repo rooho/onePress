@@ -6,7 +6,7 @@ onePress targets teams with **no dedicated designer**, where developers drive th
 
 1. **Design by guesswork** → AI consults a local design knowledge base and writes a six-section `ui-spec.md` (component hierarchy / 16-channel tokens / four-state matrix / responsive rules / micro-motion / anti-patterns).
 2. **Delivery by vibes** → a single-file `sandbox-preview.html` locks colour, type, density and motion — with four-state and Light/Dark toggles — before any production component is written.
-3. **Quality by willpower** → eight gates (token purity + WCAG contrast + anti-patterns + touch targets + a11y + pure-logic state tests + human checks) executed by `scripts/onepress-gate.sh`.
+3. **Quality by willpower** → eight UI gates (token purity + WCAG contrast + anti-patterns + touch targets + a11y + pure-logic state tests + human checks) executed by `scripts/onepress-gate.sh`; the plan stage is checked by `scripts/onepress-plan-lint.sh` (plan + design + tasks); the execution stage enforces TDD, root-cause debugging and fresh evidence; verification requires `verification-evidence.md` with a cold-context code review, checked by `scripts/onepress-evidence-lint.sh`.
 
 First-class support for four harnesses: `.qoder/`, `.opencode/`, `.trae/` and `.cursor/`. Zero runtime dependencies — any model with file read/write access can install it.
 
@@ -49,7 +49,7 @@ Common options (equivalent on both sides):
 ./install.sh --harness qoder --target ~/repo --dry-run --source ~/pack
 ```
 
-The script does six things in one go: **detect harness → layered write → align OpenSpec config → write `onePress.lock` → self-check → report**. "Align config" means: create `openspec/config.yaml` (`schema: superspec`) when missing, rewrite only that line when the value is wrong (CRLF preserved), and run `openspec init --tools qoder|trae|cursor` automatically when the corresponding `.qoder/commands/`, `.trae/commands/` or `.cursor/commands/` is empty. Checks cover layout, verbatim content, all 12 schema files, `schema: superspec`, non-empty commands with reference lines, and lock/scope consistency; any failure aborts with a reason. Exit code `0` = success, `1` = failure. Nothing to verify by hand.
+The script does six things in one go: **detect harness → layered write → align OpenSpec config → write `onePress.lock` → self-check → report**. "Align config" means: create `openspec/config.yaml` (`schema: superspec`) when missing, rewrite only that line when the value is wrong (CRLF preserved), and run `openspec init --tools qoder|trae|cursor` automatically when the corresponding `.qoder/commands/`, `.trae/commands/` or `.cursor/commands/` is empty. Checks cover layout, verbatim content, all 14 schema files, `schema: superspec`, top-level `rules`, non-empty commands with reference lines, and lock/scope consistency; any failure aborts with a reason. Exit code `0` = success, `1` = failure. Nothing to verify by hand.
 
 > Measured: `openspec init` does **not** overwrite an existing `config.yaml`, so the order "align config → init → mount" is safe. Use `-NoInit` / `--no-init` to disable the automatic init.
 
@@ -84,13 +84,13 @@ The unselected harness gets no directory created and no files written. `onePress
 | Target path | Contents | Layer | Installed when |
 |-------------|----------|-------|----------------|
 | `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/opsx-review.md`, `skills/superpowers-tdd/` | harness | OpenCode selected |
-| `.qoder/skills/onepress-discipline/SKILL.md` | Ten iron rules (contract / triage / retrieval / sandbox / gates / token / states / a11y / anti-mistake / pre-code review) + TDD discipline | harness | Qoder selected |
+| `.qoder/skills/onepress-discipline/SKILL.md` | Thirteen iron rules (contract / triage / retrieval / sandbox / gates / token / states / a11y / anti-mistake / pre-code review / TDD + root-cause / verification locks / task + design contract) + TDD discipline | harness | Qoder selected |
 | `.agents/skills/openspec-*/SKILL.md` (12) | OpenSpec 2.0 workflow skills; one reference line added after frontmatter, body untouched | harness | always (shared by all harnesses) |
-| `.trae/skills/onepress-discipline/SKILL.md` | Ten iron rules + TDD discipline (Trae carrier) | harness | Trae selected |
+| `.trae/skills/onepress-discipline/SKILL.md` | Thirteen iron rules + TDD discipline (Trae carrier) | harness | Trae selected |
 | `.trae/commands/opsx-review.md` | onePress-managed review command (slash entry `/opsx:review`) | harness | Trae selected |
-| `.cursor/skills/onepress-discipline/SKILL.md` | Ten iron rules + TDD discipline (Cursor carrier) | harness | Cursor selected |
+| `.cursor/skills/onepress-discipline/SKILL.md` | Thirteen iron rules + TDD discipline (Cursor carrier) | harness | Cursor selected |
 | `.cursor/commands/opsx-review.md` | onePress-managed review command (slash entry `/opsx:review`) | harness | Cursor selected |
-| `openspec/schemas/superspec/` | `schema.yaml` + 11 templates incl. `ui-spec.md` + `review-rubric.md` (12 files) | harness | always |
+| `openspec/schemas/superspec/` | `schema.yaml` + 13 templates incl. `ui-spec.md`, `review-rubric.md`, `verification.md`, `code-reviewer.md` (14 files) | harness | always |
 | `onePress.lock` | Version, install scope, protected assets | harness | always |
 | `docs/ui-components.md` | Component registry template (four columns, empty tables on first install) | project | always |
 
@@ -100,15 +100,16 @@ The unselected harness gets no directory created and no files written. `onePress
 
 ## 2. The full development workflow
 
-From zero to archive in 5 steps. **All `/openspec-*` skills run at the target repo root** (the directory containing `openspec/`; OpenSpec 2.0 skills delivery).
+From zero to archive in 6 steps. **All `/openspec-*` skills run at the target repo root** (the directory containing `openspec/`; OpenSpec 2.0 skills delivery).
 
 | Step | Command | You provide | Output | Pass criteria |
 |------|---------|-------------|--------|---------------|
 | 1 Contract init | `/openspec-new-change <change>` | Feature description | `proposal.md`, `design.md`, `ui-spec.md` + `sandbox-preview.html` (UI only) | Six sections complete; sandbox opens in Light/Dark |
-| 2 Complete artifacts | `/openspec-continue-change` ×N or `/openspec-ff-change` | — | `specs/`, `tasks.md`, `plan.md` | `openspec validate --strict` passes |
-| 3 Implement | `/openspec-apply-change` | — | Code + `apply.md` | Sandbox parity (Light + Dark) |
-| 4 Verify | `/openspec-verify-change` | — | `verify.md` | All eight gates green, no CRITICAL |
-| 5 Archive | `/openspec-archive-change` | — | Main specs updated, `finalize.md`, archived dir | Components appended to registry |
+| 2 Complete artifacts | `/openspec-continue-change` ×N or `/openspec-ff-change` | — | `specs/`, `tasks.md`, `plan.md` | `openspec validate --strict` passes; plan-lint passes |
+| 3 Implement | `/openspec-apply-change` | — | Code + `apply.md` | TDD evidence (RED→GREEN→REFACTOR); sandbox parity (Light + Dark) |
+| 4 Collect evidence | `/openspec-continue-change` (verify-report) or `openspec instructions verify-report --change <change>` | — | `verification-evidence.md`, `code-review-packet.md` (human mode only) | Fresh command output, `Critical: 0`, `Important: 0`, evidence-lint passes |
+| 5 Verify | `/openspec-verify-change` | — | `verify.md` | Evidence report cited; all eight UI gates green, no CRITICAL |
+| 6 Archive | `/openspec-archive-change` | — | Main specs updated, `finalize.md`, archived dir | Components appended to registry |
 
 ### Step 1 — Contract init `/openspec-new-change`
 
@@ -145,7 +146,7 @@ brainstorm → proposal → design → specs → tasks → plan → apply → ve
 | `ui-spec.md` / `sandbox-preview.html` | **Conditional, not a DAG artifact**: six-section UI contract + single-file sandbox; only when `**UI Change**: yes` |
 | `specs/<capability>/spec.md` | Delta spec: `### Requirement:` + `#### Scenario:` (GIVEN/WHEN/THEN) |
 | `tasks.md` | Atomic checkable tasks |
-| `plan.md` | 2–5 minute micro-steps |
+| `plan.md` | 2–5 minute micro-steps + Spec / Global Constraints / Review Focus / Evidence Map / File Structure / Files / Interfaces / Self-Review; run plan-lint after writing |
 | `apply.md` / `verify.md` / `finalize.md` | Implementation receipt / verification report / closeout receipt |
 
 Generate everything at once: `/openspec-ff-change`. Proposal only: `/openspec-propose`. Discussion without writing files: `/openspec-explore`.
@@ -176,6 +177,10 @@ Eight gates; any failure sends you back to the matching stage of `apply`:
 | 8 | Sandbox parity: no visible drift vs `sandbox-preview.html` | MANUAL |
 
 Run `bash scripts/onepress-gate.sh --change openspec/changes/<change>` to execute gates 0/0.5/2/4/5/6/7 automatically; the rest are printed as `MANUAL`. Run `/opsx:review <change>` before apply — `Review-Status: APPROVED` is required.
+
+Before verify, complete the `verify-report` artifact and run `bash scripts/onepress-evidence-lint.sh --change openspec/changes/<change>`: it requires fresh command output with exit codes, `Critical: 0`, `Important: 0`, and UI gate evidence when `ui-spec.md` exists. The code review must run in a cold context using `templates/code-reviewer.md` (subagent preferred, fresh human session as fallback).
+
+After the plan artifact writes `plan.md`, run `bash scripts/onepress-plan-lint.sh --change openspec/changes/<change>`: fix every FAIL; in CI, `--strict` also fails on WARN.
 
 Writes `openspec/changes/<change>/verify.md` with one of: `PASS` / `PASS WITH WARNINGS` / `FAIL`. CRITICAL issues block archiving.
 
@@ -287,9 +292,11 @@ onePress/                    # release pack root (generated from studio/pack/)
 │   └── commands/opsx-review.md
 ├── scripts/                # Pack-side scripts
 │   ├── onepress-gate.sh    # Gates 0/0.5/2/4/5/6/7 AUTO + MANUAL 1/3/8 (installed)
+│   ├── onepress-plan-lint.sh  # plan + design + tasks structural lint (installed)
+│   ├── onepress-evidence-lint.sh  # verification-evidence lint (installed)
 │   ├── sandbox-preflight.spec.ts  # L1 pre-flight (installed, optional deps)
 │   └── onepress-registry-append.sh  # Append a component row (shipped, run manually)
-└── openspec-schema/superspec/   # Schema installed into target repos (12 files, incl. templates/ui-spec.md + review-rubric.md)
+└── openspec-schema/superspec/   # Schema installed into target repos (14 files, incl. templates/ui-spec.md + review-rubric.md + verification.md + code-reviewer.md)
 ```
 
 > `blueprint/` (iteration blueprints) and `openspec/` (this toolkit's own spec workspace) live in the **studio repo**, never in this release pack. The release pack is generated from `studio/pack/`.
@@ -302,7 +309,7 @@ onePress/                    # release pack root (generated from studio/pack/)
 A: Usually the sparse-checkout path does not match the real layout (cone mode silently checks out nothing, no error). Have it verify with `git ls-tree -r --name-only HEAD`, then fall back to `git sparse-checkout disable` (the pack is only KB-sized). This is already covered in the install block above, so it normally self-recovers.
 
 **Q: `/openspec-continue-change` stops at the plan step saying `superpowers:writing-plans` is unavailable?**
-A: Since 1.0.4 every Superpowers skill reference in superspec carries an inline fallback (brainstorm / plan / apply 2c / finalize), so a missing skill no longer halts the flow — the agent writes `plan.md` inline. On older versions (schema version ≤ 4) just upgrade and re-install; as a stopgap, have the agent split `tasks.md` into 2–5 minute micro-steps and write `plan.md` directly.
+A: Since 1.0.4 every Superpowers skill reference in superspec carries an inline fallback (brainstorm / plan / apply 2c / finalize), so a missing skill no longer halts the flow — the agent writes `plan.md` inline with Spec / Global Constraints / Review Focus / File Structure / Files / Interfaces / Self-Review. On older versions (schema version ≤ 4) just upgrade and re-install; after writing the plan run `bash scripts/onepress-plan-lint.sh --change <change>`.
 
 **Q: The target repo has no OpenSpec?**
 A: Install still completes, but `/openspec-*` skills and `ui-spec.md`/`sandbox-preview.html` generation require OpenSpec. Run `openspec init --tools qoder|trae|cursor|opencode` first.

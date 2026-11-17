@@ -2,7 +2,7 @@
 
 > Review-Status: PENDING
 
-> 由 `/opsx:new` 在 `**UI Change**: yes` 时生成，七章节全部必填，仅人类可将 `Review-Status` 改为 `APPROVED`。
+> 由 `/openspec-new-change` 在 `**UI Change**: yes` 时生成，七章节全部必填，仅人类可将 `Review-Status` 改为 `APPROVED`。
 > 所有取值必须来自 `docs/design-system/projectbaseline/MASTER.md` 或 `search.py` 检索结果，
 > 严禁凭空猜测配色、字体与间距。`**UI Change**: no` 时 MUST NOT 创建本文件。
 

@@ -27,7 +27,7 @@ TEMP_ROOT=""
 
 SKILL_REF='> onepress: 执行本技能时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。'
 
-SCHEMA_FILES="schema.yaml templates/apply.md templates/brainstorm.md templates/design.md templates/finalize.md templates/plan.md templates/proposal.md templates/review-rubric.md templates/spec.md templates/tasks.md templates/ui-spec.md templates/verify.md"
+SCHEMA_FILES="schema.yaml templates/apply.md templates/brainstorm.md templates/code-reviewer.md templates/design.md templates/finalize.md templates/plan.md templates/proposal.md templates/review-rubric.md templates/spec.md templates/tasks.md templates/ui-spec.md templates/verification.md templates/verify.md"
 
 OPENCODE_FILES="opencode/opencode.json opencode/agent/ux-architect.md opencode/commands/opsx-review.md opencode/skills/superpowers-tdd/SKILL.md"
 
@@ -45,7 +45,7 @@ TRAE_COMMAND_FILES="trae/commands/opsx-review.md"
 
 CURSOR_COMMAND_FILES="cursor/commands/opsx-review.md"
 
-TOOLING_FILES="scripts/onepress-gate.sh scripts/sandbox-preflight.spec.ts"
+TOOLING_FILES="scripts/onepress-evidence-lint.sh scripts/onepress-gate.sh scripts/onepress-plan-lint.sh scripts/sandbox-preflight.spec.ts"
 
 WRITTEN=""
 LOCK_FILES=""
@@ -449,6 +449,76 @@ probe_uiux() {
   done
 }
 
+# 2.0.0 config 将 rules 缩进在 context 块内；提升为顶层并保留其余内容。
+detect_eol() {
+  if LC_ALL=C grep -q $'\r' "$1" 2>/dev/null; then
+    printf 'crlf'
+  else
+    printf 'lf'
+  fi
+}
+
+normalize_eol() {
+  local file="$1" style="$2" tmp="$file.ops-tmp"
+  if [ "$style" = "crlf" ]; then
+    awk '{ sub(/\r$/, ""); printf "%s\r\n", $0 }' "$file" > "$tmp"
+  else
+    awk '{ sub(/\r$/, ""); printf "%s\n", $0 }' "$file" > "$tmp"
+  fi
+  mv -f "$tmp" "$file"
+}
+
+migrate_nested_rules() {
+  local cfg="$1" tmp="$cfg.ops-tmp" start ctx_end rules_end total style
+  start="$(grep -nE '^[[:space:]]+rules:[[:space:]]*$' "$cfg" | head -n 1 | cut -d: -f1)"
+  [ -n "$start" ] || return 0
+  total="$(wc -l < "$cfg" | tr -d ' ')"
+  ctx_end="$(awk -v s="$start" 'NR > s && /^[^[:space:]]/ { print NR; exit }' "$cfg")"
+  [ -n "$ctx_end" ] || ctx_end="$((total + 1))"
+  rules_end="$(awk -v s="$start" -v e="$ctx_end" 'NR > s && NR < e && $0 !~ /^[[:space:]]*$/ && $0 !~ /^    / { print NR; exit }' "$cfg")"
+  [ -n "$rules_end" ] || rules_end="$ctx_end"
+  style="$(detect_eol "$cfg")"
+
+  head -n "$((start - 1))" "$cfg" > "$tmp"
+  # Keep context text that follows the nested rules inside the context block.
+  awk -v a="$rules_end" -v b="$ctx_end" 'NR >= a && NR < b { print }' "$cfg" >> "$tmp"
+  printf '\nrules:\n' >> "$tmp"
+  # Rules content is indented 4 spaces under the nested rules; dedent 2.
+  awk -v s="$start" -v e="$rules_end" 'NR > s && NR < e { sub(/^  /, ""); print }' "$cfg" >> "$tmp"
+  # Preserve top-level keys after the context block.
+  awk -v e="$ctx_end" 'NR >= e { print }' "$cfg" >> "$tmp"
+  mv -f "$tmp" "$cfg"
+  normalize_eol "$cfg" "$style"
+}
+
+ensure_rule_key() {
+  local cfg="$1" key="$2" rule="$3" tmp="$cfg.ops-tmp" style
+  grep -qE "^  ${key}:[[:space:]]*$" "$cfg" && return 0
+  grep -qE '^rules:[[:space:]]*$' "$cfg" || return 0
+  style="$(detect_eol "$cfg")"
+  awk -v key="$key" -v rule="$rule" '
+    { print }
+    /^rules:[[:space:]]*$/ && !done {
+      print "  " key ":"
+      print "    - " rule
+      done = 1
+    }
+  ' "$cfg" > "$tmp"
+  mv -f "$tmp" "$cfg"
+  normalize_eol "$cfg" "$style"
+}
+
+ensure_rule_keys() {
+  local cfg="$1"
+  ensure_rule_key "$cfg" proposal "注明涉及的 harness 与资产归属层级（harness 级 / tooling 级 / project 级）"
+  ensure_rule_key "$cfg" specs "每条需求 MUST 使用 RFC 2119 关键词（SHALL/MUST/SHOULD/MAY）"
+  ensure_rule_key "$cfg" design "必须包含至少一条 ADR（Context / Decision / Alternatives considered / Rationale / Consequences）"
+  ensure_rule_key "$cfg" tasks "每个任务 MUST 为 2–5 分钟认知粒度"
+  ensure_rule_key "$cfg" plan "每个 Task MUST 包含 Files / Interfaces / TDD 步骤 / Run 与 Expected"
+  ensure_rule_key "$cfg" apply "TDD 铁律：没有先失败的测试，绝不编写生产代码"
+  ensure_rule_key "$cfg" verify-report "必须执行一次冷上下文代码盲审，Critical 与 Important 必须为 0"
+}
+
 confirm_openspec_schema() {
   local target="$1"
   local cfg="$target/openspec/config.yaml"
@@ -463,14 +533,38 @@ confirm_openspec_schema() {
 schema: superspec
 
 context: |
-  rules:
-    specs:
-      - 每条需求 MUST 使用 RFC 2119 关键词（SHALL/MUST/SHOULD/MAY）
-      - 每条需求 MUST 至少包含一个 GIVEN/WHEN/THEN 场景，且场景具体可测试
-    design:
-      - UI 变更 MUST 在 proposal.md 首行给出 **UI Change**: yes|no；yes 时必须产出 ui-spec.md（六章节）与 sandbox-preview.html，且不得把契约写回 design.md
-    tasks:
-      - 每个任务为原子工作单元，可独立验证（跑测试、产生输出或肉眼点检）
+  Tech stack: <以实际项目为准>
+  Workflow Methodology: Strict TDD (RED → GREEN → REFACTOR) for all logic changes.
+  Validation Principle: Evidence Before Claims — no completion claim without fresh terminal output.
+
+rules:
+  proposal:
+    - 注明涉及的 harness 与资产归属层级（harness 级 / tooling 级 / project 级）
+    - 注明受影响的安装场景（全新安装 / 升级 / 回滚）
+  specs:
+    - 每条需求 MUST 使用 RFC 2119 关键词（SHALL/MUST/SHOULD/MAY）
+    - 每条需求 MUST 至少包含一个 GIVEN/WHEN/THEN 场景，且场景具体可测试
+  design:
+    - 必须包含至少一条 ADR（Context / Decision / Alternatives considered / Rationale / Consequences）
+    - 必须列出 3–5 条 Non-Goals（YAGNI）
+    - 必须列出 Risks / Trade-offs 与缓解措施
+    - "UI 变更 MUST 在 proposal.md 首行给出 **UI Change**: yes|no；yes 时必须产出 ui-spec.md 与 sandbox-preview.html"
+  tasks:
+    - 每个任务 MUST 为 2–5 分钟认知粒度
+    - 每个任务 MUST 用反引号标注精确文件路径与验证命令
+    - 含逻辑修改的任务 MUST 内嵌 RED / GREEN / REFACTOR 勾选
+    - "文档/配置任务 MUST 写 TDD: N/A (<reason>)"
+  plan:
+    - 每个 Task MUST 包含 Files / Interfaces / TDD 步骤 / Run 与 Expected
+    - 写完后 MUST 运行 scripts/onepress-plan-lint.sh 并修复所有 FAIL
+  apply:
+    - TDD 铁律：没有先失败的测试，绝不编写生产代码
+    - 根因调试铁律：连续两次修复无效必须停止补丁并按四阶段溯源
+    - 每个任务完成后 MUST 在 apply.md 粘贴真实命令输出与退出码
+  verify-report:
+    - 必须在终端重新运行测试/构建/lint/UI 门禁，禁止复用历史结果
+    - 必须执行一次冷上下文代码盲审，Critical 与 Important 必须为 0
+    - 必须运行 scripts/onepress-evidence-lint.sh 并修复所有 FAIL
 CFG_EOF
     ok 'openspec/config.yaml（新建，schema=superspec）'
     return 0
@@ -485,7 +579,19 @@ CFG_EOF
   fi
 
   if [ "$current" = "superspec" ]; then
-    info 'openspec/config.yaml schema=superspec ... OK'
+    if ! grep -qE '^rules:' "$cfg" && grep -qE '^[[:space:]]+rules:[[:space:]]*$' "$cfg"; then
+      if [ "$DRY_RUN" = 1 ]; then
+        info 'would migrate openspec/config.yaml rules: nested(context) -> top-level'
+        return 0
+      fi
+      migrate_nested_rules "$cfg"
+      ok 'openspec/config.yaml rules: nested(context) → top-level'
+    else
+      info 'openspec/config.yaml schema=superspec ... OK'
+    fi
+    if [ "$DRY_RUN" = 0 ] && grep -qE '^rules:' "$cfg"; then
+      ensure_rule_keys "$cfg"
+    fi
     return 0
   fi
 
@@ -763,7 +869,7 @@ accept_skill_harness() {
   done
 
   if [ -f "$target/$harness_dir/skills/onepress-discipline/SKILL.md" ]; then
-    for kw in ui-spec.md ui_change sandbox-preview 44×44 prefers-reduced-motion 四态 无障碍 防呆; do
+    for kw in ui-spec.md ui_change sandbox-preview 44×44 prefers-reduced-motion 四态 无障碍 防呆 RED GREEN REFACTOR verification-evidence Root-Cause Critical; do
       grep -q "$kw" "$target/$harness_dir/skills/onepress-discipline/SKILL.md" || bad "$harness_dir/skills/onepress-discipline/SKILL.md 缺少铁律关键词：$kw"
     done
   fi
@@ -830,7 +936,7 @@ run_acceptance() {
     count="$(find "$target/openspec/schemas/superspec" -type f | wc -l | tr -d ' ')"
   fi
   if [ "$count" = "$expected" ]; then
-    info "openspec/schemas/superspec 共 $expected 文件（含 ui-spec.md / review-rubric.md）... OK"
+    info "openspec/schemas/superspec 共 $expected 文件（含 ui-spec.md / review-rubric.md / verification.md / code-reviewer.md）... OK"
   else
     bad "openspec/schemas/superspec 文件数应为 $expected，实际 $count"
   fi
@@ -843,6 +949,22 @@ run_acceptance() {
     else
       bad "schema.yaml 只有 ${fb_count:-0} 处 SKILL FALLBACK（brainstorm/plan/apply/finalize 应各 1 处）"
     fi
+    grep -q 'onepress-plan-lint.sh' "$target/openspec/schemas/superspec/schema.yaml" \
+      || bad 'schema.yaml plan 指令未引用 onepress-plan-lint.sh'
+    grep -q 'Execution: OpenSpec apply' "$target/openspec/schemas/superspec/schema.yaml" \
+      || bad 'schema.yaml plan 指令缺少 Execution: OpenSpec apply 适配'
+  fi
+
+  local plan_template="$target/openspec/schemas/superspec/templates/plan.md"
+  if [ -f "$plan_template" ]; then
+    local plan_ok=1 kw
+    for kw in '**Spec:**' '## Global Constraints' '## Review Focus' '## Evidence Map' '## File Structure' '**Files:**' '**Interfaces:**' '## Self-Review'; do
+      if ! grep -qF "$kw" "$plan_template"; then
+        bad "plan.md 模板缺少 $kw"
+        plan_ok=0
+      fi
+    done
+    [ "$plan_ok" = 1 ] && info 'plan.md 模板结构完整（Spec/Constraints/Review Focus/Evidence Map/File Structure/Files/Interfaces/Self-Review）... OK'
   fi
 
   local src_rel dst_rel rel
@@ -895,15 +1017,44 @@ run_acceptance() {
   fi
 
   for rel in $TOOLING_FILES; do
+    if in_list "$rel" "$PROTECTED"; then
+      skip "$rel（受保护跳过，不计入失败）"
+      continue
+    fi
     [ -f "$target/$rel" ] || bad "缺失目标文件：$rel"
     cmp -s "$pack/$rel" "$target/$rel" || bad "内容不一致：$rel"
   done
+
+  if [ -f "$target/scripts/onepress-plan-lint.sh" ]; then
+    bash -n "$target/scripts/onepress-plan-lint.sh" || bad 'onepress-plan-lint.sh 语法错误'
+  fi
+  if [ -f "$target/scripts/onepress-evidence-lint.sh" ]; then
+    bash -n "$target/scripts/onepress-evidence-lint.sh" || bad 'onepress-evidence-lint.sh 语法错误'
+  fi
+  if grep -q 'id: verify-report' "$target/openspec/schemas/superspec/schema.yaml" 2>/dev/null; then
+    info 'schema.yaml verify-report 工件 ... OK'
+  else
+    bad 'schema.yaml 缺少 verify-report 工件'
+  fi
 
   if [ -f "$target/openspec/config.yaml" ]; then
     if tr -d '\r' < "$target/openspec/config.yaml" | grep -qE '^schema:[[:space:]]*superspec[[:space:]]*$'; then
       info 'openspec/config.yaml schema=superspec ... OK'
     else
-      bad 'openspec/config.yaml 的 schema 不是 superspec（九工件序列不可用）'
+      bad 'openspec/config.yaml 的 schema 不是 superspec（十工件序列 brainstorm→…→apply→verify-report→verify→finalize 不可用）'
+    fi
+    if tr -d '\r' < "$target/openspec/config.yaml" | grep -qE '^rules:'; then
+      local missing="" rule_key
+      for rule_key in proposal specs design tasks plan apply verify-report; do
+        tr -d '\r' < "$target/openspec/config.yaml" | grep -qE "^  ${rule_key}:[[:space:]]*$" || missing="$missing $rule_key"
+      done
+      if [ -z "$missing" ]; then
+        info 'openspec/config.yaml 顶层 rules 七键齐全 ... OK'
+      else
+        bad "openspec/config.yaml 顶层 rules 缺少：$missing"
+      fi
+    else
+      bad 'openspec/config.yaml 缺少顶层 rules（规则不会按工件注入；请重装或按 2.1.0 模板重建 rules）'
     fi
   else
     bad 'openspec/config.yaml 缺失（安装器应已创建）'

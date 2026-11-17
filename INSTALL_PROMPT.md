@@ -61,7 +61,7 @@
 **红线（违反任一条立即中止安装并报告）：**
 
 1. 禁止覆盖项目级资产：`docs/ui-components.md`、`openspec/changes/` 及其下任何文件。
-2. 禁止修改目标仓库的业务代码与既有业务文档（仅允许写入 `HARNESS_SET` 内的 `.qoder/`、`.opencode/`、`.trae/`、`.cursor/`、`openspec/schemas/`、`scripts/onepress-gate.sh`、`scripts/sandbox-preflight.spec.ts`、`onePress.lock`、`docs/ui-components.md`（首装初始化）、`.agents/skills/`（**仅允许插入技能引用行，禁止改写技能正文**））。
+2. 禁止修改目标仓库的业务代码与既有业务文档（仅允许写入 `HARNESS_SET` 内的 `.qoder/`、`.opencode/`、`.trae/`、`.cursor/`、`openspec/schemas/`、`scripts/onepress-gate.sh`、`scripts/onepress-plan-lint.sh`、`scripts/onepress-evidence-lint.sh`、`scripts/sandbox-preflight.spec.ts`、`onePress.lock`、`docs/ui-components.md`（首装初始化）、`.agents/skills/`（**仅允许插入技能引用行，禁止改写技能正文**））。
 3. 禁止删除用户本地文件（升级时仅允许删除将被全量覆盖的 harness 目录内的旧文件与 OpenSpec 1.x 生成物）。
 
 **逐字写入约束：模板包内所有文件必须逐字写入目标路径，禁止改写、精简或重排内容；无法逐字写入时中止并报告。**
@@ -70,8 +70,10 @@
 
 | 模板源路径 | 目标路径 |
 |-----------|---------|
-| `openspec-schema/superspec/**`（12 文件） | `openspec/schemas/superspec/`（schema.yaml + templates/ 11 文件，含 `ui-spec.md` 与 `review-rubric.md`） |
-| `scripts/onepress-gate.sh` | `scripts/onepress-gate.sh`（tooling 层，门禁 0.5） |
+| `openspec-schema/superspec/**`（14 文件） | `openspec/schemas/superspec/`（schema.yaml + templates/ 13 文件，含 `ui-spec.md`、`review-rubric.md`、`verification.md` 与 `code-reviewer.md`） |
+| `scripts/onepress-gate.sh` | `scripts/onepress-gate.sh`（tooling 层，UI 门禁 0.5） |
+| `scripts/onepress-plan-lint.sh` | `scripts/onepress-plan-lint.sh`（tooling 层，plan + design + tasks 结构门禁） |
+| `scripts/onepress-evidence-lint.sh` | `scripts/onepress-evidence-lint.sh`（tooling 层，verification-evidence 证据门禁） |
 | `scripts/sandbox-preflight.spec.ts` | `scripts/sandbox-preflight.spec.ts`（tooling 层，L1 可选） |
 
 ### skills 初始化（始终执行，先于挂载）
@@ -141,8 +143,47 @@ openspec init --tools <HARNESS_SET 逗号串> --no-animation
 
 ### OpenSpec 配置对齐（始终执行）
 
-- 目标仓库存在 `openspec/config.yaml` 时，其顶层 `schema:` MUST 为 `superspec`（九工件序列 brainstorm→…→finalize 依赖它）。当前值不是 `superspec` 时，**只改这一行**，`context` / `rules` 等其余字段一字不动，并在报告中记一行 `config.yaml schema: <旧值> → superspec`。**改行时保留原换行风格**：CRLF 文件的该行末尾有 `\r`，不要一并删掉。
-- `openspec/config.yaml` 不存在时**必须创建**，最小内容为 `schema: superspec` + `context.rules`（specs / design / tasks 三组；design 组要求 UI 变更在 `proposal.md` 首行给出 `**UI Change**: yes|no`，`yes` 时产出 `ui-spec.md` 与 `sandbox-preview.html`）。缺了它，本次安装提供不了九工件能力。
+- 目标仓库存在 `openspec/config.yaml` 时，其顶层 `schema:` MUST 为 `superspec`（十工件序列 brainstorm→…→apply→verify-report→verify→finalize 依赖它）。当前值不是 `superspec` 时，**只改这一行**，并在报告中记一行 `config.yaml schema: <旧值> → superspec`；**改行时保留原换行风格**：CRLF 文件的该行末尾有 `\r`，不要一并删掉。
+- 若检测到 `rules:` **缩进在 `context` 块内**（2.0.0 旧结构），MUST 将其提升为顶层 `rules:`（保留 `rules:` 前后的 `context` 文本与换行风格），并在报告中记一行 `config.yaml rules: nested(context) → top-level`；**`rules` MUST NOT 留在 `context` 块内**，否则 OpenSpec 只把它当普通上下文，规则不会按工件注入。迁移后 MUST 幂等补齐 `proposal` / `plan` / `apply` / `verify-report` 四个缺失规则键；已存在的键 MUST NOT 被覆盖，重复执行 MUST NOT 改变文件内容。
+- `openspec/config.yaml` 不存在时**必须创建**，逐字写入下方模板（与 `install.sh` / `install.ps1` 的 `OpenSpecConfigTemplate` 完全一致）：
+
+````yaml
+schema: superspec
+
+context: |
+  Tech stack: <以实际项目为准>
+  Workflow Methodology: Strict TDD (RED → GREEN → REFACTOR) for all logic changes.
+  Validation Principle: Evidence Before Claims — no completion claim without fresh terminal output.
+
+rules:
+  proposal:
+    - 注明涉及的 harness 与资产归属层级（harness 级 / tooling 级 / project 级）
+    - 注明受影响的安装场景（全新安装 / 升级 / 回滚）
+  specs:
+    - 每条需求 MUST 使用 RFC 2119 关键词（SHALL/MUST/SHOULD/MAY）
+    - 每条需求 MUST 至少包含一个 GIVEN/WHEN/THEN 场景，且场景具体可测试
+  design:
+    - 必须包含至少一条 ADR（Context / Decision / Alternatives considered / Rationale / Consequences）
+    - 必须列出 3–5 条 Non-Goals（YAGNI）
+    - 必须列出 Risks / Trade-offs 与缓解措施
+    - "UI 变更 MUST 在 proposal.md 首行给出 **UI Change**: yes|no；yes 时必须产出 ui-spec.md 与 sandbox-preview.html"
+  tasks:
+    - 每个任务 MUST 为 2–5 分钟认知粒度
+    - 每个任务 MUST 用反引号标注精确文件路径与验证命令
+    - 含逻辑修改的任务 MUST 内嵌 RED / GREEN / REFACTOR 勾选
+    - "文档/配置任务 MUST 写 TDD: N/A (<reason>)"
+  plan:
+    - 每个 Task MUST 包含 Files / Interfaces / TDD 步骤 / Run 与 Expected
+    - 写完后 MUST 运行 scripts/onepress-plan-lint.sh 并修复所有 FAIL
+  apply:
+    - TDD 铁律：没有先失败的测试，绝不编写生产代码
+    - 根因调试铁律：连续两次修复无效必须停止补丁并按四阶段溯源
+    - 每个任务完成后 MUST 在 apply.md 粘贴真实命令输出与退出码
+  verify-report:
+    - 必须在终端重新运行测试/构建/lint/UI 门禁，禁止复用历史结果
+    - 必须执行一次冷上下文代码盲审，Critical 与 Important 必须为 0
+    - 必须运行 scripts/onepress-evidence-lint.sh 并修复所有 FAIL
+````
 - 顺序：**先创建/对齐 config → 再 `openspec init` → 再挂载技能引用**。`openspec init` 在 `config.yaml` 已存在时不会覆盖。
 
 ### 文档与发布仓边界（不安装）
@@ -210,7 +251,7 @@ openspec init --tools <HARNESS_SET 逗号串> --no-animation
 
 ```json
 {
-  "version": "2.0.0",
+  "version": "2.1.0",
   "installedAt": "2026-11-16T00:00:00Z",
   "harnesses": {
     "qoder": true,
@@ -226,7 +267,8 @@ openspec init --tools <HARNESS_SET 逗号串> --no-animation
     "openspec/schemas/superspec/schema.yaml",
     ".qoder/skills/onepress-discipline/SKILL.md",
     ".qoder/commands/opsx/review.md",
-    "scripts/onepress-gate.sh"
+    "scripts/onepress-gate.sh",
+    "scripts/onepress-plan-lint.sh"
   ]
 }
 ```
@@ -269,13 +311,14 @@ openspec init --tools <HARNESS_SET 逗号串> --no-animation
 - [ ] `.opencode/commands/` 下**不存在** `opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`
 - [ ] `.opencode/agent/ux-architect.md` frontmatter 含 `mode` 字段
 - [ ] `.opencode/skills/superpowers-tdd/SKILL.md` frontmatter `name: superpowers-tdd` 与目录名一致，`description` 长度 1–1024 字符
+- [ ] `.opencode/skills/superpowers-tdd/SKILL.md` 包含 `RED`、`GREEN`、`REFACTOR`、`verification-evidence`、`Root-Cause`、`Critical` 六个 V3.2 关键词
 - [ ] `.opencode/skills/superpowers-tdd/SKILL.md` 内容与模板包逐字一致
 
 ### .qoder / .cursor 验收项（仅当 `HARNESS_SET` 含 `qoder` 或 `cursor`）
 
 - [ ] 对应目录（`.qoder/` 或 `.cursor/`）下 `skills/onepress-discipline/SKILL.md` 存在
-- [ ] 该 SKILL.md 包含十条铁律标题（ui-spec 契约先行 / 需求分流 / 设计检索与降级 / 高保真沙箱与两阶段 / 八项门禁 / Token 纯净度 / 四态状态机 / 无障碍基线 / 防呆与反馈闭环 / 编码前三级评审）
-- [ ] 该 SKILL.md 包含 `ui-spec.md`、`sandbox-preview`、`ui_change`、`44×44`、`prefers-reduced-motion`、`Review-Status`、`review.md` 七个关键词
+- [ ] 该 SKILL.md 包含十三条铁律标题（ui-spec 契约先行 / 需求分流 / 设计检索与降级 / 高保真沙箱与两阶段 / 八项门禁 / Token 纯净度 / 四态状态机 / 无障碍基线 / 防呆与反馈闭环 / 编码前三级评审 / TDD 与根因调试 / 验证双锁 / 任务与设计契约）
+- [ ] 该 SKILL.md 包含 `ui-spec.md`、`sandbox-preview`、`ui_change`、`44×44`、`prefers-reduced-motion`、`Review-Status`、`review.md`、`RED`、`GREEN`、`REFACTOR`、`verification-evidence`、`Root-Cause`、`Critical` 十三个关键词
 - [ ] 该 SKILL.md 内容与模板包逐字一致
 - [ ] 对应目录下 `commands` 中存在 onePress 托管 review 命令（Qoder：`commands/opsx/review.md`；Cursor：`commands/opsx-review.md`），且与模板包逐字节一致
 - [ ] `.agents/skills/` 下 12 个 `openspec-<slug>/SKILL.md` 全部存在，且每个文件均含一行 `onepress-discipline` 技能引用
@@ -284,7 +327,7 @@ openspec init --tools <HARNESS_SET 逗号串> --no-animation
 
 ### .trae 验收项（仅当 `HARNESS_SET` 含 `trae`）
 
-- [ ] `.trae/skills/onepress-discipline/SKILL.md` 存在，包含十条铁律与 `ui-spec.md` / `sandbox-preview` / `ui_change` / `44×44` / `prefers-reduced-motion` / `Review-Status` / `review.md` 关键词，且与模板包逐字一致
+- [ ] `.trae/skills/onepress-discipline/SKILL.md` 存在，包含十三条铁律与 `ui-spec.md` / `sandbox-preview` / `ui_change` / `44×44` / `prefers-reduced-motion` / `Review-Status` / `review.md` / `RED` / `GREEN` / `REFACTOR` / `verification-evidence` / `Root-Cause` / `Critical` 关键词，且与模板包逐字一致
 - [ ] `.trae/commands/opsx-review.md` 存在且与模板包逐字节一致
 - [ ] `.trae/commands/` 下不存在 `opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`
 - [ ] `.agents/skills/` 下 12 个技能均含一行 `onepress-discipline` 技能引用
@@ -298,10 +341,13 @@ openspec init --tools <HARNESS_SET 逗号串> --no-animation
 
 ### OpenSpec Schema 验收项
 
-- [ ] `openspec/schemas/superspec/schema.yaml` 与 `templates/` 11 个模板文件齐全（共 12 文件，含 `ui-spec.md` 与 `review-rubric.md`）
+- [ ] `openspec/schemas/superspec/schema.yaml` 与 `templates/` 13 个模板文件齐全（共 14 文件，含 `ui-spec.md`、`review-rubric.md`、`verification.md` 与 `code-reviewer.md`）
+- [ ] `schema.yaml` 含 `verify-report` 工件（生成 `verification-evidence.md`），且 `verify` 依赖 `verify-report`
 - [ ] `openspec schemas` 可列出 `superspec (project)`
-- [ ] `openspec/config.yaml` 存在且顶层 `schema:` 为 `superspec`（缺失或值不符即判定失败）
+- [ ] `openspec/config.yaml` 存在且顶层 `schema:` 为 `superspec`，顶层 `rules:` 含 `proposal` / `specs` / `design` / `tasks` / `plan` / `apply` / `verify-report` 七组键（缺失任一项即判定失败）
 - [ ] `openspec/schemas/superspec/schema.yaml` 中每一处 `superpowers:<skill>` 引用都配有 `FALLBACK` 兜底说明（brainstorm / plan / apply / finalize 四处齐全），缺一处即判定失败
+- [ ] `openspec/schemas/superspec/templates/plan.md` 含 `**Spec:**`、`## Global Constraints`、`## Review Focus`、`## Evidence Map`、`## File Structure`、`**Files:**`、`**Interfaces:**`、`## Self-Review` 八段结构，缺一段即判定失败
+- [ ] `schema.yaml` 的 plan 指令引用 `scripts/onepress-plan-lint.sh`，verify-report 指令引用 `scripts/onepress-evidence-lint.sh`，且含 `Execution: OpenSpec apply` 适配说明
 - [ ] `schema.yaml` 中 `/opsx:` 仅允许出现 `/opsx:review`；不得出现 `/opsx:continue`、`/opsx:apply`、`/opsx:verify`、`/opsx:archive`、`/opsx:propose`
 
 ### 可选增强层验收项
@@ -310,7 +356,8 @@ openspec init --tools <HARNESS_SET 逗号串> --no-animation
 - [ ] `SKIP` 时附有启用指引，且安装结论仍为成功（不计入失败项）
 - [ ] 本次安装未执行任何 `npm install` / `uipro init` / 网络请求
 - [ ] `docs/design-system/projectbaseline/MASTER.md` 若已存在，内容逐字节不变
-- [ ] `scripts/onepress-gate.sh` 与 `scripts/sandbox-preflight.spec.ts` 存在且与模板包逐字节一致（tooling 层）
+- [ ] `scripts/onepress-gate.sh`、`scripts/onepress-plan-lint.sh`、`scripts/onepress-evidence-lint.sh` 与 `scripts/sandbox-preflight.spec.ts` 存在且与模板包逐字节一致（tooling 层）
+- [ ] `bash -n scripts/onepress-plan-lint.sh` 与 `bash -n scripts/onepress-evidence-lint.sh` 均返回 0
 - [ ] L1 预检依赖缺失时报告记 `SKIP`，且安装结论仍为成功（不计入失败项）
 
 ### 安装范围验收项

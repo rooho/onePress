@@ -11,7 +11,7 @@ description: "编码前三级设计评审门禁（L1 确定性预检 / L2 冷上
 ## 1. 输入与前置校验
 
 1. 读 `openspec/changes/<change>/proposal.md` 的 `**UI Change**:` 行。为 `no` → 输出 `SKIP（无 UI 变更）` 并结束，退出码 0。
-2. 校验 `ui-spec.md` 与 `sandbox-preview.html` 存在；缺失 → `FAIL`，提示先运行 `/opsx:new`。
+2. 校验 `ui-spec.md` 与 `sandbox-preview.html` 存在；缺失 → `FAIL`，提示先运行 `/openspec-new-change`。
 3. 读评分表 `openspec/schemas/superspec/templates/review-rubric.md`（唯一来源，不得复制锚点）。
 4. `Round` = 现有 `review.md` 的 `Round` + 1；无则 `1`。上限 3。
 
@@ -40,7 +40,7 @@ description: "编码前三级设计评审门禁（L1 确定性预检 / L2 冷上
 ## 4. L3 人类批注与契约锁定
 
 1. 打开 `sandbox-preview.html`，提示 `Alt/⌘ + Click` 点选元素；批注器复制"选择器 + 类名 + HTML 片段 + 批注"。
-2. 批注经 `/opsx:update <change-name> "<批注>"` 回写到 `ui-spec.md` 与沙箱，重跑 L1/L2。
+2. 批注经 `/openspec-update-change <change-name> "<批注>"` 回写到 `ui-spec.md` 与沙箱，重跑 L1/L2。
 3. **只有人类**可把 `ui-spec.md` 第 3 行改为 `> Review-Status: APPROVED`；Agent MUST NOT 自签，`review.md` 记录 approver 与日期。
 
 ## 5. 写 `review.md`
@@ -67,8 +67,8 @@ description: "编码前三级设计评审门禁（L1 确定性预检 / L2 冷上
 
 ## 6. 失败处置
 
-- `P0` 存在 → 结论 `FAIL`，MUST 阻断进入 `/opsx:apply`。
+- `P0` 存在 → 结论 `FAIL`，MUST 阻断进入 `/openspec-apply-change`。
 - `P1` 存在 → 结论 `FAIL`，修订后重跑；3 轮未收敛 → `ESCALATE`。
 - `L1: SKIP` 不阻断，但 MUST 在 `review.md` 写明原因与代理风险。
 - 评审全程 MUST NOT 写业务代码、MUST NOT 执行 `npm install`、MUST NOT 发起网络请求。
-- 结束后提示：`Review-Status: PENDING` 时必须由人类批准后 `/opsx:apply` 才会放行。
+- 结束后提示：`Review-Status: PENDING` 时必须由人类批准后 `/openspec-apply-change` 才会放行。

@@ -6,7 +6,7 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 
 1. **设计靠猜**：让 AI 检索本地设计知识库，产出六章节 `ui-spec.md`（组件层级 / 16 通道 Token / 四态矩阵 / 响应式规则 / 微动效 / 行业反模式），不再凭训练数据均值配色。
 2. **交付靠感觉**：先出单文件 `sandbox-preview.html`（四态 + Light/Dark 切换），把色彩、字体、密度、动效锁死，再写生产组件。
-3. **质量靠自觉**：八项门禁（Token 纯净度 + WCAG 对比度 + 反模式 + 热区 + 无障碍 + 纯逻辑状态测试 + 人工项）由 `scripts/onepress-gate.sh` 执行。
+3. **质量靠自觉**：八项 UI 门禁（Token 纯净度 + WCAG 对比度 + 反模式 + 热区 + 无障碍 + 纯逻辑状态测试 + 人工项）由 `scripts/onepress-gate.sh` 执行；plan 阶段由 `scripts/onepress-plan-lint.sh` 检查 plan + design + tasks 结构；执行阶段强制 TDD、根因调试与实时证据；验证阶段要求 `verification-evidence.md` 与冷上下文代码盲审，由 `scripts/onepress-evidence-lint.sh` 检查。
 
 首批支持四个 AI 编码环境：`.qoder/`、`.opencode/`、`.trae/` 与 `.cursor/`。安装零运行时依赖，任意具备文件读写能力的模型都能执行。
 
@@ -49,7 +49,7 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 ./install.sh --harness qoder --target ~/repo --dry-run --source ~/pack
 ```
 
-脚本一键做完六件事：**探测 harness → 分层写入 → 对齐 OpenSpec 配置 → 写 `onePress.lock` → 自检 → 输出报告**。其中"对齐配置"包括：`openspec/config.yaml` 不存在时创建（`schema: superspec`）、已存在但值不对时只改那一行（CRLF 也保留），以及 `.qoder/`、`.trae/`、`.cursor/` 的 `commands/` 为空时自动 `openspec init --tools <qoder|trae|cursor>` 生成命令。自检覆盖布局、逐字一致、schema 12 文件齐全、`schema: superspec`、review 托管命令与挂载、命令非空且已挂载、lock 与安装范围一致；失败即中止并给出原因，退出码 `0` 成功 / `1` 失败。你不需要手动核对任何东西。
+脚本一键做完六件事：**探测 harness → 分层写入 → 对齐 OpenSpec 配置 → 写 `onePress.lock` → 自检 → 输出报告**。其中"对齐配置"包括：`openspec/config.yaml` 不存在时创建（`schema: superspec`）、已存在但值不对时只改那一行（CRLF 也保留），以及 `.qoder/`、`.trae/`、`.cursor/` 的 `commands/` 为空时自动 `openspec init --tools <qoder|trae|cursor>` 生成命令。自检覆盖布局、逐字一致、schema 14 文件齐全、`schema: superspec`、顶层 `rules`、review 托管命令与挂载、命令非空且已挂载、lock 与安装范围一致；失败即中止并给出原因，退出码 `0` 成功 / `1` 失败。你不需要手动核对任何东西。
 
 > 实测：`openspec init` 在 `config.yaml` 已存在时**不会覆盖它**，所以"先对齐配置、再 init、再挂载"的顺序是安全的；`-NoInit` / `--no-init` 可关闭自动 init。
 
@@ -84,13 +84,13 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 | 目标仓库路径 | 内容 | 层级 | 安装条件 |
 |--------------|------|------|----------|
 | `.opencode/` | `opencode.json`、`agent/ux-architect.md`、`commands/opsx-review.md`、`skills/superpowers-tdd/` | harness | 仅选中 OpenCode |
-| `.qoder/skills/onepress-discipline/SKILL.md` | 十条铁律（契约 / 分流 / 检索 / 沙箱 / 门禁 / Token / 四态 / 无障碍 / 防呆 / 编码前评审）+ TDD 纪律 | harness | 仅选中 Qoder |
+| `.qoder/skills/onepress-discipline/SKILL.md` | 十三条铁律（契约 / 分流 / 检索 / 沙箱 / 门禁 / Token / 四态 / 无障碍 / 防呆 / 编码前评审 / TDD 与根因调试 / 验证双锁 / 任务与设计契约）+ TDD 纪律 | harness | 仅选中 Qoder |
 | `.agents/skills/openspec-*/SKILL.md`（12 个） | OpenSpec 2.0 工作流技能；仅在 frontmatter 后**新增一行**技能引用，正文不改 | harness | 始终（四 harness 共享） |
-| `.trae/skills/onepress-discipline/SKILL.md` | 十条铁律 + TDD 纪律（Trae 载体） | harness | 仅选中 Trae |
+| `.trae/skills/onepress-discipline/SKILL.md` | 十三条铁律 + TDD 纪律（Trae 载体） | harness | 仅选中 Trae |
 | `.trae/commands/opsx-review.md` | onePress 托管评审命令（斜杠入口 `/opsx:review`） | harness | 仅选中 Trae |
-| `.cursor/skills/onepress-discipline/SKILL.md` | 十条铁律 + TDD 纪律（Cursor 载体） | harness | 仅选中 Cursor |
+| `.cursor/skills/onepress-discipline/SKILL.md` | 十三条铁律 + TDD 纪律（Cursor 载体） | harness | 仅选中 Cursor |
 | `.cursor/commands/opsx-review.md` | onePress 托管评审命令（斜杠入口 `/opsx:review`） | harness | 仅选中 Cursor |
-| `openspec/schemas/superspec/` | `schema.yaml` + 11 模板（共 12 文件，含 `ui-spec.md` 与 `review-rubric.md`） | harness | 始终 |
+| `openspec/schemas/superspec/` | `schema.yaml` + 13 模板（共 14 文件，含 `ui-spec.md`、`review-rubric.md`、`verification.md` 与 `code-reviewer.md`） | harness | 始终 |
 | `onePress.lock` | 版本、安装范围与受保护资产清单 | harness | 始终 |
 | `docs/ui-components.md` | 组件注册表模板（四列，首次安装初始化为空表） | project | 始终 |
 
@@ -100,15 +100,16 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 
 ## 二、完整开发流程
 
-一条需求从零到归档，共 5 步。**所有 `/openspec-*` 技能都在目标仓库根目录执行**（即包含 `openspec/` 的那一层；OpenSpec 2.0 skills 交付形态）。
+一条需求从零到归档，共 6 步。**所有 `/openspec-*` 技能都在目标仓库根目录执行**（即包含 `openspec/` 的那一层；OpenSpec 2.0 skills 交付形态）。
 
 | 步骤 | 命令 | 你提供 | 产物 | 通过标准 |
 |------|------|--------|------|----------|
 | 1 契约初始化 | `/openspec-new-change <change>` | 功能描述 | `proposal.md`、`design.md`、`ui-spec.md` + `sandbox-preview.html`（仅 UI 变更） | 六章节齐全，沙箱 Light/Dark 可打开 |
-| 2 补全工件 | `/openspec-continue-change` ×N 或 `/openspec-ff-change` | — | `specs/`、`tasks.md`、`plan.md` | `openspec validate --strict` 通过 |
-| 3 实现 | `/openspec-apply-change` | — | 代码 + `apply.md` | 与沙箱 Light + Dark 对齐 |
-| 4 验证 | `/openspec-verify-change` | — | `verify.md` | 八门禁全绿，无 CRITICAL |
-| 5 归档 | `/openspec-archive-change` | — | 主 specs 更新 + `finalize.md` + 归档目录 | 组件已增量写入注册表 |
+| 2 补全工件 | `/openspec-continue-change` ×N 或 `/openspec-ff-change` | — | `specs/`、`tasks.md`、`plan.md` | `openspec validate --strict` 与 plan-lint 通过 |
+| 3 实现 | `/openspec-apply-change` | — | 代码 + `apply.md` | TDD 证据（RED→GREEN→REFACTOR）；与沙箱 Light + Dark 对齐 |
+| 4 收集证据 | `/openspec-continue-change`（verify-report）或 `openspec instructions verify-report --change <change>` | — | `verification-evidence.md`、`code-review-packet.md`（仅 human 模式） | 实测命令输出、`Critical: 0`、`Important: 0`、evidence-lint 通过 |
+| 5 验证 | `/openspec-verify-change` | — | `verify.md` | 引用证据报告；八项 UI 门禁全绿，无 CRITICAL |
+| 6 归档 | `/openspec-archive-change` | — | 主 specs 更新 + `finalize.md` + 归档目录 | 组件已增量写入注册表 |
 
 ### 步骤 1：契约初始化 `/openspec-new-change`
 
@@ -145,7 +146,7 @@ brainstorm → proposal → design → specs → tasks → plan → apply → ve
 | `ui-spec.md` / `sandbox-preview.html` | **条件产物，非 DAG 工件**：六章节契约 + 单文件沙箱；仅 `**UI Change**: yes` 时产出 |
 | `specs/<capability>/spec.md` | delta 规范：`### Requirement:` + `#### Scenario:`（GIVEN/WHEN/THEN） |
 | `tasks.md` | 可勾选的原子任务 |
-| `plan.md` | 2–5 分钟粒度的微步骤 |
+| `plan.md` | 2–5 分钟微步骤 + Spec / Global Constraints / Review Focus / Evidence Map / File Structure / Files / Interfaces / Self-Review；生成后跑 plan-lint |
 | `apply.md` / `verify.md` / `finalize.md` | 实现回执 / 验证报告 / 收尾回执 |
 
 想一次性补齐：`/openspec-ff-change`；只想先看完整提案：`/openspec-propose`；只想讨论不落文件：`/openspec-explore`。
@@ -175,7 +176,11 @@ brainstorm → proposal → design → specs → tasks → plan → apply → ve
 | 7 | 反模式：零 Emoji 图标、未命中黑名单 | AUTO |
 | 8 | 与沙箱无显著视觉偏差 | MANUAL |
 
-执行 `bash scripts/onepress-gate.sh --change openspec/changes/<change>` 自动跑门禁 0/0.5/2/4/5/6/7，其余输出 `MANUAL`。apply 前运行 `/opsx:review <change>`；`Review-Status: APPROVED` 是放行条件。
+执行 `bash scripts/onepress-gate.sh --change openspec/changes/<change>` 自动跑门禁 0/0.5/2/4/5/6/7，其余输出 `MANUAL`。apply 前运行 `/opsx:review <change>` ；`Review-Status: APPROVED` 是放行条件。
+
+verify 之前必须完成 `verify-report` 工件并运行 `bash scripts/onepress-evidence-lint.sh --change openspec/changes/<change>`：它要求带退出码的实测输出、`Critical: 0`、`Important: 0`，以及 UI 变更的 `onepress-gate.sh` 证据。代码盲审必须使用 `templates/code-reviewer.md` 在冷上下文中执行（优先子代理，其次人类新会话）。
+
+plan 阶段生成 `plan.md` 后运行 `bash scripts/onepress-plan-lint.sh --change openspec/changes/<change>`：FAIL 必须先修；WARN 可在 CI 中用 `--strict` 升级为失败。
 
 输出 `openspec/changes/<change>/verify.md`，结论三选一：`PASS` / `PASS WITH WARNINGS` / `FAIL`。有 CRITICAL 不允许归档。
 
@@ -287,9 +292,11 @@ onePress/                    # 发布包根目录（由 studio/pack/ 生成）
 │   └── commands/opsx-review.md
 ├── scripts/                # 发布包侧脚本
 │   ├── onepress-gate.sh    # 门禁 0/0.5/2/4/5/6/7 AUTO + MANUAL 1/3/8（安装）
+│   ├── onepress-plan-lint.sh  # plan + design + tasks 结构门禁（安装）
+│   ├── onepress-evidence-lint.sh  # verification-evidence 证据门禁（安装）
 │   ├── sandbox-preflight.spec.ts  # L1 预检（安装，依赖可选）
 │   └── onepress-registry-append.sh  # 按分区追加组件行（随包分发，手工运行）
-└── openspec-schema/superspec/   # 分发给目标仓库的 schema（12 文件，含 templates/ui-spec.md 与 review-rubric.md）
+└── openspec-schema/superspec/   # 分发给目标仓库的 schema（14 文件，含 templates/ui-spec.md、review-rubric.md、verification.md 与 code-reviewer.md）
 ```
 
 > `blueprint/`（迭代纲领）与 `openspec/`（本方案自己的规范工作区）位于**开发仓**，永不进入发布包；发布包由 `studio/pack/` 生成。
@@ -302,7 +309,7 @@ onePress/                    # 发布包根目录（由 studio/pack/ 生成）
 A：多半是稀疏检出路径与实际布局不符（cone 模式对不存在的路径静默空检出、不报错）。让它先 `git ls-tree -r --name-only HEAD` 核对真实布局，再 `git sparse-checkout disable` 全量检出（包体仅 KB 级）。这条已写进上面的安装提示词，正常情况下它会自己兜住。
 
 **Q：没装 Superpowers 插件，`/openspec-continue-change` 卡在 plan 步骤报 `superpowers:writing-plans` 不可用？**
-A：1.0.4 起 superspec 的 Superpowers 技能引用全部带内联兜底（brainstorm / plan / apply 2c / finalize 四处），技能缺失时 AI 会按兜底步骤自行产出 `plan.md`，不会中断。旧版本（schema version ≤ 4）升级重装即可；临时也可让 AI 直接按 `tasks.md` 拆 2–5 分钟微步骤写入 `plan.md`。
+A：1.0.4 起 superspec 的 Superpowers 技能引用全部带内联兜底（brainstorm / plan / apply 2c / finalize 四处），技能缺失时 AI 会按兜底步骤自行产出 `plan.md`（含 Spec / Global Constraints / Review Focus / Evidence Map / File Structure / Files / Interfaces / Self-Review），不会中断。旧版本（schema version ≤ 5）升级重装即可；生成后运行 `bash scripts/onepress-plan-lint.sh --change <change>` 自检。
 
 **Q：目标仓库没有 OpenSpec？**
 A：安装能完成，但 `/openspec-*` 技能与 `ui-spec.md` / `sandbox-preview.html` 的产出需要 OpenSpec。先 `openspec init --tools qoder|trae|cursor|opencode` 再安装。

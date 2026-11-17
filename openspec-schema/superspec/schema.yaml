@@ -1,13 +1,15 @@
 name: SuperSpec
-version: 5
+version: 6
 description: >
   Spec-driven workflow integrated with Superpowers skills.
-  brainstorm → proposal → specs → tasks → plan → apply → verify → finalize.
-  design is optional (produced from brainstorm but not required by tasks).
+  brainstorm → proposal → specs → tasks → plan → apply → verify-report → verify → finalize.
+  design is optional in the DAG (produced from brainstorm but not required by
+  tasks); when present it MUST satisfy the ADR / Non-Goals / Risks contract.
   Apply is both a DAG artifact (generates apply.md, a minimal receipt)
   and a top-level apply: phase block (canonical /openspec-apply-change instruction
-  body). Verify requires apply, so /openspec-verify-change cannot run before
-  /openspec-apply-change has executed. Finalize requires verify and is reached via
+  body). Verify requires verify-report (which requires apply), so
+  /openspec-verify-change cannot run before the verify-report artifact and
+  /openspec-apply-change have executed. Finalize requires verify and is reached via
   /openspec-continue-change after verify reports PASS; its instruction executes
   the git-side closeout directly (merge worktree branch back into the
   feature branch, push the branch — which updates an existing spec
@@ -20,7 +22,7 @@ description: >
   fallback for platforms without subagent support. v3 (historical):
   finalize was promoted from a manual post-verify step to a real DAG
   artifact, with its instruction invoking
-  superpowers:finishing-a-development-branch. v4 (current): finalize's
+  superpowers:finishing-a-development-branch. v4 (historical): finalize's
   instruction is rewritten to execute the git-side closeout directly;
   the skill is retained as a manual escape hatch for non-canonical flows
   (solo merge-to-main, brand-new PR via the skill, keep-as-is,
@@ -29,12 +31,26 @@ description: >
   wording is also updated to recommend a user-created feature branch
   as the canonical starting state (previously the schema recommended
   starting on the integration branch).
-  v5 (current): every Superpowers skill reference is now optional.
+  v5 (historical): every Superpowers skill reference is now optional.
   brainstorm / plan / apply / finalize each carry an explicit inline
   FALLBACK (plan: write plan.md inline; apply: 2c inline executor;
   finalize: inline closeout modes) and must never halt because a
   skill is missing. This makes the schema self-contained for harnesses
   that install onePress without the upstream Superpowers plugin.
+  The plan artifact also carries a self-contained rigor contract:
+  Spec path, Global Constraints, Review Focus, File Structure,
+  per-task Files and Interfaces, anti-placeholder rules, and a
+  five-point Self-Review.
+  v6 (current): V3.2 pragmatic fusion. design carries an ADR /
+  Non-Goals / Risks contract; specs carry Given/When/Then scenarios;
+  tasks carry exact file paths and RED-GREEN-REFACTOR micro-steps;
+  apply carries the TDD, root-cause debugging and fresh-evidence
+  iron laws; a new verify-report artifact (verification-evidence.md)
+  sits between apply and verify, collects fresh terminal evidence and
+  one cold-context code review, and the verify artifact now requires
+  it. Two deterministic scripts back the contract:
+  onepress-plan-lint.sh (plan + design + tasks) and the new
+  onepress-evidence-lint.sh (verification evidence).
 
 artifacts:
   - id: brainstorm
@@ -122,6 +138,16 @@ artifacts:
 
       Focus on architecture and approach, not line-by-line implementation.
       Good design docs explain the "why" behind technical decisions.
+
+      V3.2 DEFENSIVE DESIGN CONTRACT (mandatory):
+      - Include at least one ADR with Context, Decision, Alternatives
+        considered, Rationale, and Consequences.
+      - Include 3-5 explicit Non-Goals (YAGNI). Fewer than 3 or more
+        than 5 is a contract violation.
+      - Include Risks / Trade-offs with a mitigation for each row.
+      - Record rejected alternatives; the implementer must not
+        re-litigate settled decisions without new evidence.
+
       UI CHANGE GATE (onePress):
       Before writing design.md, read `**UI Change**: yes|no` from
       proposal.md.
@@ -168,6 +194,13 @@ artifacts:
       - Every requirement MUST have at least one scenario.
 
       Specs should be testable - each scenario is a potential test case.
+
+      V3.2 SCENARIO CONTRACT:
+      - Every Requirement MUST have at least one GIVEN/WHEN/THEN
+        scenario with an observable, testable outcome.
+      - Cover at least one error path or boundary input per capability.
+      - Do not write scenarios that only restate the implementation; a
+        scenario is a test case, not a code echo.
     requires:
       - proposal
 
@@ -184,7 +217,13 @@ artifacts:
       Guidelines:
       - Group related tasks under ## numbered headings
       - Each task MUST be a checkbox: `- [ ] X.Y Task description`
-      - Tasks should be small enough to complete in one session
+      - Task right-sizing: each task is a 2-5 minute cognitive unit.
+      - Every task MUST name the exact file paths it touches inside
+        backticks, plus the command that verifies it.
+      - Every task that changes logic MUST nest three checkboxes:
+        RED (failing test name + expectation), GREEN (minimal code),
+        REFACTOR (cleanup with tests still green).
+      - Docs/config-only tasks MUST write `TDD: N/A (<reason>)`.
       - Order tasks by dependency (what must be done first?)
 
       Reference specs for what needs to be built. If design.md exists,
@@ -196,31 +235,102 @@ artifacts:
 
   - id: plan
     generates: plan.md
-    description: Micro-task implementation plan using Superpowers writing-plans
+    description: Micro-task implementation plan using Superpowers writing-plans (canonical) or inline fallback
     template: plan.md
     instruction: |
       PRECHECK — skill availability:
       If `superpowers:writing-plans` is in your available skills list,
-      use the Skill tool to invoke it (canonical path).
+      use the Skill tool to invoke it through the CANONICAL ADAPTER below.
       If it is NOT available, do NOT stop, do NOT report "skill
       unavailable", and do NOT ask the user to install a plugin — run
-      SKILL FALLBACK below and state which path you took.
+      SKILL FALLBACK below. State only "using inline fallback" as a
+      status note, not as an error or a missing dependency.
+
+      CANONICAL ADAPTER — use the upstream skill without breaking the DAG:
+      1. Invoke `superpowers:writing-plans`.
+      2. Override its save path: write the plan to this change's
+         `plan.md`, never to `docs/superpowers/plans/`. Treat this
+         instruction as the user preference that overrides the skill's
+         default location.
+      3. Use `templates/plan.md` as the section contract. If the skill
+         produces its own header, merge it into this template: keep
+         Goal, Architecture, Tech Stack, Spec, Global Constraints,
+         Review Focus, File Structure, per-task Files/Interfaces, and
+         Self-Review.
+      4. Ignore the skill's Execution Handoff. Do NOT pause to ask the
+         user to choose subagent-driven vs native. OpenSpec's apply
+         artifact owns execution. Record `Execution: OpenSpec apply
+         phase` in plan.md.
+      5. Run the onePress self-review and the plan lint from the
+         FALLBACK below; fix all failures before finishing. The lint
+         also validates sibling `design.md` (ADR / Non-Goals / Risks)
+         and `tasks.md` (exact file paths + RED-GREEN-REFACTOR).
 
       SKILL FALLBACK — write plan.md inline:
-      1. Read this change's `tasks.md` and `design.md` (design optional)
-         as the only inputs.
-      2. Break every task into 2-5 minute micro-steps, TDD order:
-         failing test first, then implementation, then refactor.
-      3. Each step MUST name exact file paths, the code to write, and
-         the command that proves it (test / build / lint).
-      4. Add an explicit commit point after each task, stating what
-         that commit contains.
-      5. Write the result directly to this change's `plan.md` using the
-         plan template; never write to `docs/superpowers/plans/`.
-      6. If a task cannot be decomposed below 5 minutes, split it in
-         `tasks.md` first and note the split in `plan.md`.
-      7. Finish by stating the total task count and the estimated
-         number of commits.
+      1. Inputs: this change's `tasks.md`, `design.md` (optional),
+         `proposal.md`, and `specs/**/*.md`. The plan must argue from
+         these artifacts, not from memory.
+      2. Scope check: if the spec covers multiple independent
+         subsystems, split the plan per subsystem (or record why one
+         plan is still coherent). Each plan must produce working,
+         testable software on its own.
+      3. File structure: before defining tasks, map every file to be
+         created, modified, or tested and state its single
+         responsibility. Follow existing project patterns; do not
+         restructure unrelated files.
+      4. Task right-sizing: a task is the smallest unit with its own
+         test cycle and a reviewer-worthy gate. Fold setup, config,
+         scaffolding, and docs into the task whose deliverable needs
+         them. Each task ends with an independently testable
+         deliverable.
+      5. Step granularity: every step is one action with a checkable
+         result. Use TDD order: write the failing test (test name +
+         assertions, exact values), run it and record the expected
+         failure, implement the minimal code (exact signature and
+         file), run it and record the expected pass, then commit.
+         Name exact file paths, exact commands, and expected output.
+      6. Plan header: fill Goal, Architecture, Tech Stack, and Spec
+         (paths to this change's spec/design artifacts).
+      7. Global Constraints: copy the spec's project-wide rules
+         verbatim — version floors, dependency limits, naming/copy
+         rules, platform requirements. One line each.
+      8. Review Focus: list the five input classes or failure modes
+         the spec implies but no task's tests exercise, most likely
+         first. For each line, add the test that pins it to the owning
+         task. Write "None found" only after checking.
+      9. Interfaces: for every task, write Consumes / Produces with
+         exact function names, parameters, and return types. A task
+         implementer sees only that task; this block is how they learn
+         neighboring contracts.
+      10. Anti-placeholder rule: no `TBD`, `TODO`, "handle edge cases",
+          "add appropriate validation", "write tests for the above",
+          or types/functions no task defines. A plan is the set of
+          decisions the implementer cannot make alone; a plan longer
+          than the code it describes has written the code instead.
+      11. Self-review before finishing (fix inline, do not re-review):
+          a. Spec coverage: every requirement maps to a task.
+          b. Step scan: every step lets the implementer write exactly
+             one reasonable thing; no transcript and no placeholder.
+          c. Type consistency: names/signatures in later tasks match
+             earlier definitions.
+          d. Review Focus: every listed failure mode has a test in its
+             owning task.
+          e. Proportion: the plan is not several times longer than the
+             spec; code blocks are not the majority of the document.
+      12. Write the result directly to this change's `plan.md` using
+          `templates/plan.md`; never write to `docs/superpowers/plans/`.
+      13. If a task cannot be decomposed below 5 minutes, split it in
+          `tasks.md` first and note the split in `plan.md`.
+      14. Finish with `**Totals:** <N tasks, M commits>` and
+          `Execution: OpenSpec apply phase`. Do not pause for a
+          subagent-driven/native choice.
+      15. If `scripts/onepress-plan-lint.sh` exists, run
+          `bash scripts/onepress-plan-lint.sh --change <change-dir>`
+          and fix every FAIL before finishing. The lint checks
+          `plan.md`, sibling `design.md` (ADR / Non-Goals / Risks) and
+          sibling `tasks.md` (exact file paths + RGB micro-steps). For a
+          change created before the V3.2 contract, add `--only-plan` to
+          skip the sibling checks instead of rewriting its artifacts.
 
       IMPORTANT output redirection:
       - Do NOT write to `docs/superpowers/plans/`. Instead, write
@@ -248,12 +358,98 @@ artifacts:
     requires:
       - plan
 
+  - id: verify-report
+    generates: verification-evidence.md
+    description: Fresh terminal evidence plus one cold-context code review, collected before verify
+    template: verification.md
+    instruction: |
+      V3.2 EVIDENCE AND COLD-REVIEW GATE — run this before verify.
+
+      This artifact exists to make completion claims falsifiable. Do
+      NOT reuse any output from the apply session or from an earlier
+      iteration. Every command below MUST be executed again now.
+
+      1. Establish the review range. Read `apply.md` for the applied
+         iteration, then compute BASE_SHA and HEAD_SHA:
+         - BASE_SHA = the commit before this change's first
+           implementation commit (or the merge-base with the
+           integration branch);
+         - HEAD_SHA = the current implementation head.
+         Record both in the report. If the work is uncommitted, use
+         `git diff` against the branch point and say so explicitly.
+
+      2. Identify the commands that can prove each claim (The Gate
+         Function):
+         - the project's test command (unit/integration);
+         - build and lint/typecheck commands, when the project has them;
+         - `bash scripts/onepress-gate.sh --change <change-dir>` when
+           `ui-spec.md` exists (UI changes);
+         - `bash scripts/onepress-evidence-lint.sh --change <change-dir>`
+           at the end of this artifact.
+         A claim with no command is not verifiable; record it as
+         `unverified` instead of asserting it.
+
+      3. RUN each command in the terminal, capture the full exit code
+         and pass/fail counts, and paste a raw output excerpt into
+         `verification-evidence.md`. Required sections:
+         `## 1. Commands`, `## 2. Fresh Command Results`,
+         `## 3. Evidence Table`, `## 4. Cold-Context Review`,
+         `## Overall Decision`. At least two fenced `text` blocks MUST
+         contain `exit code:`. The Evidence Table MUST contain at least
+         one row whose exit code is 0 for every required command.
+
+      4. READ the output. A non-zero exit code is a FAIL. Build or
+         test warnings remain unresolved unless this report states an
+         explicit exclusion rule. Never write speculative phrases such
+         as "should pass" or "looks correct"; the lint rejects them.
+
+      5. Cold-context code review (once, read-only):
+         - Assemble the review inputs: the `BASE_SHA..HEAD_SHA` diff,
+           `design.md`, `tasks.md` and `specs/**/*.md`. Do not include
+           the apply session history.
+         - If the harness supports subagents (for example a CodeReview
+           subagent), dispatch exactly one read-only reviewer with those
+           inputs directly. Record `Mode: subagent` and
+           `Packet: current-session diff`. Do NOT require or create
+           `code-review-packet.md` in this mode.
+         - If the harness does not support subagents, build
+           `code-review-packet.md` in the change directory with the
+           same inputs, record `Mode: human-fresh-session` and
+           `Packet: code-review-packet.md`, keep the packet on disk, and
+           tell the user to open a fresh session with
+           `templates/code-reviewer.md`.
+         - Triage every finding as Critical (crash / core function /
+           security), Important (logic gap / test does not verify
+           behavior / misleading name) or Minor (style / micro-perf).
+           Every finding MUST cite `file:line` or a diff hunk.
+         - Record counts in the report as `- Critical: <n>` and
+           `- Important: <n>`. If either is greater than zero, record
+           `Overall Decision: FAIL`, return to apply, fix, and re-run
+           this artifact. Minor findings are recorded but do not block.
+         - Receiving review: do not perform agreement. Verify each
+           finding against the code; accept it with evidence or rebut
+           it with evidence in the report.
+
+      6. Validate the report:
+         `bash scripts/onepress-evidence-lint.sh --change <change-dir>`
+         must exit 0. Fix every FAIL before declaring this artifact
+         complete. Then run verify.
+    requires:
+      - apply
+
   - id: verify
     generates: verify.md
     description: Post-implementation verification against specs, design, and tasks
     template: verify.md
     instruction: |
       ONE PRESS GATES (all harnesses):
+      EVIDENCE FIRST (V3.2): verify MUST NOT run before
+      verification-evidence.md exists and
+      `bash scripts/onepress-evidence-lint.sh --change <change-dir>`
+      exits 0. Re-run the commands yourself only if the evidence is older
+      than the latest code change; otherwise cite the fresh report. A
+      report with `Critical > 0` or `Important > 0` is a FAIL.
+
       When the change has ui-spec.md, run gates 0-8 and record
       PASS/FAIL/SKIP plus AUTO/MANUAL for each one. Gate 0.5
       (`Review-Status: APPROVED`) is enforced by /opsx:review and
@@ -287,6 +483,11 @@ artifacts:
       apply iteration (whether the first or a re-run), verify should be
       invoked so the convergence loop can decide whether more apply
       iterations are needed.
+
+      verification-evidence.md MUST also exist: the DAG now requires the
+      verify-report artifact. If it is missing, run its instructions
+      (`openspec instructions verify-report --change <name>`) before
+      verifying.
 
       verify.md is overwritten each run. Copy the `Iteration:` value
       from apply.md so verify and apply stay in lockstep.
@@ -340,7 +541,7 @@ artifacts:
       If `openspec-verify-change` skill is unavailable, fall back to
       running the 5 checks manually and recording results in verify.md.
     requires:
-      - apply
+      - verify-report
 
   - id: finalize
     generates: finalize.md
@@ -743,6 +944,28 @@ apply:
     `> Review-Status:`. If the value is not `APPROVED`, STOP and run
     `/opsx:review <change-name>` first. Agent MUST NOT self-approve.
 
+    V3.2 EXECUTION IRON LAWS (all changes):
+    1. TDD iron law: for every logic task, the first output MUST be the
+       failing test plus its test-run command. Do NOT output production
+       code before a recorded RED failure. If you claim GREEN without a
+       RED run in this session, delete the ghost code and return to RED.
+       A docs/config-only task MUST record `TDD: N/A (<reason>)` in
+       apply.md instead of silently skipping.
+    2. Root-cause iron law: on an unexpected test failure or compile
+       error, or after two failed fix attempts, STOP patching. Run the
+       four-step trace: read the full stack/error and find the earliest
+       trigger; trace the invalid data backward to its source; write one
+       text hypothesis ("I think X is the root cause because Y"); run the
+       smallest experiment. If the hypothesis is disproved, revert to the
+       original error state before forming a new one. Record the trace in
+       apply.md under `Root-Cause Log`.
+    3. Fresh evidence: after every task, paste the real command output
+       and exit code into apply.md. Never use "should pass", "looks
+       correct", "probably" or equivalent speculation.
+    4. Review lock: the UI design review and the code blind review are
+       separate. `/opsx:review` owns the former; verify-report owns the
+       latter.
+
     Before implementing, set up an isolated workspace and executor:
 
     0. **Pre-flight — commit change artifacts to feature branch**:
@@ -858,14 +1081,20 @@ apply:
 
        Use this when neither 2a nor 2b is available. For each task in
        tasks.md, in dependency order:
-       1. Write the failing test first (RED) — pure logic only; do not
-          write DOM snapshot tests.
-       2. Implement until the test passes (GREEN), then refactor while
-          keeping it green.
-       3. Run the project's test / build / lint command and paste the
-          result into apply.md.
-       4. Tick that task's checkbox in tasks.md.
-       5. After all tasks: diff the implementation against the specs
+       1. If the task changes logic, write the failing test first (RED)
+          and run it; record the failing assertion and exit code in
+          apply.md. Pure logic only — do not write DOM snapshot tests.
+       2. Implement the minimum code until the test passes (GREEN),
+          then refactor while keeping it green. Paste the passing run
+          into apply.md.
+       3. On any unexpected failure, follow the root-cause iron law
+          before writing another patch; record the hypothesis and the
+          experiment outcome under `Root-Cause Log`.
+       4. Run the project's test / build / lint command and paste the
+          result into apply.md. No speculative wording.
+       5. Tick that task's checkbox in tasks.md. For docs/config-only
+          tasks, record `TDD: N/A (<reason>)`.
+       6. After all tasks: diff the implementation against the specs
           (`git diff <base>...HEAD`), list any spec drift or skipped
           state in apply.md — this inline self-review replaces
           superpowers:requesting-code-review.

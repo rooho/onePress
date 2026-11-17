@@ -85,6 +85,7 @@ $script:SchemaFiles = @(
     'schema.yaml',
     'templates/apply.md',
     'templates/brainstorm.md',
+    'templates/code-reviewer.md',
     'templates/design.md',
     'templates/finalize.md',
     'templates/plan.md',
@@ -93,6 +94,7 @@ $script:SchemaFiles = @(
     'templates/spec.md',
     'templates/tasks.md',
     'templates/ui-spec.md',
+    'templates/verification.md',
     'templates/verify.md'
 )
 
@@ -122,7 +124,9 @@ $script:TraeCommandFiles = @('trae/commands/opsx-review.md')
 $script:CursorCommandFiles = @('cursor/commands/opsx-review.md')
 
 $script:ToolingFiles = @(
+    'scripts/onepress-evidence-lint.sh',
     'scripts/onepress-gate.sh',
+    'scripts/onepress-plan-lint.sh',
     'scripts/sandbox-preflight.spec.ts'
 )
 
@@ -130,14 +134,38 @@ $script:OpenSpecConfigTemplate = @'
 schema: superspec
 
 context: |
-  rules:
-    specs:
-      - 每条需求 MUST 使用 RFC 2119 关键词（SHALL/MUST/SHOULD/MAY）
-      - 每条需求 MUST 至少包含一个 GIVEN/WHEN/THEN 场景，且场景具体可测试
-    design:
-      - UI 变更 MUST 在 proposal.md 首行给出 **UI Change**: yes|no；yes 时必须产出 ui-spec.md（六章节）与 sandbox-preview.html，且不得把契约写回 design.md
-    tasks:
-      - 每个任务为原子工作单元，可独立验证（跑测试、产生输出或肉眼点检）
+  Tech stack: <以实际项目为准>
+  Workflow Methodology: Strict TDD (RED → GREEN → REFACTOR) for all logic changes.
+  Validation Principle: Evidence Before Claims — no completion claim without fresh terminal output.
+
+rules:
+  proposal:
+    - 注明涉及的 harness 与资产归属层级（harness 级 / tooling 级 / project 级）
+    - 注明受影响的安装场景（全新安装 / 升级 / 回滚）
+  specs:
+    - 每条需求 MUST 使用 RFC 2119 关键词（SHALL/MUST/SHOULD/MAY）
+    - 每条需求 MUST 至少包含一个 GIVEN/WHEN/THEN 场景，且场景具体可测试
+  design:
+    - 必须包含至少一条 ADR（Context / Decision / Alternatives considered / Rationale / Consequences）
+    - 必须列出 3–5 条 Non-Goals（YAGNI）
+    - 必须列出 Risks / Trade-offs 与缓解措施
+    - "UI 变更 MUST 在 proposal.md 首行给出 **UI Change**: yes|no；yes 时必须产出 ui-spec.md 与 sandbox-preview.html"
+  tasks:
+    - 每个任务 MUST 为 2–5 分钟认知粒度
+    - 每个任务 MUST 用反引号标注精确文件路径与验证命令
+    - 含逻辑修改的任务 MUST 内嵌 RED / GREEN / REFACTOR 勾选
+    - "文档/配置任务 MUST 写 TDD: N/A (<reason>)"
+  plan:
+    - 每个 Task MUST 包含 Files / Interfaces / TDD 步骤 / Run 与 Expected
+    - 写完后 MUST 运行 scripts/onepress-plan-lint.sh 并修复所有 FAIL
+  apply:
+    - TDD 铁律：没有先失败的测试，绝不编写生产代码
+    - 根因调试铁律：连续两次修复无效必须停止补丁并按四阶段溯源
+    - 每个任务完成后 MUST 在 apply.md 粘贴真实命令输出与退出码
+  verify-report:
+    - 必须在终端重新运行测试/构建/lint/UI 门禁，禁止复用历史结果
+    - 必须执行一次冷上下文代码盲审，Critical 与 Important 必须为 0
+    - 必须运行 scripts/onepress-evidence-lint.sh 并修复所有 FAIL
 '@
 
 $script:UiComponentsTemplate = @'
@@ -536,6 +564,83 @@ function Mount-SkillReference {
     Write-Info "技能挂载：mounted $mounted / skipped $skipped（共 $($files.Count) 个技能）"
 }
 
+function Migrate-NestedRules {
+    param([string]$ConfigPath)
+
+    $text = [System.IO.File]::ReadAllText($ConfigPath, $script:Utf8NoBom)
+    $nl = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $lines = $text -split "`r?`n"
+
+    $start = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^\s+rules:\s*$') { $start = $i; break }
+    }
+    if ($start -lt 0) { return $false }
+
+    $ctxEnd = $lines.Count
+    for ($i = $start + 1; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^\S') { $ctxEnd = $i; break }
+    }
+
+    $rulesEnd = $ctxEnd
+    for ($i = $start + 1; $i -lt $ctxEnd; $i++) {
+        if ($lines[$i] -notmatch '^\s*$' -and $lines[$i] -notmatch '^    ') { $rulesEnd = $i; break }
+    }
+
+    $out = New-Object System.Collections.Generic.List[string]
+    for ($i = 0; $i -lt $start; $i++) { $out.Add($lines[$i]) }
+    # Keep context text that follows the nested rules inside the context block.
+    for ($i = $rulesEnd; $i -lt $ctxEnd; $i++) { $out.Add($lines[$i]) }
+    $out.Add('')
+    $out.Add('rules:')
+    for ($i = $start + 1; $i -lt $rulesEnd; $i++) {
+        $line = $lines[$i]
+        if ($line -match '^  ') { $line = $line.Substring(2) }
+        $out.Add($line)
+    }
+    for ($i = $ctxEnd; $i -lt $lines.Count; $i++) { $out.Add($lines[$i]) }
+
+    [System.IO.File]::WriteAllText($ConfigPath, ($out -join $nl), $script:Utf8NoBom)
+    return $true
+}
+
+function Ensure-RuleKey {
+    param([string]$ConfigPath, [string]$Key, [string]$Rule)
+
+    $text = [System.IO.File]::ReadAllText($ConfigPath, $script:Utf8NoBom)
+    $nl = if ($text.Contains("`r`n")) { "`r`n" } else { "`n" }
+    $lines = $text -split "`r?`n"
+
+    if ($lines -match "^  $([regex]::Escape($Key)):") { return $false }
+
+    $rulesIndex = -1
+    for ($i = 0; $i -lt $lines.Count; $i++) {
+        if ($lines[$i] -match '^rules:[ \t]*$') { $rulesIndex = $i; break }
+    }
+    if ($rulesIndex -lt 0) { return $false }
+
+    $out = New-Object System.Collections.Generic.List[string]
+    for ($i = 0; $i -le $rulesIndex; $i++) { $out.Add($lines[$i]) }
+    $out.Add("  ${Key}:")
+    $out.Add("    - $Rule")
+    for ($i = $rulesIndex + 1; $i -lt $lines.Count; $i++) { $out.Add($lines[$i]) }
+
+    [System.IO.File]::WriteAllText($ConfigPath, ($out -join $nl), $script:Utf8NoBom)
+    return $true
+}
+
+function Ensure-RuleKeys {
+    param([string]$ConfigPath)
+
+    [void](Ensure-RuleKey -ConfigPath $ConfigPath -Key 'proposal' -Rule '注明涉及的 harness 与资产归属层级（harness 级 / tooling 级 / project 级）')
+    [void](Ensure-RuleKey -ConfigPath $ConfigPath -Key 'specs' -Rule '每条需求 MUST 使用 RFC 2119 关键词（SHALL/MUST/SHOULD/MAY）')
+    [void](Ensure-RuleKey -ConfigPath $ConfigPath -Key 'design' -Rule '必须包含至少一条 ADR（Context / Decision / Alternatives considered / Rationale / Consequences）')
+    [void](Ensure-RuleKey -ConfigPath $ConfigPath -Key 'tasks' -Rule '每个任务 MUST 为 2–5 分钟认知粒度')
+    [void](Ensure-RuleKey -ConfigPath $ConfigPath -Key 'plan' -Rule '每个 Task MUST 包含 Files / Interfaces / TDD 步骤 / Run 与 Expected')
+    [void](Ensure-RuleKey -ConfigPath $ConfigPath -Key 'apply' -Rule 'TDD 铁律：没有先失败的测试，绝不编写生产代码')
+    [void](Ensure-RuleKey -ConfigPath $ConfigPath -Key 'verify-report' -Rule '必须执行一次冷上下文代码盲审，Critical 与 Important 必须为 0')
+}
+
 function Confirm-OpenSpecSchema {
     param([string]$TargetRoot)
 
@@ -565,7 +670,20 @@ function Confirm-OpenSpecSchema {
 
     $current = $match.Groups['v'].Value
     if ($current -eq 'superspec') {
-        Write-Ok 'openspec/config.yaml schema=superspec'
+        if ($text -notmatch '(?m)^rules:[ \t]*\r?$' -and $text -match '(?m)^[ \t]+rules:[ \t]*\r?$') {
+            if ($DryRun) {
+                Write-Info 'would migrate openspec/config.yaml rules: nested(context) -> top-level'
+                return
+            }
+            if (Migrate-NestedRules -ConfigPath $path) {
+                Write-Ok 'openspec/config.yaml rules: nested(context) → top-level'
+            }
+        } else {
+            Write-Ok 'openspec/config.yaml schema=superspec'
+        }
+        if (-not $DryRun) {
+            Ensure-RuleKeys -ConfigPath $path
+        }
         return
     }
 
@@ -803,7 +921,7 @@ function Test-SkillHarness {
     $skill = Join-Rel $TargetRoot "$HarnessDir/skills/onepress-discipline/SKILL.md"
     if (Test-Path -LiteralPath $skill) {
         $skillText = [System.IO.File]::ReadAllText($skill, $script:Utf8NoBom)
-        foreach ($rule in @('ui-spec.md', 'ui_change', 'sandbox-preview', '44×44', 'prefers-reduced-motion', '四态', '无障碍', '防呆')) {
+        foreach ($rule in @('ui-spec.md', 'ui_change', 'sandbox-preview', '44×44', 'prefers-reduced-motion', '四态', '无障碍', '防呆', 'RED', 'GREEN', 'REFACTOR', 'verification-evidence', 'Root-Cause', 'Critical')) {
             if ($skillText -notmatch $rule) { Write-Fail "$HarnessDir/skills/onepress-discipline/SKILL.md 缺少铁律关键词：$rule" }
         }
     }
@@ -888,7 +1006,7 @@ function Test-Acceptance {
         $schemaCount = @(Get-ChildItem -LiteralPath $schemaDir -Recurse -File).Count
     }
     $schemaExpected = $script:SchemaFiles.Count
-    if ($schemaCount -eq $schemaExpected) { Write-Ok "openspec/schemas/superspec 共 $schemaExpected 文件（含 ui-spec.md / review-rubric.md）" }
+    if ($schemaCount -eq $schemaExpected) { Write-Ok "openspec/schemas/superspec 共 $schemaExpected 文件（含 ui-spec.md / review-rubric.md / verification.md / code-reviewer.md）" }
     else { Write-Fail "openspec/schemas/superspec 文件数应为 $schemaExpected，实际 $schemaCount" }
 
     $schemaYaml = Join-Rel $TargetRoot 'openspec/schemas/superspec/schema.yaml'
@@ -899,6 +1017,30 @@ function Test-Acceptance {
             Write-Ok "schema.yaml 技能兜底：$fallbackCount 处 SKILL FALLBACK"
         } else {
             Write-Fail "schema.yaml 只有 $fallbackCount 处 SKILL FALLBACK（brainstorm/plan/apply/finalize 应各 1 处）"
+        }
+        if ($schemaText -notmatch 'onepress-plan-lint\.sh') {
+            Write-Fail 'schema.yaml plan 指令未引用 onepress-plan-lint.sh'
+        }
+        if ($schemaText -notmatch 'onepress-evidence-lint\.sh') {
+            Write-Fail 'schema.yaml verify-report 指令未引用 onepress-evidence-lint.sh'
+        }
+        if ($schemaText -notmatch 'id: verify-report') {
+            Write-Fail 'schema.yaml 缺少 verify-report 工件'
+        }
+        if ($schemaText -notmatch 'Execution: OpenSpec apply') {
+            Write-Fail 'schema.yaml plan 指令缺少 Execution: OpenSpec apply 适配'
+        }
+    }
+
+    $planTemplate = Join-Rel $TargetRoot 'openspec/schemas/superspec/templates/plan.md'
+    if (Test-Path -LiteralPath $planTemplate) {
+        $planText = [System.IO.File]::ReadAllText($planTemplate, $script:Utf8NoBom)
+        $planKeywords = @('**Spec:**', '## Global Constraints', '## Review Focus', '## Evidence Map', '## File Structure', '**Files:**', '**Interfaces:**', '## Self-Review')
+        $planMissing = @($planKeywords | Where-Object { $planText -notmatch [regex]::Escape($_) })
+        if ($planMissing.Count -eq 0) {
+            Write-Ok 'plan.md 模板结构完整（Spec/Constraints/Review Focus/Evidence Map/File Structure/Files/Interfaces/Self-Review）'
+        } else {
+            Write-Fail "plan.md 模板缺少：$($planMissing -join ', ')"
         }
     }
 
@@ -952,9 +1094,22 @@ function Test-Acceptance {
     if (Test-Path -LiteralPath $configPath) {
         $configText = [System.IO.File]::ReadAllText($configPath, $script:Utf8NoBom)
         if ($configText -notmatch '(?m)^\uFEFF?schema:[ \t]*superspec[ \t]*\r?$') {
-            Write-Fail 'openspec/config.yaml 的 schema 不是 superspec（九工件序列不可用）'
+            Write-Fail 'openspec/config.yaml 的 schema 不是 superspec（十工件序列 brainstorm→…→apply→verify-report→verify→finalize 不可用）'
         } else {
             Write-Ok 'openspec/config.yaml schema=superspec'
+        }
+        if ($configText -notmatch '(?m)^rules:[ \t]*\r?$') {
+            Write-Fail 'openspec/config.yaml 缺少顶层 rules（规则不会按工件注入）'
+        } else {
+            $missingKeys = @()
+            foreach ($key in @('proposal', 'specs', 'design', 'tasks', 'plan', 'apply', 'verify-report')) {
+                if ($configText -notmatch "(?m)^  $([regex]::Escape($key)):[ \t]*\r?$") { $missingKeys += $key }
+            }
+            if ($missingKeys.Count -eq 0) {
+                Write-Ok 'openspec/config.yaml 顶层 rules 七键齐全'
+            } else {
+                Write-Fail "openspec/config.yaml 顶层 rules 缺少：$($missingKeys -join ', ')"
+            }
         }
     } else {
         Write-Fail 'openspec/config.yaml 缺失（安装器应已创建）'
