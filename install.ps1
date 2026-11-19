@@ -91,6 +91,7 @@ $script:SchemaFiles = @(
     'templates/plan.md',
     'templates/proposal.md',
     'templates/review-rubric.md',
+    'templates/review.md',
     'templates/spec.md',
     'templates/tasks.md',
     'templates/ui-spec.md',
@@ -127,6 +128,7 @@ $script:ToolingFiles = @(
     'scripts/onepress-evidence-lint.sh',
     'scripts/onepress-gate.sh',
     'scripts/onepress-plan-lint.sh',
+    'scripts/onepress-review-lint.sh',
     'scripts/sandbox-preflight.spec.ts'
 )
 
@@ -1006,7 +1008,7 @@ function Test-Acceptance {
         $schemaCount = @(Get-ChildItem -LiteralPath $schemaDir -Recurse -File).Count
     }
     $schemaExpected = $script:SchemaFiles.Count
-    if ($schemaCount -eq $schemaExpected) { Write-Ok "openspec/schemas/superspec 共 $schemaExpected 文件（含 ui-spec.md / review-rubric.md / verification.md / code-reviewer.md）" }
+    if ($schemaCount -eq $schemaExpected) { Write-Ok "openspec/schemas/superspec 共 $schemaExpected 文件（含 ui-spec.md / review.md / review-rubric.md / verification.md / code-reviewer.md）" }
     else { Write-Fail "openspec/schemas/superspec 文件数应为 $schemaExpected，实际 $schemaCount" }
 
     $schemaYaml = Join-Rel $TargetRoot 'openspec/schemas/superspec/schema.yaml'
@@ -1026,6 +1028,9 @@ function Test-Acceptance {
         }
         if ($schemaText -notmatch 'id: verify-report') {
             Write-Fail 'schema.yaml 缺少 verify-report 工件'
+        }
+        if ($schemaText -notmatch 'id: review') {
+            Write-Fail 'schema.yaml 缺少 review 工件'
         }
         if ($schemaText -notmatch 'Execution: OpenSpec apply') {
             Write-Fail 'schema.yaml plan 指令缺少 Execution: OpenSpec apply 适配'
@@ -1094,7 +1099,7 @@ function Test-Acceptance {
     if (Test-Path -LiteralPath $configPath) {
         $configText = [System.IO.File]::ReadAllText($configPath, $script:Utf8NoBom)
         if ($configText -notmatch '(?m)^\uFEFF?schema:[ \t]*superspec[ \t]*\r?$') {
-            Write-Fail 'openspec/config.yaml 的 schema 不是 superspec（十工件序列 brainstorm→…→apply→verify-report→verify→finalize 不可用）'
+            Write-Fail 'openspec/config.yaml 的 schema 不是 superspec（十一工件序列 brainstorm→…→plan→review→apply→verify-report→verify→finalize 不可用）'
         } else {
             Write-Ok 'openspec/config.yaml schema=superspec'
         }

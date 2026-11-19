@@ -27,7 +27,7 @@ TEMP_ROOT=""
 
 SKILL_REF='> onepress: 执行本技能时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。'
 
-SCHEMA_FILES="schema.yaml templates/apply.md templates/brainstorm.md templates/code-reviewer.md templates/design.md templates/finalize.md templates/plan.md templates/proposal.md templates/review-rubric.md templates/spec.md templates/tasks.md templates/ui-spec.md templates/verification.md templates/verify.md"
+SCHEMA_FILES="schema.yaml templates/apply.md templates/brainstorm.md templates/code-reviewer.md templates/design.md templates/finalize.md templates/plan.md templates/proposal.md templates/review-rubric.md templates/review.md templates/spec.md templates/tasks.md templates/ui-spec.md templates/verification.md templates/verify.md"
 
 OPENCODE_FILES="opencode/opencode.json opencode/agent/ux-architect.md opencode/commands/opsx-review.md opencode/skills/superpowers-tdd/SKILL.md"
 
@@ -45,7 +45,7 @@ TRAE_COMMAND_FILES="trae/commands/opsx-review.md"
 
 CURSOR_COMMAND_FILES="cursor/commands/opsx-review.md"
 
-TOOLING_FILES="scripts/onepress-evidence-lint.sh scripts/onepress-gate.sh scripts/onepress-plan-lint.sh scripts/sandbox-preflight.spec.ts"
+TOOLING_FILES="scripts/onepress-evidence-lint.sh scripts/onepress-gate.sh scripts/onepress-plan-lint.sh scripts/onepress-review-lint.sh scripts/sandbox-preflight.spec.ts"
 
 WRITTEN=""
 LOCK_FILES=""
@@ -936,7 +936,7 @@ run_acceptance() {
     count="$(find "$target/openspec/schemas/superspec" -type f | wc -l | tr -d ' ')"
   fi
   if [ "$count" = "$expected" ]; then
-    info "openspec/schemas/superspec 共 $expected 文件（含 ui-spec.md / review-rubric.md / verification.md / code-reviewer.md）... OK"
+    info "openspec/schemas/superspec 共 $expected 文件（含 ui-spec.md / review.md / review-rubric.md / verification.md / code-reviewer.md）... OK"
   else
     bad "openspec/schemas/superspec 文件数应为 $expected，实际 $count"
   fi
@@ -1031,17 +1031,25 @@ run_acceptance() {
   if [ -f "$target/scripts/onepress-evidence-lint.sh" ]; then
     bash -n "$target/scripts/onepress-evidence-lint.sh" || bad 'onepress-evidence-lint.sh 语法错误'
   fi
+  if [ -f "$target/scripts/onepress-review-lint.sh" ]; then
+    bash -n "$target/scripts/onepress-review-lint.sh" || bad 'onepress-review-lint.sh 语法错误'
+  fi
   if grep -q 'id: verify-report' "$target/openspec/schemas/superspec/schema.yaml" 2>/dev/null; then
     info 'schema.yaml verify-report 工件 ... OK'
   else
     bad 'schema.yaml 缺少 verify-report 工件'
+  fi
+  if grep -q 'id: review' "$target/openspec/schemas/superspec/schema.yaml" 2>/dev/null; then
+    info 'schema.yaml review 工件 ... OK'
+  else
+    bad 'schema.yaml 缺少 review 工件'
   fi
 
   if [ -f "$target/openspec/config.yaml" ]; then
     if tr -d '\r' < "$target/openspec/config.yaml" | grep -qE '^schema:[[:space:]]*superspec[[:space:]]*$'; then
       info 'openspec/config.yaml schema=superspec ... OK'
     else
-      bad 'openspec/config.yaml 的 schema 不是 superspec（十工件序列 brainstorm→…→apply→verify-report→verify→finalize 不可用）'
+      bad 'openspec/config.yaml 的 schema 不是 superspec（十一工件序列 brainstorm→…→plan→review→apply→verify-report→verify→finalize 不可用）'
     fi
     if tr -d '\r' < "$target/openspec/config.yaml" | grep -qE '^rules:'; then
       local missing="" rule_key
@@ -1054,7 +1062,7 @@ run_acceptance() {
         bad "openspec/config.yaml 顶层 rules 缺少：$missing"
       fi
     else
-      bad 'openspec/config.yaml 缺少顶层 rules（规则不会按工件注入；请重装或按 2.1.0 模板重建 rules）'
+      bad 'openspec/config.yaml 缺少顶层 rules（规则不会按工件注入；请重装或按 2.2.0 模板重建 rules）'
     fi
   else
     bad 'openspec/config.yaml 缺失（安装器应已创建）'

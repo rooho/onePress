@@ -116,14 +116,15 @@ python3 .cursor/skills/ui-ux-pro-max/scripts/search.py "data table empty state s
 
 可执行脚本：`bash scripts/onepress-gate.sh`（门禁 0/0.5/2/4/5/6/7 自动，1/3/8 输出 `MANUAL`）。默认对 `UI Change: yes` 强制校验门禁 0.5；`--require-review` 供 CI 固定语义，`--no-require-review` 仅用于 1.1.0 之前的旧变更。
 
-## 铁律 10：编码前三级评审（/opsx:review）
+## 铁律 10：编码前三级评审（review 工件）
 
-UI 变更 MUST 在 `/openspec-apply-change` 之前执行 `/opsx:review <change-name>`，按 L1 → L2 → L3 推进，并把结果写入 `review.md`：
+`review` 是 `plan` 之后的 DAG 工件。UI 变更 MUST 通过 `/opsx:review <change-name>` 完成 L1 → L2 → L3，并把结果写入 `review.md`；非 UI 变更写 `Result: SKIP`。`/openspec-apply-change` 依赖 `review.md`，不存在或 `Result` 非 `PASS`/`SKIP` 时 MUST NOT 启动。
 
 - **L1 确定性预检**：Playwright + `@axe-core/playwright` 遍历 4 态 × 2 主题 8 视图；WCAG 2.2 A/AA 零 violations；热区 ≥44×44（项目标准，行内文本链接豁免）；375/768/1024/1280 零横向溢出；变量声明块外零 Hex、零 Emoji；CLS 以 `PerformanceObserver` 采样（代理指标）。依赖缺失记 `L1: SKIP`，不阻断。
-- **L2 冷上下文盲审**：输入仅 `MASTER.md`、`ui-spec.md`、`sandbox-preview.html`、`review-rubric.md`；主判据 `P0 = 0 且 P1 = 0`，单层列表 ≤8、单决策点 ≤4；每条 finding MUST 引用章节或选择器，无证据不计分；Critique 40 / Audit 20 为观察模式；最多 3 轮，超限 `ESCALATE`。
-- **L3 人类批注与锁定**：沙箱 `Alt/⌘ + Click` 输出"选择器 + 类名 + HTML 片段 + 批注"，经 `/openspec-update-change` 回写；只有人类可把 `ui-spec.md` 的 `Review-Status` 改为 `APPROVED`，Agent MUST NOT 自签。
-- `review.md` MUST 含 `Round` / `L1` / `L2` / `L3` / `Critique` / `Audit` / `P0`–`P3` 与带证据列的 `Findings` 表；`Review-Status` 非 `APPROVED` 时 `/openspec-apply-change` MUST 停止。
+- **L2 冷上下文盲审**：输入 `proposal.md`、`design.md`（若存在）、`specs/**`、`tasks.md`、`plan.md`、`MASTER.md`、`ui-spec.md`、`sandbox-preview.html`、`review-rubric.md`；主判据 `P0 = 0 且 P1 = 0`；每条 finding MUST 引用章节或选择器，无证据不计分；Critique 40 / Audit 20 为观察模式；最多 3 轮，超限 `ESCALATE`。
+- **L3 人类批注与锁定**：沙箱 `Alt/⌘ + Click` 输出"选择器 + 类名 + HTML 片段 + 批注"，经 `/openspec-update-change` 回写；回写后 MUST 把 `Review-Status` 重置为 `PENDING`、删除 `review.md`，再重跑 L1/L2；只有人类可改为 `APPROVED`，Agent MUST NOT 自签。
+- **版本绑定**：`review.md` MUST 记录 `ui-spec-sha256` / `sandbox-sha256` / `plan-sha256` 与 `Approver` / `Reviewed-At`；任一文件变化即失效，必须删 `review.md` 并复审。`scripts/onepress-review-lint.sh` MUST 在 apply 前退出 0。
+- **轮次记录**：每轮写 `.review/round-<n>.md`；FAIL 轮次 MUST NOT 生成 `review.md`，避免 DAG 误放行。
 
 ## TDD 纪律
 

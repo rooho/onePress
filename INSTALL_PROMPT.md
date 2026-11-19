@@ -61,7 +61,7 @@
 **红线（违反任一条立即中止安装并报告）：**
 
 1. 禁止覆盖项目级资产：`docs/ui-components.md`、`openspec/changes/` 及其下任何文件。
-2. 禁止修改目标仓库的业务代码与既有业务文档（仅允许写入 `HARNESS_SET` 内的 `.qoder/`、`.opencode/`、`.trae/`、`.cursor/`、`openspec/schemas/`、`scripts/onepress-gate.sh`、`scripts/onepress-plan-lint.sh`、`scripts/onepress-evidence-lint.sh`、`scripts/sandbox-preflight.spec.ts`、`onePress.lock`、`docs/ui-components.md`（首装初始化）、`.agents/skills/`（**仅允许插入技能引用行，禁止改写技能正文**））。
+2. 禁止修改目标仓库的业务代码与既有业务文档（仅允许写入 `HARNESS_SET` 内的 `.qoder/`、`.opencode/`、`.trae/`、`.cursor/`、`openspec/schemas/`、`scripts/onepress-gate.sh`、`scripts/onepress-plan-lint.sh`、`scripts/onepress-evidence-lint.sh`、`scripts/onepress-review-lint.sh`、`scripts/sandbox-preflight.spec.ts`、`onePress.lock`、`docs/ui-components.md`（首装初始化）、`.agents/skills/`（**仅允许插入技能引用行，禁止改写技能正文**））。
 3. 禁止删除用户本地文件（升级时仅允许删除将被全量覆盖的 harness 目录内的旧文件与 OpenSpec 1.x 生成物）。
 
 **逐字写入约束：模板包内所有文件必须逐字写入目标路径，禁止改写、精简或重排内容；无法逐字写入时中止并报告。**
@@ -70,10 +70,11 @@
 
 | 模板源路径 | 目标路径 |
 |-----------|---------|
-| `openspec-schema/superspec/**`（14 文件） | `openspec/schemas/superspec/`（schema.yaml + templates/ 13 文件，含 `ui-spec.md`、`review-rubric.md`、`verification.md` 与 `code-reviewer.md`） |
+| `openspec-schema/superspec/**`（15 文件） | `openspec/schemas/superspec/`（schema.yaml + templates/ 14 文件，含 `ui-spec.md`、`review.md`、`review-rubric.md`、`verification.md` 与 `code-reviewer.md`） |
 | `scripts/onepress-gate.sh` | `scripts/onepress-gate.sh`（tooling 层，UI 门禁 0.5） |
 | `scripts/onepress-plan-lint.sh` | `scripts/onepress-plan-lint.sh`（tooling 层，plan + design + tasks 结构门禁） |
 | `scripts/onepress-evidence-lint.sh` | `scripts/onepress-evidence-lint.sh`（tooling 层，verification-evidence 证据门禁） |
+| `scripts/onepress-review-lint.sh` | `scripts/onepress-review-lint.sh`（tooling 层，review.md 回执与哈希门禁） |
 | `scripts/sandbox-preflight.spec.ts` | `scripts/sandbox-preflight.spec.ts`（tooling 层，L1 可选） |
 
 ### skills 初始化（始终执行，先于挂载）
@@ -143,7 +144,7 @@ openspec init --tools <HARNESS_SET 逗号串> --no-animation
 
 ### OpenSpec 配置对齐（始终执行）
 
-- 目标仓库存在 `openspec/config.yaml` 时，其顶层 `schema:` MUST 为 `superspec`（十工件序列 brainstorm→…→apply→verify-report→verify→finalize 依赖它）。当前值不是 `superspec` 时，**只改这一行**，并在报告中记一行 `config.yaml schema: <旧值> → superspec`；**改行时保留原换行风格**：CRLF 文件的该行末尾有 `\r`，不要一并删掉。
+- 目标仓库存在 `openspec/config.yaml` 时，其顶层 `schema:` MUST 为 `superspec`（十一工件序列 brainstorm→…→plan→review→apply→verify-report→verify→finalize 依赖它）。当前值不是 `superspec` 时，**只改这一行**，并在报告中记一行 `config.yaml schema: <旧值> → superspec`；**改行时保留原换行风格**：CRLF 文件的该行末尾有 `\r`，不要一并删掉。
 - 若检测到 `rules:` **缩进在 `context` 块内**（2.0.0 旧结构），MUST 将其提升为顶层 `rules:`（保留 `rules:` 前后的 `context` 文本与换行风格），并在报告中记一行 `config.yaml rules: nested(context) → top-level`；**`rules` MUST NOT 留在 `context` 块内**，否则 OpenSpec 只把它当普通上下文，规则不会按工件注入。迁移后 MUST 幂等补齐 `proposal` / `plan` / `apply` / `verify-report` 四个缺失规则键；已存在的键 MUST NOT 被覆盖，重复执行 MUST NOT 改变文件内容。
 - `openspec/config.yaml` 不存在时**必须创建**，逐字写入下方模板（与 `install.sh` / `install.ps1` 的 `OpenSpecConfigTemplate` 完全一致）：
 
@@ -179,6 +180,7 @@ rules:
     - TDD 铁律：没有先失败的测试，绝不编写生产代码
     - 根因调试铁律：连续两次修复无效必须停止补丁并按四阶段溯源
     - 每个任务完成后 MUST 在 apply.md 粘贴真实命令输出与退出码
+    - review 工件 MUST 已生成（Result: PASS/SKIP），并运行 scripts/onepress-review-lint.sh 且退出 0
   verify-report:
     - 必须在终端重新运行测试/构建/lint/UI 门禁，禁止复用历史结果
     - 必须执行一次冷上下文代码盲审，Critical 与 Important 必须为 0
@@ -251,7 +253,7 @@ rules:
 
 ```json
 {
-  "version": "2.1.0",
+  "version": "2.2.0",
   "installedAt": "2026-11-16T00:00:00Z",
   "harnesses": {
     "qoder": true,
@@ -341,13 +343,13 @@ rules:
 
 ### OpenSpec Schema 验收项
 
-- [ ] `openspec/schemas/superspec/schema.yaml` 与 `templates/` 13 个模板文件齐全（共 14 文件，含 `ui-spec.md`、`review-rubric.md`、`verification.md` 与 `code-reviewer.md`）
-- [ ] `schema.yaml` 含 `verify-report` 工件（生成 `verification-evidence.md`），且 `verify` 依赖 `verify-report`
+- [ ] `openspec/schemas/superspec/schema.yaml` 与 `templates/` 14 个模板文件齐全（共 15 文件，含 `ui-spec.md`、`review.md`、`review-rubric.md`、`verification.md` 与 `code-reviewer.md`）
+- [ ] `schema.yaml` 含 `verify-report` 工件（生成 `verification-evidence.md`），且 `verify` 依赖 `verify-report`；含 `review` 工件（生成 `review.md`），且 `apply.requires` 包含 `review`
 - [ ] `openspec schemas` 可列出 `superspec (project)`
 - [ ] `openspec/config.yaml` 存在且顶层 `schema:` 为 `superspec`，顶层 `rules:` 含 `proposal` / `specs` / `design` / `tasks` / `plan` / `apply` / `verify-report` 七组键（缺失任一项即判定失败）
 - [ ] `openspec/schemas/superspec/schema.yaml` 中每一处 `superpowers:<skill>` 引用都配有 `FALLBACK` 兜底说明（brainstorm / plan / apply / finalize 四处齐全），缺一处即判定失败
 - [ ] `openspec/schemas/superspec/templates/plan.md` 含 `**Spec:**`、`## Global Constraints`、`## Review Focus`、`## Evidence Map`、`## File Structure`、`**Files:**`、`**Interfaces:**`、`## Self-Review` 八段结构，缺一段即判定失败
-- [ ] `schema.yaml` 的 plan 指令引用 `scripts/onepress-plan-lint.sh`，verify-report 指令引用 `scripts/onepress-evidence-lint.sh`，且含 `Execution: OpenSpec apply` 适配说明
+- [ ] `schema.yaml` 的 plan 指令引用 `scripts/onepress-plan-lint.sh`，verify-report 指令引用 `scripts/onepress-evidence-lint.sh`，review 指令引用 `scripts/onepress-review-lint.sh`，且含 `Execution: OpenSpec apply` 适配说明
 - [ ] `schema.yaml` 中 `/opsx:` 仅允许出现 `/opsx:review`；不得出现 `/opsx:continue`、`/opsx:apply`、`/opsx:verify`、`/opsx:archive`、`/opsx:propose`
 
 ### 可选增强层验收项
@@ -356,8 +358,8 @@ rules:
 - [ ] `SKIP` 时附有启用指引，且安装结论仍为成功（不计入失败项）
 - [ ] 本次安装未执行任何 `npm install` / `uipro init` / 网络请求
 - [ ] `docs/design-system/projectbaseline/MASTER.md` 若已存在，内容逐字节不变
-- [ ] `scripts/onepress-gate.sh`、`scripts/onepress-plan-lint.sh`、`scripts/onepress-evidence-lint.sh` 与 `scripts/sandbox-preflight.spec.ts` 存在且与模板包逐字节一致（tooling 层）
-- [ ] `bash -n scripts/onepress-plan-lint.sh` 与 `bash -n scripts/onepress-evidence-lint.sh` 均返回 0
+- [ ] `scripts/onepress-gate.sh`、`scripts/onepress-plan-lint.sh`、`scripts/onepress-evidence-lint.sh`、`scripts/onepress-review-lint.sh` 与 `scripts/sandbox-preflight.spec.ts` 存在且与模板包逐字节一致（tooling 层）
+- [ ] `bash -n scripts/onepress-plan-lint.sh`、`bash -n scripts/onepress-evidence-lint.sh` 与 `bash -n scripts/onepress-review-lint.sh` 均返回 0
 - [ ] L1 预检依赖缺失时报告记 `SKIP`，且安装结论仍为成功（不计入失败项）
 
 ### 安装范围验收项

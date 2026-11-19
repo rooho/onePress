@@ -1,10 +1,15 @@
 name: SuperSpec
-version: 6
+version: 7
 description: >
   Spec-driven workflow integrated with Superpowers skills.
-  brainstorm → proposal → specs → tasks → plan → apply → verify-report → verify → finalize.
-  design is optional in the DAG (produced from brainstorm but not required by
-  tasks); when present it MUST satisfy the ADR / Non-Goals / Risks contract.
+  brainstorm → proposal → design → specs → tasks → plan → review → apply →
+  verify-report → verify → finalize.
+  design is optional in the DAG (produced from brainstorm + proposal but not
+  required by tasks); when present it MUST satisfy the ADR / Non-Goals / Risks
+  contract. review is a required DAG artifact produced from plan: for UI
+  changes it records the L1/L2/L3 pre-apply review and freezes the approved
+  contract hash; for non-UI changes it records `Result: SKIP`. apply requires
+  review, so the design review can no longer be bypassed by prose alone.
   Apply is both a DAG artifact (generates apply.md, a minimal receipt)
   and a top-level apply: phase block (canonical /openspec-apply-change instruction
   body). Verify requires verify-report (which requires apply), so
@@ -41,16 +46,29 @@ description: >
   Spec path, Global Constraints, Review Focus, File Structure,
   per-task Files and Interfaces, anti-placeholder rules, and a
   five-point Self-Review.
-  v6 (current): V3.2 pragmatic fusion. design carries an ADR /
+  v6 (historical): V3.2 pragmatic fusion. design carries an ADR /
   Non-Goals / Risks contract; specs carry Given/When/Then scenarios;
   tasks carry exact file paths and RED-GREEN-REFACTOR micro-steps;
   apply carries the TDD, root-cause debugging and fresh-evidence
-  iron laws; a new verify-report artifact (verification-evidence.md)
+  iron laws; a verify-report artifact (verification-evidence.md)
   sits between apply and verify, collects fresh terminal evidence and
-  one cold-context code review, and the verify artifact now requires
-  it. Two deterministic scripts back the contract:
-  onepress-plan-lint.sh (plan + design + tasks) and the new
+  one cold-context code review, and the verify artifact requires it.
+  Two deterministic scripts back the contract:
+  onepress-plan-lint.sh (plan + design + tasks) and
   onepress-evidence-lint.sh (verification evidence).
+  v7 (current): the pre-apply design review is promoted from a hidden
+  apply-time prose check to a real DAG artifact. `review` requires
+  `plan`, generates `review.md`, and `apply.requires` now includes
+  `review`. `review.md` is written only when the review converges
+  (`P0 = 0`, `P1 = 0`) and a human approves the UI contract, or when
+  the change is non-UI (`Result: SKIP`). Failed rounds stay in
+  `.review/round-<n>.md`, so the artifact's existence is a
+  deterministic apply gate. `review.md` records SHA-256 hashes of
+  ui-spec.md, sandbox-preview.html and plan.md; any later edit to
+  those files invalidates the review. `onepress-review-lint.sh`
+  verifies the receipt and hashes before apply. `design.requires`
+  also gains `proposal` because the design artifact reads the
+  `**UI Change**` decision from proposal.md.
 
 artifacts:
   - id: brainstorm
@@ -168,6 +186,7 @@ artifacts:
       single source of truth for UI decisions.
     requires:
       - brainstorm
+      - proposal
 
   - id: specs
     generates: "specs/**/*.md"
@@ -341,6 +360,73 @@ artifacts:
     requires:
       - tasks
 
+  - id: review
+    generates: review.md
+    description: Pre-apply design review gate (UI changes) or SKIP receipt (non-UI changes)
+    template: review.md
+    instruction: |
+      PRE-APPLY DESIGN REVIEW GATE (onePress).
+
+      This artifact is the only bridge between plan and apply. Apply MUST
+      NOT start until review.md exists with `Result: PASS` (UI change) or
+      `Result: SKIP` (non-UI change). Do NOT write business code here.
+
+      0. Read `**UI Change**: yes|no` from proposal.md.
+         - If `no`: write review.md with `Result: SKIP (UI Change: no)`,
+           `P0: 0`, `P1: 0`, `Review-Status: N/A`, and stop. This artifact
+           is complete; do not create ui-spec.md or sandbox-preview.html.
+         - If `yes`: continue with steps 1-6.
+
+      1. Inputs (read-only): proposal.md, design.md (if present),
+         specs/**/*.md, tasks.md, plan.md, ui-spec.md,
+         sandbox-preview.html, docs/design-system/projectbaseline/MASTER.md,
+         and templates/review-rubric.md. Review from these files, not from
+         conversation memory. If the harness provides `/opsx:review`, it is
+         a shortcut for the same procedure; otherwise execute it inline.
+
+      2. L1 deterministic preflight: when Playwright and
+         @axe-core/playwright are available, run the sandbox preflight
+         from review-rubric.md section 6. Record PASS/FAIL/SKIP. Missing
+         dependencies are SKIP; do not install packages.
+
+      3. L2 cold-context review: dispatch a zero-history subagent when
+         the harness supports one; otherwise use a fresh session with only
+         the inputs above. Evaluate review-rubric.md sections 1-4. Every
+         finding MUST cite a ui-spec section or a DOM selector; findings
+         without evidence are recorded as `no-evidence`, are not scored,
+         and MUST NOT block. The blocking criterion is `P0 = 0` and
+         `P1 = 0`.
+
+      4. Fix and re-run: revise only ui-spec.md and
+         sandbox-preview.html, then re-run L1/L2. Write each round to
+         `.review/round-<n>.md` (create `.review/` if needed). Maximum 3
+         rounds. If the review does not converge, record `ESCALATE` in the
+         round file and stop; do NOT create review.md.
+
+      5. L3 human approval: only a human may set ui-spec.md line 3 to
+         `> Review-Status: APPROVED`. The agent MUST NOT self-approve.
+
+      6. On convergence, compute SHA-256 for ui-spec.md,
+         sandbox-preview.html and plan.md (use `sha256sum`, or
+         `shasum -a 256` when sha256sum is unavailable). Write review.md
+         from templates/review.md with:
+         - `Result: PASS`
+         - `P0: 0`, `P1: 0`
+         - `L1`, `L2`, `L3: APPROVED (<approver>, <date>)`
+         - `ui-spec-sha256`, `sandbox-sha256`, `plan-sha256`
+         - the Findings table and final conclusion.
+         review.md is the DAG receipt: its existence means apply is
+         unblocked. Any later change to ui-spec.md, sandbox-preview.html
+         or plan.md invalidates it: delete review.md, reset
+         `Review-Status` to PENDING, and re-run this artifact
+         (incremental review of the changed sections is enough).
+
+      Validation: `bash scripts/onepress-review-lint.sh --change <change-dir>`
+      MUST exit 0 before apply. The lint checks Result, P0/P1, L3 approval,
+      and the three hashes against the current files.
+    requires:
+      - plan
+
   - id: apply
     generates: apply.md
     description: Implementation receipt confirming the apply phase completed
@@ -356,7 +442,7 @@ artifacts:
       phase block. Verification outcome is recorded in verify.md
       (Overall Decision section), not here.
     requires:
-      - plan
+      - review
 
   - id: verify-report
     generates: verification-evidence.md
@@ -926,7 +1012,7 @@ artifacts:
       - verify
 
 apply:
-  requires: [plan]
+  requires: [plan, review]
   tracks: tasks.md
   instruction: |
     SANDBOX-AS-PRODUCTION (onePress, UI changes only):
@@ -940,9 +1026,15 @@ apply:
     and class lists MUST NOT change.
     Changes with `**UI Change**: no` skip both stages.
 
-    REVIEW LOCK (onePress): if `ui-spec.md` exists, read its third line
-    `> Review-Status:`. If the value is not `APPROVED`, STOP and run
-    `/opsx:review <change-name>` first. Agent MUST NOT self-approve.
+    REVIEW LOCK (onePress): this phase requires both `review.md` and, for
+    UI changes, `ui-spec.md` line 3 `> Review-Status: APPROVED`.
+    - Read `review.md`; if it is missing, or `Result` is not `PASS`/`SKIP`,
+      STOP and produce the `review` artifact first.
+    - If `ui-spec.md` exists, its `Review-Status` must be `APPROVED`.
+      Agent MUST NOT self-approve.
+    - Run `bash scripts/onepress-review-lint.sh --change <change-dir>`;
+      a non-zero exit means the review is missing, stale (hashes changed),
+      or not approved. STOP and re-run the review artifact.
 
     V3.2 EXECUTION IRON LAWS (all changes):
     1. TDD iron law: for every logic task, the first output MUST be the

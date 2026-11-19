@@ -163,6 +163,17 @@ gate05() {
   else
     fail '缺少合法的 Review-Status 行（期望第 3 行 > Review-Status: PENDING|APPROVED）'
   fi
+
+  local lint="$ROOT/scripts/onepress-review-lint.sh"
+  if [ -f "$lint" ] && [ -n "$CHANGE_DIR" ]; then
+    if bash "$lint" --change "$CHANGE_DIR" --quiet; then
+      pass 'review.md 与 ui-spec/sandbox/plan 哈希一致'
+    else
+      fail 'review.md 缺失、过期或未通过（运行 review 工件后重试）'
+    fi
+  else
+    note '未找到 scripts/onepress-review-lint.sh，跳过 review.md 哈希校验'
+  fi
 }
 
 # ---------- 门禁 2a：Token 正则 ----------

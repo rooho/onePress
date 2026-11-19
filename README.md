@@ -4,7 +4,7 @@
 
 onePress targets teams with **no dedicated designer**, where developers drive the work. It solves three concrete problems:
 
-1. **Design by guesswork** → AI consults a local design knowledge base and writes a six-section `ui-spec.md` (component hierarchy / 16-channel tokens / four-state matrix / responsive rules / micro-motion / anti-patterns).
+1. **Design by guesswork** → AI consults a local design knowledge base and writes a seven-section `ui-spec.md` (component hierarchy / 16-channel tokens / four-state matrix / responsive rules / micro-motion / anti-patterns / sandbox preview).
 2. **Delivery by vibes** → a single-file `sandbox-preview.html` locks colour, type, density and motion — with four-state and Light/Dark toggles — before any production component is written.
 3. **Quality by willpower** → eight UI gates (token purity + WCAG contrast + anti-patterns + touch targets + a11y + pure-logic state tests + human checks) executed by `scripts/onepress-gate.sh`; the plan stage is checked by `scripts/onepress-plan-lint.sh` (plan + design + tasks); the execution stage enforces TDD, root-cause debugging and fresh evidence; verification requires `verification-evidence.md` with a cold-context code review, checked by `scripts/onepress-evidence-lint.sh`.
 
@@ -90,7 +90,7 @@ The unselected harness gets no directory created and no files written. `onePress
 | `.trae/commands/opsx-review.md` | onePress-managed review command (slash entry `/opsx:review`) | harness | Trae selected |
 | `.cursor/skills/onepress-discipline/SKILL.md` | Thirteen iron rules + TDD discipline (Cursor carrier) | harness | Cursor selected |
 | `.cursor/commands/opsx-review.md` | onePress-managed review command (slash entry `/opsx:review`) | harness | Cursor selected |
-| `openspec/schemas/superspec/` | `schema.yaml` + 13 templates incl. `ui-spec.md`, `review-rubric.md`, `verification.md`, `code-reviewer.md` (14 files) | harness | always |
+| `openspec/schemas/superspec/` | `schema.yaml` + 14 templates incl. `ui-spec.md`, `review.md`, `review-rubric.md`, `verification.md`, `code-reviewer.md` (15 files) | harness | always |
 | `onePress.lock` | Version, install scope, protected assets | harness | always |
 | `docs/ui-components.md` | Component registry template (four columns, empty tables on first install) | project | always |
 
@@ -100,18 +100,19 @@ The unselected harness gets no directory created and no files written. `onePress
 
 ## 2. The full development workflow
 
-From zero to archive in 6 steps. **All `/openspec-*` skills run at the target repo root** (the directory containing `openspec/`; OpenSpec 2.0 skills delivery).
+From zero to archive in 7 steps. **All `/openspec-*` skills run at the target repo root** (the directory containing `openspec/`; OpenSpec 2.0 skills delivery).
 
 | Step | Command | You provide | Output | Pass criteria |
 |------|---------|-------------|--------|---------------|
-| 1 Contract init | `/openspec-new-change <change>` | Feature description | `proposal.md`, `design.md`, `ui-spec.md` + `sandbox-preview.html` (UI only) | Six sections complete; sandbox opens in Light/Dark |
-| 2 Complete artifacts | `/openspec-continue-change` ×N or `/openspec-ff-change` | — | `specs/`, `tasks.md`, `plan.md` | `openspec validate --strict` passes; plan-lint passes |
-| 3 Implement | `/openspec-apply-change` | — | Code + `apply.md` | TDD evidence (RED→GREEN→REFACTOR); sandbox parity (Light + Dark) |
-| 4 Collect evidence | `/openspec-continue-change` (verify-report) or `openspec instructions verify-report --change <change>` | — | `verification-evidence.md`, `code-review-packet.md` (human mode only) | Fresh command output, `Critical: 0`, `Important: 0`, evidence-lint passes |
-| 5 Verify | `/openspec-verify-change` | — | `verify.md` | Evidence report cited; all eight UI gates green, no CRITICAL |
-| 6 Archive | `/openspec-archive-change` | — | Main specs updated, `finalize.md`, archived dir | Components appended to registry |
+| 1 New change | `/openspec-new-change <change>` | Feature description | `proposal.md` (with the `**UI Change**` verdict) | proposal written |
+| 2 Complete planning | `/openspec-continue-change` ×N or `/openspec-ff-change` | — | `brainstorm.md`, `design.md` (+ `ui-spec.md` / `sandbox-preview.html`), `specs/`, `tasks.md`, `plan.md` | `openspec validate --strict` and plan-lint pass; seven sections complete; sandbox opens in Light/Dark |
+| 3 Design review | `/opsx:review <change>` | Human annotations (L3) | `review.md` (`Result: SKIP` for non-UI) | `P0 = 0`, `P1 = 0`, `Review-Status: APPROVED`, review-lint passes |
+| 4 Implement | `/openspec-apply-change` | — | Code + `apply.md` | `review.md` exists with Result PASS/SKIP; TDD evidence (RED→GREEN→REFACTOR); sandbox parity (Light + Dark) |
+| 5 Collect evidence | `/openspec-continue-change` (verify-report) or `openspec instructions verify-report --change <change>` | — | `verification-evidence.md`, `code-review-packet.md` (human mode only) | Fresh command output, `Critical: 0`, `Important: 0`, evidence-lint passes |
+| 6 Verify | `/openspec-verify-change` | — | `verify.md` | Evidence report cited; all eight UI gates green, no CRITICAL |
+| 7 Archive | `/openspec-archive-change` | — | Main specs updated, `finalize.md`, archived dir | Components appended to registry |
 
-### Step 1 — Contract init `/openspec-new-change`
+### Step 1 — New change `/openspec-new-change`
 
 ```text
 /openspec-new-change feat-261103-001-user-role-permission
@@ -119,39 +120,49 @@ From zero to archive in 6 steps. **All `/openspec-*` skills run at the target re
 
 What happens:
 
-1. `/openspec-new-change` first decides `**UI Change**: yes|no` from three rules (routes/pages; table columns, form fields or state display; destructive interactions) and writes the verdict on the first line of `proposal.md`;
-2. On `yes`, `ux-architect` reads `docs/design-system/projectbaseline/MASTER.md`, then runs a two-step retrieval (`--domain ux` first, then `--stack shadcn|html-tailwind`);
-3. Reusable components are pulled from `docs/ui-components.md` (four columns, keyed by archetype);
-4. A six-section `ui-spec.md` is written, followed by a single-file `sandbox-preview.html`.
+1. A change directory and `proposal.md` skeleton are created (why, what, affected capabilities);
+2. `**UI Change**: yes|no` is decided from three rules (routes/pages; table columns, form fields or state display; destructive interactions) and written on the first line of `proposal.md`;
+3. `ui-spec.md` and the sandbox are **not** produced here — the UI contract is generated by the `design` artifact in step 2.
 
-`ui-spec.md` sections: component hierarchy / design tokens (16 colour channels + font pairing + `xs`–`3xl` density) / four-state matrix / responsive & anti-breakage / touch targets & micro-motion / industry anti-patterns.
+### Step 2 — Complete planning artifacts `/openspec-continue-change` / `/openspec-ff-change`
 
-**Human review point**: check `ui-spec.md` and the sandbox (Light + Dark) only — no production code exists yet.
-
-**Optional accelerator**: `ui-ux-pro-max` supplies the local CSV knowledge base. If `python3` or the skill directory is missing, retrieval is recorded as `SKIP` and `ui-spec.md` is filled by hand — install and gates still work.
-
-### Step 2 — Complete artifacts `/openspec-continue-change` / `/openspec-ff-change`
-
-superspec defines 9 DAG artifacts; `/openspec-continue-change` produces **one per invocation**. UI changes additionally produce the conditional pair in the last row:
+superspec defines 11 DAG artifacts; `/openspec-continue-change` produces **one per invocation**:
 
 ```text
-brainstorm → proposal → design → specs → tasks → plan → apply → verify → finalize
+brainstorm → proposal → design → specs → tasks → plan → review → apply → verify-report → verify → finalize
 ```
+
+`ui-spec.md` / `sandbox-preview.html` are **conditional outputs of the `design` artifact, not standalone DAG artifacts** (only when `**UI Change**: yes`). `review` is a real DAG artifact after `plan`, and `apply` depends on it.
 
 | Artifact | Purpose |
 |----------|---------|
 | `brainstorm.md` | Options compared, decision recorded |
 | `proposal.md` | Why, what, affected capabilities |
 | `design.md` | Decisions (D1…Dn) + risks (UI contract lives in `ui-spec.md`) |
-| `ui-spec.md` / `sandbox-preview.html` | **Conditional, not a DAG artifact**: six-section UI contract + single-file sandbox; only when `**UI Change**: yes` |
+| `ui-spec.md` / `sandbox-preview.html` | **Conditional, not a DAG artifact**: seven-section UI contract + single-file sandbox, produced by `design` only when `**UI Change**: yes` |
 | `specs/<capability>/spec.md` | Delta spec: `### Requirement:` + `#### Scenario:` (GIVEN/WHEN/THEN) |
 | `tasks.md` | Atomic checkable tasks |
 | `plan.md` | 2–5 minute micro-steps + Spec / Global Constraints / Review Focus / Evidence Map / File Structure / Files / Interfaces / Self-Review; run plan-lint after writing |
+| `review.md` | Pre-apply review receipt: `Result: PASS` (P0=0, P1=0, human-approved) or `Result: SKIP` (non-UI); records three contract hashes |
 | `apply.md` / `verify.md` / `finalize.md` | Implementation receipt / verification report / closeout receipt |
 
-Generate everything at once: `/openspec-ff-change`. Proposal only: `/openspec-propose`. Discussion without writing files: `/openspec-explore`.
+`review.md` is written only when the review converges; failed rounds go to `.review/round-<n>.md`. Any change to `ui-spec.md`, the sandbox or `plan.md` invalidates `review.md` and forces a re-review.
 
-### Step 3 — Implement `/openspec-apply-change` (two stages)
+Generate all planning artifacts at once: `/openspec-ff-change`. Proposal only: `/openspec-propose`. Discussion without writing files: `/openspec-explore`.
+
+### Step 3 — Design review `/opsx:review`
+
+```text
+/opsx:review feat-261103-001-user-role-permission
+```
+
+- **L1 deterministic preflight**: sandbox four states × two themes; WCAG, hit areas, overflow, Hex/Emoji, CLS proxy; missing dependencies are SKIP.
+- **L2 cold-context review**: inputs are proposal / design / specs / tasks / plan / MASTER / ui-spec / sandbox / rubric; blocking criterion is `P0 = 0` and `P1 = 0`; every finding needs evidence.
+- **L3 human annotation**: only a human may set `ui-spec.md` line 3 to `> Review-Status: APPROVED`; after writing annotations back, reset it to PENDING and re-review.
+- On convergence, write `review.md` with `ui-spec-sha256` / `sandbox-sha256` / `plan-sha256`; `apply` requires `scripts/onepress-review-lint.sh` to pass.
+- Non-UI changes write `Result: SKIP` only; no ui-spec, sandbox or L1/L2/L3.
+
+### Step 4 — Implement `/openspec-apply-change` (two stages)
 
 | Stage | What | Output | Acceptance |
 |-------|------|--------|------------|
@@ -160,7 +171,11 @@ Generate everything at once: `/openspec-ff-change`. Proposal only: `/openspec-pr
 
 There is no in-app State Bar: `sandbox-preview.html` is the single visual acceptance surface. **No DOM/RTL tests** — verify by eye, guard quality with the gate script.
 
-### Step 4 — Verify `/openspec-verify-change`
+### Step 5 — Collect evidence (verify-report)
+
+Before verify, complete the `verify-report` artifact and run `bash scripts/onepress-evidence-lint.sh --change openspec/changes/<change>`: it requires fresh command output with exit codes, `Critical: 0`, `Important: 0`, and UI gate evidence when `ui-spec.md` exists. The code review must run in a cold context using `templates/code-reviewer.md` (subagent preferred, fresh human session as fallback).
+
+### Step 6 — Verify `/openspec-verify-change`
 
 Eight gates; any failure sends you back to the matching stage of `apply`:
 
@@ -176,15 +191,13 @@ Eight gates; any failure sends you back to the matching stage of `apply`:
 | 7 | Anti-patterns: zero Emoji icons, no blacklisted entries | AUTO |
 | 8 | Sandbox parity: no visible drift vs `sandbox-preview.html` | MANUAL |
 
-Run `bash scripts/onepress-gate.sh --change openspec/changes/<change>` to execute gates 0/0.5/2/4/5/6/7 automatically; the rest are printed as `MANUAL`. Run `/opsx:review <change>` before apply — `Review-Status: APPROVED` is required.
-
-Before verify, complete the `verify-report` artifact and run `bash scripts/onepress-evidence-lint.sh --change openspec/changes/<change>`: it requires fresh command output with exit codes, `Critical: 0`, `Important: 0`, and UI gate evidence when `ui-spec.md` exists. The code review must run in a cold context using `templates/code-reviewer.md` (subagent preferred, fresh human session as fallback).
+Run `bash scripts/onepress-gate.sh --change openspec/changes/<change>` to execute gates 0/0.5/2/4/5/6/7 automatically; the rest are printed as `MANUAL`. Before apply, complete the `review` artifact: `review.md` must exist with `Result: PASS`/`SKIP`, and `scripts/onepress-review-lint.sh` must pass; UI changes also require `Review-Status: APPROVED`.
 
 After the plan artifact writes `plan.md`, run `bash scripts/onepress-plan-lint.sh --change openspec/changes/<change>`: fix every FAIL; in CI, `--strict` also fails on WARN.
 
 Writes `openspec/changes/<change>/verify.md` with one of: `PASS` / `PASS WITH WARNINGS` / `FAIL`. CRITICAL issues block archiving.
 
-### Step 5 — Archive `/openspec-archive-change`
+### Step 7 — Archive `/openspec-archive-change`
 
 ```text
 /openspec-archive-change
@@ -294,9 +307,10 @@ onePress/                    # release pack root (generated from studio/pack/)
 │   ├── onepress-gate.sh    # Gates 0/0.5/2/4/5/6/7 AUTO + MANUAL 1/3/8 (installed)
 │   ├── onepress-plan-lint.sh  # plan + design + tasks structural lint (installed)
 │   ├── onepress-evidence-lint.sh  # verification-evidence lint (installed)
+│   ├── onepress-review-lint.sh  # review.md receipt + contract hash lint (installed)
 │   ├── sandbox-preflight.spec.ts  # L1 pre-flight (installed, optional deps)
 │   └── onepress-registry-append.sh  # Append a component row (shipped, run manually)
-└── openspec-schema/superspec/   # Schema installed into target repos (14 files, incl. templates/ui-spec.md + review-rubric.md + verification.md + code-reviewer.md)
+└── openspec-schema/superspec/   # Schema installed into target repos (15 files, incl. templates/ui-spec.md + review.md + review-rubric.md + verification.md + code-reviewer.md)
 ```
 
 > `blueprint/` (iteration blueprints) and `openspec/` (this toolkit's own spec workspace) live in the **studio repo**, never in this release pack. The release pack is generated from `studio/pack/`.

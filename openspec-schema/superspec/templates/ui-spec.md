@@ -2,7 +2,8 @@
 
 > Review-Status: PENDING
 
-> 由 `/openspec-new-change` 在 `**UI Change**: yes` 时生成，七章节全部必填，仅人类可将 `Review-Status` 改为 `APPROVED`。
+> 由 `design` 工件在 `**UI Change**: yes` 时生成（`/openspec-continue-change`），七章节全部必填；评审通过后由 `review` 工件写入 `review.md` 并冻结本文件的哈希。
+> 仅人类可将 `Review-Status` 改为 `APPROVED`；任何对 `ui-spec.md`、沙箱或 `plan.md` 的后续修改都会使 `review.md` 失效。
 > 所有取值必须来自 `docs/design-system/projectbaseline/MASTER.md` 或 `search.py` 检索结果，
 > 严禁凭空猜测配色、字体与间距。`**UI Change**: no` 时 MUST NOT 创建本文件。
 
