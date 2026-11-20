@@ -911,7 +911,7 @@ function Write-LockFile {
             cursor   = [bool]$HarnessSet.cursor
         }
         protectedAssets = @('docs/ui-components.md', 'openspec/changes/')
-        files           = @($script:LockFiles | Where-Object { $_ -and $_ -notlike '.agents/skills/*' -and $_ -notlike 'scripts/*.ps1' } | Sort-Object -Unique)
+        files           = @($script:LockFiles | Where-Object { $_ -and $_ -notlike '.agents/skills/*' } | Sort-Object -Unique)
     }
 
     $json = ($lock | ConvertTo-Json -Depth 5) + "`n"
@@ -1186,7 +1186,7 @@ if ($oldLock -and $oldLock.files) {
         if ($file) { $managedFiles[[string]$file] = $true }
     }
 }
-# .ps1 对等实现不入 lock，但仍属 onePress 管理：未跟踪旧文件必须可被刷新。
+# .ps1 对等实现随包安装并记入 lock；未跟踪旧文件仍必须可被刷新。
 foreach ($file in $script:ToolingFiles) {
     if ($file -like 'scripts/*.ps1') { $managedFiles[[string]$file] = $true }
 }

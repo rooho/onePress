@@ -48,7 +48,7 @@ CURSOR_COMMAND_FILES="cursor/commands/openspec-review-change.md cursor/commands/
 
 TOOLING_FILES="scripts/onepress-evidence-lint.sh scripts/onepress-gate.sh scripts/onepress-plan-lint.sh scripts/onepress-review-lint.sh scripts/onepress-telemetry.sh scripts/onepress-verify.sh scripts/sandbox-preflight.spec.ts"
 
-# .ps1 对等实现：必须随包安装，但与同名 .sh 计同一逻辑项，不入 lock。
+# .ps1 对等实现：与同名 .sh 一并随包安装，并同样记入 lock（均属 onePress 托管资产）。
 TOOLING_ALIAS_FILES="scripts/onepress-telemetry.ps1"
 
 WRITTEN=""
@@ -1175,7 +1175,7 @@ info "安装类型：$INSTALL_KIND"
 
 MODIFIED="$(modified_paths "$TARGET_ROOT")"
 UNTRACKED="$(untracked_paths "$TARGET_ROOT")"
-# alias（.ps1 对等实现）不入 lock，但仍属 onePress 管理：否则已存在且未跟踪时会被当用户文件永久跳过。
+# alias（.ps1 对等实现）已由 copy_file 记入 lock，同时保留在 MANAGED 里：旧版 lock 未记录时也不会被当用户文件永久跳过。
 MANAGED="$(lock_files "$LOCK"; printf '%s\n' $TOOLING_ALIAS_FILES)"
 if [ -n "$MODIFIED" ]; then
   warn "检测到 $(printf '%s\n' "$MODIFIED" | grep -c .) 个已跟踪文件存在未提交修改，命中的 harness 文件将被跳过"
@@ -1221,7 +1221,7 @@ for rel in $TOOLING_FILES; do
 done
 
 for rel in $TOOLING_ALIAS_FILES; do
-  copy_file "$PACK_ROOT" "$TARGET_ROOT" "$rel" "$rel" 0
+  copy_file "$PACK_ROOT" "$TARGET_ROOT" "$rel" "$rel"
 done
 
 init_ui_components "$TARGET_ROOT"
