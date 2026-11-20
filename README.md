@@ -84,20 +84,20 @@ The unselected harness gets no directory created and no files written. `onePress
 
 | Target path | Contents | Layer | Installed when |
 |-------------|----------|-------|----------------|
-| `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/openspec-review-change.md`, `commands/openspec-finish-change.md`, `skills/superpowers-tdd/` | harness | OpenCode selected |
+| `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/op-*.md` (14), `commands/openspec-review-change.md`, `commands/openspec-finish-change.md`, `skills/superpowers-tdd/` | harness | OpenCode selected |
 | `.qoder/skills/onepress-discipline/SKILL.md` | Thirteen iron rules (contract / triage / retrieval / sandbox / gates / token / states / a11y / anti-mistake / pre-code review / TDD + root-cause / verification locks / task + design contract) + TDD discipline | harness | Qoder selected |
 | `.agents/skills/openspec-*/SKILL.md` (12) | OpenSpec 2.0 workflow skills; one reference line added after frontmatter, body untouched | harness | always (shared by all harnesses) |
 | `.trae/skills/onepress-discipline/SKILL.md` | Thirteen iron rules + TDD discipline (Trae carrier) | harness | Trae selected |
-| `.trae/commands/openspec-review-change.md` | onePress-managed review command (slash entry `/openspec-review-change`) | harness | Trae selected |
-| `.trae/commands/openspec-finish-change.md` | onePress-managed combined closeout (slash entry `/openspec-finish-change`; also `/one verify`) | harness | Trae selected |
+| `.trae/commands/openspec-review-change.md` | onePress-managed review command (internal; user entry `/op-review`) | harness | Trae selected |
+| `.trae/commands/openspec-finish-change.md` | onePress-managed combined closeout (internal command; user entry `/op-finish`) | harness | Trae selected |
 | `.cursor/skills/onepress-discipline/SKILL.md` | Thirteen iron rules + TDD discipline (Cursor carrier) | harness | Cursor selected |
-| `.cursor/commands/openspec-review-change.md` | onePress-managed review command (slash entry `/openspec-review-change`) | harness | Cursor selected |
-| `.cursor/commands/openspec-finish-change.md` | onePress-managed combined closeout (slash entry `/openspec-finish-change`; also `/one verify`) | harness | Cursor selected |
+| `.cursor/commands/openspec-review-change.md` | onePress-managed review command (internal; user entry `/op-review`) | harness | Cursor selected |
+| `.cursor/commands/openspec-finish-change.md` | onePress-managed combined closeout (internal command; user entry `/op-finish`) | harness | Cursor selected |
 | `openspec/schemas/superspec/` | `schema.yaml` + 15 templates incl. `ui-spec.md`, `review.md`, `review-ledger.md`, `review-rubric.md`, `verification.md`, `code-reviewer.md` (16 files) | harness | always |
 | `onePress.lock` | Version, install scope, protected assets | harness | always |
 | `docs/ui-components.md` | Component registry template (four columns, empty tables on first install) | project | always |
 
-> Commands have two layers: the **contract layer** is 12 `openspec-*` skills plus 2 onePress-managed commands (`openspec-review-change`, `openspec-finish-change`); the **user layer** is the single entry `/one <subcommand>` (propose / explore / new / continue / ff / update / apply / verify / sync / archive / bulk-archive / onboard / review). `verify` runs the combined closeout (verify-report → verify → finalize). It only forwards and never rewrites upstream steps; an unknown subcommand fails and prints the full table.
+> Commands have two layers: the **contract layer** is 12 `openspec-*` skills plus 2 onePress-managed internal commands (`openspec-review-change`, `openspec-finish-change`, described as `[internal]`); the **user layer** is 14 flat entries `/op-<key>` (`/op-propose`, `/op-explore`, `/op-new`, `/op-continue`, `/op-ff`, `/op-update`, `/op-apply`, `/op-verify`, `/op-finish`, `/op-sync`, `/op-archive`, `/op-bulk-archive`, `/op-onboard`, `/op-review`). Each file forwards to exactly one fixed target; `/op-finish` runs the combined closeout (verify-report → verify → finalize) and `/op-review` runs the design review. No prefix inference: an unknown key fails. `commands/one.md` and `commands/o.md` are retired and removed on install.
 
 > `docs/design-system/projectbaseline/MASTER.md` is generated **once** by the optional `ui-ux-pro-max` skill. onePress protects it on install/upgrade but never creates or rewrites it.
 
@@ -109,18 +109,18 @@ From zero to archive in 7 steps. **All `/openspec-*` skills run at the target re
 
 | Step | Command | You provide | Output | Pass criteria |
 |------|---------|-------------|--------|---------------|
-| 1 New change | `/openspec-new-change <change>` | Feature description | `proposal.md` (with the `**UI Change**` verdict) | proposal written |
-| 2 Complete planning | `/openspec-continue-change` ×N or `/openspec-ff-change` | — | `brainstorm.md`, `design.md` (+ `ui-spec.md` / `sandbox-preview.html`), `specs/`, `tasks.md`, `plan.md` | `openspec validate --strict` and plan-lint pass; seven sections complete; sandbox opens in Light/Dark |
-| 3 Design review | `/openspec-review-change <change>` | Human annotations (L3) | `review.md` (`Result: SKIP` for non-UI) | `P0 = 0`, `P1 = 0`, `Review-Status: APPROVED`, review-lint passes |
-| 4 Implement | `/openspec-apply-change` | — | Code + `apply.md` | `review.md` exists with Result PASS/SKIP; TDD evidence (RED→GREEN→REFACTOR); sandbox parity (Light + Dark) |
-| 5 Collect evidence | `/openspec-continue-change` (verify-report) or `openspec instructions verify-report --change <change>` | — | `verification-evidence.md`, `code-review-packet.md` (human mode only) | Fresh command output, `Critical: 0`, `Important: 0`, evidence-lint passes |
-| 6 Verify | `/openspec-verify-change` | — | `verify.md` | Evidence report cited; all eight UI gates green, no CRITICAL |
-| 7 Archive | `/openspec-archive-change` | — | Main specs updated, `finalize.md`, archived dir | Components appended to registry |
+| 1 New change | `/op-new <change>` | Feature description | `proposal.md` (with the `**UI Change**` verdict) | proposal written |
+| 2 Complete planning | `/op-continue` ×N or `/op-ff` | — | `brainstorm.md`, `design.md` (+ `ui-spec.md` / `sandbox-preview.html`), `specs/`, `tasks.md`, `plan.md` | `openspec validate --strict` and plan-lint pass; seven sections complete; sandbox opens in Light/Dark |
+| 3 Design review | `/op-review <change>` | Human annotations (L3) | `review.md` (`Result: SKIP` for non-UI) | `P0 = 0`, `P1 = 0`, `Review-Status: APPROVED`, review-lint passes |
+| 4 Implement | `/op-apply` | — | Code + `apply.md` | `review.md` exists with Result PASS/SKIP; TDD evidence (RED→GREEN→REFACTOR); sandbox parity (Light + Dark) |
+| 5 Collect evidence | `/op-continue` (verify-report) or `openspec instructions verify-report --change <change>` | — | `verification-evidence.md`, `code-review-packet.md` (human mode only) | Fresh command output, `Critical: 0`, `Important: 0`, evidence-lint passes |
+| 6 Verify | `/op-verify` | — | `verify.md` | Evidence report cited; all eight UI gates green, no CRITICAL |
+| 7 Archive | `/op-archive` | — | Main specs updated, `finalize.md`, archived dir | Components appended to registry |
 
-### Step 1 — New change `/openspec-new-change`
+### Step 1 — New change `/op-new`
 
 ```text
-/openspec-new-change feat-261103-001-user-role-permission
+/op-new feat-261103-001-user-role-permission
 ```
 
 What happens:
@@ -129,9 +129,9 @@ What happens:
 2. `**UI Change**: yes|no` is decided from three rules (routes/pages; table columns, form fields or state display; destructive interactions) and written on the first line of `proposal.md`;
 3. `ui-spec.md` and the sandbox are **not** produced here — the UI contract is generated by the `design` artifact in step 2.
 
-### Step 2 — Complete planning artifacts `/openspec-continue-change` / `/openspec-ff-change`
+### Step 2 — Complete planning artifacts `/op-continue` / `/op-ff`
 
-superspec defines 11 DAG artifacts; `/openspec-continue-change` produces **one per invocation**:
+superspec defines 11 DAG artifacts; `/op-continue` produces **one per invocation**:
 
 ```text
 brainstorm → proposal → design → specs → tasks → plan → review → apply → verify-report → verify → finalize
@@ -153,12 +153,12 @@ brainstorm → proposal → design → specs → tasks → plan → review → a
 
 `review.md` is written only when the review converges; failed rounds go to `.review/round-<n>.md`. Any change to `ui-spec.md`, the sandbox or `plan.md` invalidates `review.md` and forces a re-review.
 
-Generate all planning artifacts at once: `/openspec-ff-change`. Proposal only: `/openspec-propose`. Discussion without writing files: `/openspec-explore`.
+Generate all planning artifacts at once: `/op-ff`. Proposal only: `/op-propose`. Discussion without writing files: `/op-explore`.
 
-### Step 3 — Design review `/openspec-review-change`
+### Step 3 — Design review `/op-review`
 
 ```text
-/openspec-review-change feat-261103-001-user-role-permission
+/op-review feat-261103-001-user-role-permission
 ```
 
 - **L1 deterministic preflight**: sandbox four states × two themes; WCAG, hit areas, overflow, Hex/Emoji, CLS proxy; missing dependencies are SKIP.
@@ -167,7 +167,7 @@ Generate all planning artifacts at once: `/openspec-ff-change`. Proposal only: `
 - On convergence, write `review.md` with `ui-spec-sha256` / `sandbox-sha256` / `plan-sha256`; `apply` requires `scripts/onepress-review-lint.sh` to pass.
 - Non-UI changes write `Result: SKIP` only; no ui-spec, sandbox or L1/L2/L3.
 
-### Step 4 — Implement `/openspec-apply-change` (two stages)
+### Step 4 — Implement `/op-apply` (two stages)
 
 | Stage | What | Output | Acceptance |
 |-------|------|--------|------------|
@@ -180,7 +180,7 @@ There is no in-app State Bar: `sandbox-preview.html` is the single visual accept
 
 Before verify, complete the `verify-report` artifact and run `bash scripts/onepress-evidence-lint.sh --change openspec/changes/<change>`: it requires fresh command output with exit codes, `Critical: 0`, `Important: 0`, and UI gate evidence when `ui-spec.md` exists. The code review must run in a cold context using `templates/code-reviewer.md` (subagent preferred, fresh human session as fallback).
 
-### Step 6 — Verify `/openspec-verify-change`
+### Step 6 — Verify `/op-verify`
 
 Eight gates; any failure sends you back to the matching stage of `apply`:
 
@@ -202,10 +202,10 @@ After the plan artifact writes `plan.md`, run `bash scripts/onepress-plan-lint.s
 
 Writes `openspec/changes/<change>/verify.md` with one of: `PASS` / `PASS WITH WARNINGS` / `FAIL`. CRITICAL issues block archiving.
 
-### Step 7 — Archive `/openspec-archive-change`
+### Step 7 — Archive `/op-archive`
 
 ```text
-/openspec-archive-change
+/op-archive
 ```
 
 1. Delta specs sync into `openspec/specs/<capability>/spec.md` (main specs);
@@ -213,11 +213,11 @@ Writes `openspec/changes/<change>/verify.md` with one of: `PASS` / `PASS WITH WA
 3. The change directory moves to `openspec/changes/archive/YYYY-MM-DD-<change>/`;
 4. `finalize.md` records the closeout.
 
-> **OpenCode behaves like every other harness**: run `/openspec-archive-change` directly; append the component row afterwards if needed:
+> **OpenCode behaves like every other harness**: run `/op-archive` directly; append the component row afterwards if needed:
 > `bash scripts/onepress-registry-append.sh --root . --name <Name> --path <path> --archetype <Archetype> --props '<signature>'`
 > The script is idempotent and only appends to the chosen section.
 
-Batch: `/openspec-bulk-archive-change`. Sync specs only: `/openspec-sync-specs`.
+Batch: `/op-bulk-archive`. Sync specs only: `/op-sync`.
 
 ---
 
@@ -225,21 +225,24 @@ Batch: `/openspec-bulk-archive-change`. Sync specs only: `/openspec-sync-specs`.
 
 | Command | Qoder | OpenCode | Trae | Cursor | Purpose |
 |---------|:-----:|:--------:|:----:|:------:|---------|
-| `/openspec-new-change <name>` | ✅ | ✅ | ✅ | ✅ | Contract init (proposal + design + ui-spec + sandbox) |
-| `/openspec-continue-change` | ✅ | CLI | ✅ | ✅ | Produce the next artifact |
-| `/openspec-ff-change` | ✅ | CLI | ✅ | ✅ | Produce all remaining artifacts |
-| `/openspec-propose` | ✅ | CLI | ✅ | ✅ | Full proposal in one step |
-| `/openspec-explore` | ✅ | — | ✅ | ✅ | Discussion only, no files |
-| `/openspec-apply-change` | ✅ | ✅ | ✅ | ✅ | Two-stage implementation |
-| `/openspec-verify-change` | ✅ | ✅ | ✅ | ✅ | Eight gates |
-| `/openspec-sync-specs` | ✅ | CLI | ✅ | ✅ | Sync delta specs only |
-| `/openspec-archive-change` | ✅ | ✅ | ✅ | ✅ | Archive + registry append |
-| `/openspec-bulk-archive-change` | ✅ | CLI | ✅ | ✅ | Archive several changes |
-| `/openspec-onboard` | ✅ | CLI | ✅ | ✅ | Guided first-run walkthrough (native) |
-| `/openspec-update-change` | ✅ | CLI | ✅ | ✅ | Revise planning artifacts (native, experimental) |
+| `/op-new <name>` | ✅ | ✅ | ✅ | ✅ | Contract init (proposal + design + ui-spec + sandbox) |
+| `/op-continue` | ✅ | ✅ | ✅ | ✅ | Produce the next artifact |
+| `/op-ff` | ✅ | ✅ | ✅ | ✅ | Produce all remaining artifacts |
+| `/op-propose` | ✅ | ✅ | ✅ | ✅ | Full proposal in one step |
+| `/op-explore` | ✅ | ✅ | ✅ | ✅ | Discussion only, no files |
+| `/op-update` | ✅ | ✅ | ✅ | ✅ | Revise planning artifacts (native, experimental) |
+| `/op-apply` | ✅ | ✅ | ✅ | ✅ | Two-stage implementation |
+| `/op-verify` | ✅ | ✅ | ✅ | ✅ | Eight gates |
+| `/op-finish` | ✅ | ✅ | ✅ | ✅ | Combined closeout (verify-report → verify → finalize) |
+| `/op-sync` | ✅ | ✅ | ✅ | ✅ | Sync delta specs only |
+| `/op-archive` | ✅ | ✅ | ✅ | ✅ | Archive + registry append |
+| `/op-bulk-archive` | ✅ | ✅ | ✅ | ✅ | Archive several changes |
+| `/op-onboard` | ✅ | ✅ | ✅ | ✅ | Guided first-run walkthrough (native) |
+| `/op-review` | ✅ | ✅ | ✅ | ✅ | Design review gate (L1/L2/L3) |
 
-- **Qoder / Trae / Cursor**: OpenSpec 2.0 installs all 12 skills into `.agents/skills/`; the installer mounts one `onepress-discipline` reference line after each `SKILL.md` frontmatter and ships one managed `/openspec-review-change` command.
-- **OpenCode**: shares the same `.agents/skills/` and ships two managed commands (`commands/openspec-review-change.md`, `commands/openspec-finish-change.md`); `new` / `apply` / `verify` commands are no longer shipped:
+- **All four harnesses** ship the same 14 `commands/op-<key>.md` entry files (byte-identical across ends), each forwarding to exactly one fixed target.
+- **Qoder / Trae / Cursor**: OpenSpec 2.0 installs all 12 skills into `.agents/skills/`; the installer mounts one `onepress-discipline` reference line after each `SKILL.md` frontmatter and ships two internal commands backing `/op-review` and `/op-finish`.
+- **OpenCode**: shares the same `.agents/skills/`, ships the same 14 `/op-*` entries, and adds `commands/openspec-review-change.md` / `commands/openspec-finish-change.md` as internal forwarding targets:
 
 ```bash
 openspec status --change <name> --json          # progress and next step
@@ -290,31 +293,33 @@ onePress/                    # release pack root (generated from studio/pack/)
 ├── README-ch.md            # Chinese README (default)
 ├── README.md               # English README (this file)
 ├── VERSION                 # Version (upgrade baseline)
+├── manifest.json           # Single source of truth for asset counts and layers
+├── install-plan.tsv        # Derived from manifest.json; sole write plan + lock.files source
 ├── ASSETS.md               # Asset manifest (layer + overwrite policy)
 ├── INSTALL_PROMPT.md       # AI install entry (five sections, script-equivalent fallback)
 ├── install.ps1             # Windows installer (detect/write/check/report in one command)
 ├── install.sh              # macOS / Linux installer
-├── opencode/               # OpenCode harness assets (6 files)
+├── opencode/               # OpenCode harness assets (19 files)
 │   ├── opencode.json
 │   ├── agent/ux-architect.md
-│   ├── commands/one.md
+│   ├── commands/op-*.md    # 14 user entries (/op-<key>)
 │   ├── commands/openspec-review-change.md
 │   ├── commands/openspec-finish-change.md
 │   └── skills/superpowers-tdd/SKILL.md
-├── qoder/                  # Qoder harness assets (5 files)
+├── qoder/                  # Qoder harness assets (18 files)
 │   ├── skills/onepress-discipline/SKILL.md
 │   ├── skills/testing-impl-story/SKILL.md
-│   ├── commands/one.md
+│   ├── commands/op-*.md    # 14 user entries
 │   ├── commands/openspec-review-change.md
 │   └── commands/openspec-finish-change.md
-├── trae/                   # Trae harness assets (4 files)
+├── trae/                   # Trae harness assets (17 files)
 │   ├── skills/onepress-discipline/SKILL.md
-│   ├── commands/one.md
+│   ├── commands/op-*.md    # 14 user entries
 │   ├── commands/openspec-review-change.md
 │   └── commands/openspec-finish-change.md
-├── cursor/                 # Cursor harness assets (4 files)
+├── cursor/                 # Cursor harness assets (17 files)
 │   ├── skills/onepress-discipline/SKILL.md
-│   ├── commands/one.md
+│   ├── commands/op-*.md    # 14 user entries
 │   ├── commands/openspec-review-change.md
 │   └── commands/openspec-finish-change.md
 ├── scripts/                # Pack-side scripts
@@ -330,7 +335,7 @@ onePress/                    # release pack root (generated from studio/pack/)
 └── openspec-schema/superspec/   # Schema installed into target repos (16 files, incl. templates/ui-spec.md + review.md + review-ledger.md + review-rubric.md + verification.md + code-reviewer.md)
 ```
 
-> Tooling logical items count **7** (`.ps1` shares an item with its `.sh`; `onepress-registry-append.sh` is an assistant script): `manifest.json` → `counts.tooling` is the single source of truth.
+> Tooling logical items count **8** (`.ps1` shares an item with its `.sh`; `onepress-registry-append.sh` is an assistant script): `manifest.json` → `counts.tooling` is the single source of truth. `onepress-skills-prune.sh` and `onepress-skills-prune.ps1` install alongside the other tooling scripts and run before any asset is written.
 
 > `blueprint/` (iteration blueprints) and `openspec/` (this toolkit's own spec workspace) live in the **studio repo**, never in this release pack. The release pack is generated from `studio/pack/`.
 
@@ -341,7 +346,7 @@ onePress/                    # release pack root (generated from studio/pack/)
 **Q: The agent cannot find `INSTALL_PROMPT.md` after cloning?**
 A: Usually the sparse-checkout path does not match the real layout (cone mode silently checks out nothing, no error). Have it verify with `git ls-tree -r --name-only HEAD`, then fall back to `git sparse-checkout disable` (the pack is only KB-sized). This is already covered in the install block above, so it normally self-recovers.
 
-**Q: `/openspec-continue-change` stops at the plan step saying `superpowers:writing-plans` is unavailable?**
+**Q: `/op-continue` stops at the plan step saying `superpowers:writing-plans` is unavailable?**
 A: Since 1.0.4 every Superpowers skill reference in superspec carries an inline fallback (brainstorm / plan / apply 2c / finalize), so a missing skill no longer halts the flow — the agent writes `plan.md` inline with Spec / Global Constraints / Review Focus / File Structure / Files / Interfaces / Self-Review. On older versions (schema version ≤ 4) just upgrade and re-install; after writing the plan run `bash scripts/onepress-plan-lint.sh --change <change>`.
 
 **Q: The target repo has no OpenSpec?**

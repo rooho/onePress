@@ -10,14 +10,16 @@
 
 ```powershell
 # Windows
-<pack-root>\install.ps1 -Target <target-repo-root> -Harness <qoder|opencode|trae|cursor|both|all|逗号组合>
+<pack-root>\install.ps1 -Target <target-repo-root> -Harness <qoder|opencode|trae|cursor|both|all|逗号组合> [-UiUxProMax <install|skip>]
 ```
 ```bash
 # macOS / Linux
-<pack-root>/install.sh --target <target-repo-root> --harness <qoder|opencode|trae|cursor|both|all|逗号组合>
+<pack-root>/install.sh --target <target-repo-root> --harness <qoder|opencode|trae|cursor|both|all|逗号组合> [--ui-ux-pro-max <install|skip>]
 ```
 
-它会在数秒内完成 ①~⑤ 的全部工作（探测 / 写入 / config 对齐 / skills 初始化 / 挂载 / lock / 自检），退出码 `0` 即成功。把它的报告原样转述给用户即可，不要重复校验。
+可选参数 `--ui-ux-pro-max` / `-UiUxProMax` 只接受 `install | skip`，默认 `skip`；`skip` MUST NOT 发起网络请求，`install` 失败降级为 `SKIP (<原因>)` 且不改变安装结论。
+
+它会在数秒内完成 ①~⑤ 的全部工作（探测 / 清理 / 写入 / config 对齐 / skills 初始化 / 挂载 / lock / 自检），退出码 `0` 即成功。写入与 `onePress.lock.files` 均由包内 `install-plan.tsv` 派生，件数以 `manifest.json` 为唯一真相源。把它的报告原样转述给用户即可，不要重复校验。
 
 **只有**脚本无法执行（无 shell、无执行权限、环境禁止运行命令）时，才继续按下面 ①~⑤ 手工安装，且手工产出必须与脚本逐字节一致。
 
@@ -62,9 +64,17 @@
 
 1. 禁止覆盖项目级资产：`docs/ui-components.md`、`openspec/changes/` 及其下任何文件。
 2. 禁止修改目标仓库的业务代码与既有业务文档（仅允许写入 `HARNESS_SET` 内的 `.qoder/`、`.opencode/`、`.trae/`、`.cursor/`、`openspec/schemas/`、`scripts/onepress-gate.sh`、`scripts/onepress-plan-lint.sh`、`scripts/onepress-evidence-lint.sh`、`scripts/onepress-review-lint.sh`、`scripts/onepress-verify.sh`、`scripts/onepress-telemetry.sh`、`scripts/onepress-telemetry.ps1`、`scripts/sandbox-preflight.spec.ts`、`onePress.lock`、`docs/ui-components.md`（首装初始化）、`.agents/skills/`（**仅允许插入技能引用行，禁止改写技能正文**））。
-3. 禁止删除用户本地文件（升级时仅允许删除将被全量覆盖的 harness 目录内的旧文件与 OpenSpec 1.x 生成物）。
+3. 禁止删除用户本地文件（升级时仅允许删除将被全量覆盖的 harness 目录内的旧文件、退役入口与 OpenSpec 1.x 生成物）。
 
 **逐字写入约束：模板包内所有文件必须逐字写入目标路径，禁止改写、精简或重排内容；无法逐字写入时中止并报告。**
+
+**写入清单唯一来源**：所有落点以包内 `install-plan.tsv` 为准（每行 `layer<TAB>source<TAB>target`）。该文件任一行不是三列 Tab 分隔时，MUST 立即中止并报告 `install-plan.tsv: invalid separator at line <n>`，且不写入任何资产。
+
+### 清理阶段（先于任何写入）
+
+1. 运行包内 `scripts/onepress-skills-prune.sh`（Windows 用同名 `.ps1`），透传 `--root <target>`、`--version <VERSION>`、`--harness <HARNESS_SET>`，`--dry-run` 时透传 `--dry-run`。
+2. 清理旧版 onePress 技能目录（版本标记低于本包）与退役路径：`commands/one.md`、`commands/o.md`、`commands/opsx/`、`commands/opsx-*.md`。退役路径被删除时 MUST 输出 `removed retired path: <path>`。
+3. 无 `metadata.onepress-version` 标记的用户技能 MUST 保留并告警，不删除。
 
 ### 通用（与 IDE 无关，始终安装）
 
@@ -76,7 +86,7 @@
 | `scripts/onepress-evidence-lint.sh` | `scripts/onepress-evidence-lint.sh`（tooling 层，verification-evidence 证据门禁） |
 | `scripts/onepress-review-lint.sh` | `scripts/onepress-review-lint.sh`（tooling 层，review.md 回执与哈希门禁） |
 | `scripts/onepress-verify.sh` | `scripts/onepress-verify.sh`（tooling 层，证据编排与 `--range`/`--churn`） |
-| `qoder|trae|cursor|opencode/commands/one.md` | 所选 harness 的 `commands/one.md`（用户层单入口 `/one`，13 项转发表，`verify` 为组合收尾，只转发） |
+| `<qoder|trae|cursor|opencode>/commands/op-<key>.md`（14 个） | 所选 harness 的 `commands/op-<key>.md`（用户入口 `/op-<key>`；键集合固定为 propose / explore / new / continue / ff / update / apply / verify / finish / sync / archive / bulk-archive / onboard / review；每个文件只转发一个目标） |
 | `scripts/sandbox-preflight.spec.ts` | `scripts/sandbox-preflight.spec.ts`（tooling 层，L1 可选） |
 
 ### skills 初始化（始终执行，先于挂载）
@@ -145,6 +155,7 @@ openspec init --tools <HARNESS_SET 逗号串> --no-animation
 
 - Qoder：`.qoder/commands/opsx/*.md`（整个 `opsx/` 目录删除），onePress 托管命令改为 `.qoder/commands/openspec-review-change.md`。
 - OpenCode / Trae / Cursor：`commands/opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`、`opsx-review.md`（旧评审命令，必须删除以避开双入口）。
+- 四端：`commands/one.md` 与 `commands/o.md` MUST 被删除，且 MUST NOT 再被写入。
 
 清理后不得重建任何 `/opsx:*` 工作流命令；工作流一律由 `.agents/skills/openspec-*` 承载。
 
@@ -234,24 +245,15 @@ rules:
 
 写入任一 harness 级文件前，若该文件在 `git status --porcelain` 中命中未提交修改，则**提示用户并跳过该文件**，继续安装其余文件；所有此类跳过项 MUST 在最终报告中列出。
 
-### 可选增强层探测（不安装，只探测）
+### 可选增强层（INSTALL | SKIP）
 
-设计检索能力 `ui-ux-pro-max` 属于**可选增强层**。本次安装 MUST NOT 尝试安装它，MUST NOT 调用 `npm install` / `uipro init`，MUST NOT 发起任何网络请求。
+设计检索能力 `ui-ux-pro-max` 属于**可选增强层**，取值只有 `INSTALL` 与 `SKIP`，默认 `SKIP`。
 
-1. 判定条件（两者同时满足才视为可用）：
-   - `python3` 可执行（以 `command -v python3` 判定）；
-   - `HARNESS_SET` 中任一 harness 存在 `.<harness>/skills/ui-ux-pro-max/scripts/search.py`。
-2. 在报告第⑤段输出**且仅输出一行**结论：
-   - 可用：`ui-ux-pro-max：enabled（python3 与技能目录均就绪）`
-   - 不可用：`ui-ux-pro-max：SKIP（<未检测到 python3 | 未检测到技能目录>；检索步骤降级为手工填写 ui-spec.md）`
-3. `SKIP` MUST NOT 视为安装失败，MUST NOT 重试、MUST NOT 因此向用户索要额外权限。
-4. 输出 `SKIP` 时，紧随其后给出启用指引（按 `HARNESS_SET` 逐个 harness 展开，**只打印，不落盘**）：
-
-```text
-启用设计检索（可选，需 Node.js + Python3）：
-  npm install -g ui-ux-pro-max-cli
-  uipro init --ai <harness> --offline    # 只保留 .<harness>/skills/ui-ux-pro-max 目录，其余 6 个伴生技能可删
-```
+- `SKIP` MUST NOT 调用 `npm install` / `uipro init`，MUST NOT 发起任何网络请求。
+- `INSTALL` 依次执行 `npm install -g ui-ux-pro-max-cli` 与 `uipro init --ai <harness> --offline`（按 `HARNESS_SET` 逐个 harness，在目标仓库根执行）。
+- `INSTALL` 任一环节失败 MUST 降级为 `SKIP (<原因>)`（如 `SKIP (npm install failed)`、`SKIP (uipro init failed: qoder)`），退出码仍为 0，不改变安装结论。
+- 报告第⑤段输出**且仅输出一行**结论：`ui-ux-pro-max：INSTALL` 或 `ui-ux-pro-max：SKIP` / `ui-ux-pro-max：SKIP (<原因>)`。
+- `SKIP` MUST NOT 视为安装失败，MUST NOT 重试、MUST NOT 因此向用户索要额外权限。
 
 ## ③ 幂等与升级
 
@@ -259,7 +261,7 @@ rules:
 
 ```json
 {
-  "version": "2.3.0-alpha.1",
+  "version": "2.4.0",
   "installedAt": "2026-11-16T00:00:00Z",
   "harnesses": {
     "qoder": true,
@@ -274,6 +276,7 @@ rules:
   "files": [
     "openspec/schemas/superspec/schema.yaml",
     ".qoder/skills/onepress-discipline/SKILL.md",
+    ".qoder/commands/op-apply.md",
     ".qoder/commands/openspec-review-change.md",
     ".qoder/commands/openspec-finish-change.md",
     "scripts/onepress-gate.sh",
@@ -283,7 +286,9 @@ rules:
 ```
 
 - `harnesses` 按**实际安装范围**填写：本次装哪个写 `true`，未装写 `false`。
-- `files` MUST 只记录 onePress 实际写入的文件（纯路径，无中文后缀）；`.agents/skills/**` 归 OpenSpec CLI 所有，**MUST NOT 纳入 `files`**。
+- `files` MUST 由 `install-plan.tsv` 派生：取本轮激活 layer 的 `target` 集合与 `project-generated` 集合的并集，MUST NOT 由逐文件副作用累加。
+- `files` MUST 只记录 onePress 实际写入的受管文件（纯路径，无中文后缀）；因本地修改而跳过的受管文件 MUST 仍保留在 `files` 中（报告单列 `skipped but owned`）。`.agents/skills/**` 归 OpenSpec CLI 所有，**MUST NOT 纳入 `files`**。
+- 验收 MUST 将 `files` 与派生集做双向比对，多一条或少一条均判定安装失败。
 
 ### 安装范围与增量
 
@@ -330,16 +335,18 @@ rules:
 - [ ] 该 SKILL.md 包含十三条铁律标题（ui-spec 契约先行 / 需求分流 / 设计检索与降级 / 高保真沙箱与两阶段 / 八项门禁 / Token 纯净度 / 四态状态机 / 无障碍基线 / 防呆与反馈闭环 / 编码前三级评审 / TDD 与根因调试 / 验证双锁 / 任务与设计契约）
 - [ ] 该 SKILL.md 包含 `ui-spec.md`、`sandbox-preview`、`ui_change`、`44×44`、`prefers-reduced-motion`、`Review-Status`、`review.md`、`RED`、`GREEN`、`REFACTOR`、`verification-evidence`、`Root-Cause`、`Critical` 十三个关键词
 - [ ] 该 SKILL.md 内容与模板包逐字一致
-- [ ] 对应目录下 `commands` 中存在 onePress 托管 review 命令与组合收尾命令（Qoder：`commands/openspec-review-change.md`、`commands/openspec-finish-change.md`；Cursor 同名），且与模板包逐字节一致
+- [ ] 对应目录下 `commands` 中存在 onePress 托管 review 命令与组合收尾命令（Qoder：`commands/openspec-review-change.md`、`commands/openspec-finish-change.md`；Cursor 同名），与模板包逐字节一致，且 frontmatter `description` 以 `[internal]` 开头
 - [ ] `.agents/skills/` 下 12 个 `openspec-<slug>/SKILL.md` 全部存在，且每个文件均含一行 `onepress-discipline` 技能引用
 - [ ] Qoder：`.qoder/commands/opsx/` 目录不存在；`.qoder/commands/openspec-review-change.md` 与 `.qoder/commands/openspec-finish-change.md` 均存在
-- [ ] 所选 harness 的 `commands/one.md` 存在，转发表恰好 13 项，且 `review` 指向 `/openspec-review-change`（命令）、`verify` 指向 `/openspec-finish-change`（命令）而非技能
+- [ ] 所选 harness 的 `commands/` 恰有 14 个 `op-<key>.md`（键集合：propose / explore / new / continue / ff / update / apply / verify / finish / sync / archive / bulk-archive / onboard / review），每个文件只转发一个目标，且与模板包逐字节一致
+- [ ] 四端同名 `op-<key>.md` 逐字节一致；`commands/one.md` 与 `commands/o.md` 均不存在
 - [ ] 项目级资产未被覆盖：`docs/ui-components.md`（若安装前已存在）内容不变
 
 ### .trae 验收项（仅当 `HARNESS_SET` 含 `trae`）
 
 - [ ] `.trae/skills/onepress-discipline/SKILL.md` 存在，包含十三条铁律与 `ui-spec.md` / `sandbox-preview` / `ui_change` / `44×44` / `prefers-reduced-motion` / `Review-Status` / `review.md` / `RED` / `GREEN` / `REFACTOR` / `verification-evidence` / `Root-Cause` / `Critical` 关键词，且与模板包逐字一致
-- [ ] `.trae/commands/openspec-review-change.md` 存在且与模板包逐字节一致
+- [ ] `.trae/commands/openspec-review-change.md` 与 `.trae/commands/openspec-finish-change.md` 存在且与模板包逐字节一致，`description` 以 `[internal]` 开头
+- [ ] `.trae/commands/` 下恰有 14 个 `op-*.md`，且不存在 `one.md`、`o.md`
 - [ ] `.trae/commands/` 下不存在 `opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`
 - [ ] `.agents/skills/` 下 12 个技能均含一行 `onepress-discipline` 技能引用
 - [ ] 项目级资产未被覆盖：`docs/ui-components.md`（若安装前已存在）内容不变
@@ -364,9 +371,9 @@ rules:
 
 ### 可选增强层验收项
 
-- [ ] 报告含**且仅含一行** `ui-ux-pro-max：enabled` 或 `ui-ux-pro-max：SKIP（<原因>）`
-- [ ] `SKIP` 时附有启用指引，且安装结论仍为成功（不计入失败项）
-- [ ] 本次安装未执行任何 `npm install` / `uipro init` / 网络请求
+- [ ] 报告含**且仅含一行** `ui-ux-pro-max：INSTALL` 或 `ui-ux-pro-max：SKIP` / `ui-ux-pro-max：SKIP (<原因>)`
+- [ ] 默认 `SKIP` 时未执行任何 `npm install` / `uipro init` / 网络请求
+- [ ] `INSTALL` 失败已降级为 `SKIP (<原因>)`，安装结论仍为成功（不计入失败项）
 - [ ] `docs/design-system/projectbaseline/MASTER.md` 若已存在，内容逐字节不变
 - [ ] `scripts/onepress-gate.sh`、`scripts/onepress-plan-lint.sh`、`scripts/onepress-evidence-lint.sh`、`scripts/onepress-review-lint.sh`、`scripts/onepress-verify.sh` 与 `scripts/sandbox-preflight.spec.ts` 存在且与模板包逐字节一致（tooling 层）
 - [ ] `bash -n scripts/onepress-plan-lint.sh`、`bash -n scripts/onepress-evidence-lint.sh`、`bash -n scripts/onepress-review-lint.sh` 与 `bash -n scripts/onepress-verify.sh` 均返回 0
@@ -380,8 +387,8 @@ rules:
 
 ### 模板包结构验收项
 
-- [ ] 模板包根条目均在白名单内：`VERSION`、`ASSETS.md`、`INSTALL_PROMPT.md`、`install.ps1`、`install.sh`、`README-ch.md`、`README.md`、`opencode/`、`qoder/`、`trae/`、`cursor/`、`openspec-schema/`、`scripts/`；出现白名单外条目即判定失败并输出违规路径
-- [ ] `opencode/commands/` 仅含 `openspec-review-change.md`
+- [ ] 模板包根条目均在白名单内：`VERSION`、`ASSETS.md`、`INSTALL_PROMPT.md`、`install.ps1`、`install.sh`、`install-plan.tsv`、`manifest.json`、`README-ch.md`、`README.md`、`opencode/`、`qoder/`、`trae/`、`cursor/`、`openspec-schema/`、`scripts/`；出现白名单外条目即判定失败并输出违规路径
+- [ ] `opencode/commands/` 恰含 14 个 `op-*.md` 与 `openspec-review-change.md`、`openspec-finish-change.md`，不含 `one.md`、`o.md`
 
 ## ⑤ 收尾
 

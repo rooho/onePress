@@ -1,6 +1,6 @@
 ---
 name: "openspec-review-change"
-description: "编码前三级设计评审门禁（L1 确定性预检 / L2 冷上下文盲审 / L3 人类批注）"
+description: "[internal] 编码前三级设计评审门禁（L1 确定性预检 / L2 冷上下文盲审 / L3 人类批注）"
 ---
 
 > onepress: 执行本命令时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。

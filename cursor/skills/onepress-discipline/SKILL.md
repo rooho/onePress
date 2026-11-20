@@ -1,6 +1,8 @@
 ---
 name: onepress-discipline
 description: onePress 执行纪律（Cursor 载体）——ui-spec 契约推导、Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆、编码前三级评审
+metadata:
+  onepress-version: "2.4.0"
 ---
 
 # onePress 执行纪律（onepress-discipline）

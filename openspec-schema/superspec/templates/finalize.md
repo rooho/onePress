@@ -8,7 +8,7 @@
 **Change**: `<change-name>`
 **Finalized at**: `YYYY-MM-DD HH:mm`
 **Outcome**: `merge-locally` | `pr-created` | `pr-updated` | `kept-as-is` | `discarded`
-**Entry**: `standalone | combined (/one verify)`
+**Entry**: `standalone | combined (/op-finish)`
 
 ---
 

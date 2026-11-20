@@ -10,12 +10,13 @@
 #   ./install.sh --harness trae,cursor  # install Trae + Cursor only
 #   ./install.sh --target ~/repo     # explicit target repo
 #   ./install.sh --dry-run           # print the plan, write nothing
+#   ./install.sh --ui-ux-pro-max install  # optional ui-ux-pro-max layer (default: skip)
 #
 # When the source is not a local pack (e.g. script downloaded on its own):
 #   ./install.sh --source "" --repo https://github.com/rooho/onePress.git --ref main
 set -eo pipefail
 
-# 发布版本锚点（dev/release-check.sh 校验四处版本一致）：2.3.0-alpha.1
+# 发布版本锚点（dev/release-check.sh 校验四处版本一致）：2.4.0
 HARNESS="auto"
 SOURCE=""
 TARGET=""
@@ -24,35 +25,53 @@ REF="main"
 DRY_RUN=0
 ASSUME_YES=0
 NO_INIT=0
+RECONCILE_LOCK=0
+UI_UX_PRO_MAX="skip"
 TEMP_ROOT=""
 
 SKILL_REF='> onepress: 执行本技能时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。'
 
-SCHEMA_FILES="schema.yaml templates/apply.md templates/brainstorm.md templates/code-reviewer.md templates/design.md templates/finalize.md templates/plan.md templates/proposal.md templates/review-ledger.md templates/review-rubric.md templates/review.md templates/spec.md templates/tasks.md templates/ui-spec.md templates/verification.md templates/verify.md"
-
-OPENCODE_FILES="opencode/opencode.json opencode/agent/ux-architect.md opencode/commands/openspec-review-change.md opencode/commands/openspec-finish-change.md opencode/commands/one.md opencode/skills/superpowers-tdd/SKILL.md"
-
 SKILL_SLUGS="apply-change archive-change bulk-archive-change continue-change explore ff-change new-change onboard propose sync-specs update-change verify-change"
 
-QODER_FILES="qoder/skills/onepress-discipline/SKILL.md"
+# install-plan.tsv 是唯一事实源：写入、验收与 lock.files 全部从这里派生。
+plan_pairs() { # phase: all | pre | commands；输出 "source<TAB>target"
+  local allow="harness:all tooling"
+  [ "$USE_QODER" = 1 ] && allow="$allow harness:qoder"
+  [ "$USE_OPENCODE" = 1 ] && allow="$allow harness:opencode"
+  [ "$USE_TRAE" = 1 ] && allow="$allow harness:trae"
+  [ "$USE_CURSOR" = 1 ] && allow="$allow harness:cursor"
+  awk -F'\t' -v allow="$allow" -v phase="$1" '
+    BEGIN { n = split(allow, a, " "); for (i = 1; i <= n; i++) active[a[i]] = 1 }
+    /^#/ { next }
+    NF != 3 { next }
+    !active[$1] { next }
+    {
+      cmd = ($3 ~ /(^|\/)commands\//) ? 1 : 0
+      if (phase == "pre" && cmd) next
+      if (phase == "commands" && !cmd) next
+      print $2 "\t" $3
+    }' "$PACK_ROOT/install-plan.tsv"
+}
 
-TRAE_FILES="trae/skills/onepress-discipline/SKILL.md"
+# TSV 结构校验：任何非注释行都必须恰好三列 Tab 分隔且三列非空。
+# 发现坏行立即中止，确保零写入（install-plan.tsv 是唯一事实源）。
+validate_plan() {
+  local plan="$1" bad_line
+  bad_line="$(awk -F'\t' '
+    /^#/ { next }
+    NF != 3 || $1 == "" || $2 == "" || $3 == "" { print NR; exit }
+  ' "$plan")"
+  [ -z "$bad_line" ] || die "install-plan.tsv: invalid separator at line $bad_line"
+}
 
-CURSOR_FILES="cursor/skills/onepress-discipline/SKILL.md"
-
-QODER_COMMAND_FILES="qoder/commands/openspec-review-change.md qoder/commands/openspec-finish-change.md qoder/commands/one.md"
-
-TRAE_COMMAND_FILES="trae/commands/openspec-review-change.md trae/commands/openspec-finish-change.md trae/commands/one.md"
-
-CURSOR_COMMAND_FILES="cursor/commands/openspec-review-change.md cursor/commands/openspec-finish-change.md cursor/commands/one.md"
-
-TOOLING_FILES="scripts/onepress-evidence-lint.sh scripts/onepress-gate.sh scripts/onepress-plan-lint.sh scripts/onepress-review-lint.sh scripts/onepress-telemetry.sh scripts/onepress-verify.sh scripts/sandbox-preflight.spec.ts"
-
-# .ps1 对等实现：与同名 .sh 一并随包安装，并同样记入 lock（均属 onePress 托管资产）。
-TOOLING_ALIAS_FILES="scripts/onepress-telemetry.ps1"
+plan_sources() { # layer → 该层非 commands 的 source（用于验收）
+  awk -F'\t' -v layer="$1" '
+    /^#/ { next }
+    NF == 3 && $1 == layer && $3 !~ /(^|\/)commands\// { print $2 }
+  ' "$PACK_ROOT/install-plan.tsv"
+}
 
 WRITTEN=""
-LOCK_FILES=""
 SKIPPED=""
 FAILURES=""
 
@@ -74,7 +93,7 @@ PROTECTED=""
 MOUNT_SKIPPED=""
 
 usage() {
-  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # ---------------------------------------------------------------- output
@@ -262,7 +281,6 @@ copy_file() {
   local target="$2"
   local src_rel="$3"
   local dst_rel="$4"
-  local record_lock="${5:-1}"
   local src="$pack/$src_rel"
   local dst="$target/$dst_rel"
 
@@ -274,6 +292,7 @@ copy_file() {
   if in_list "$dst_rel" "$MODIFIED"; then
     PROTECTED="$PROTECTED$dst_rel"$'\n'
     skip "$dst_rel（已跟踪文件存在未提交修改，保持原样）"
+    info "skipped but owned: $dst_rel"
     return 0
   fi
 
@@ -286,17 +305,11 @@ copy_file() {
   if [ "$DRY_RUN" = 1 ]; then
     info "would write $dst_rel"
     WRITTEN="$WRITTEN$dst_rel"$'\n'
-    if [ "$record_lock" = 1 ]; then
-      LOCK_FILES="$LOCK_FILES$dst_rel"$'\n'
-    fi
     return 0
   fi
 
   mkdir -p "$(dirname "$dst")"
   cp -f "$src" "$dst"
-  if [ "$record_lock" = 1 ]; then
-    LOCK_FILES="$LOCK_FILES$dst_rel"$'\n'
-  fi
   ok "$dst_rel"
 }
 
@@ -412,15 +425,13 @@ init_ui_components() {
       info '  | 组件名称 | 路径 | 适用骨架 (Archetype) | 核心 Props 签名 |'
     fi
     skip "$rel（已存在，Protect Local 不覆盖）"
-    # 已存在也必须记入 lock：generated 资产不因重装而从受管清单里消失。
-    LOCK_FILES="$LOCK_FILES$rel"$'\n'
+    # project-generated 资产始终由派生集记入 lock，此处不再单独追加。
     return 0
   fi
 
   if [ "$DRY_RUN" = 1 ]; then
     info "would create $rel"
     WRITTEN="$WRITTEN$rel"$'\n'
-    LOCK_FILES="$LOCK_FILES$rel"$'\n'
     return 0
   fi
 
@@ -448,31 +459,56 @@ init_ui_components() {
 | 组件名称 | 路径 | 适用骨架 (Archetype) | 核心 Props 签名 |
 |----------|------|----------------------|-----------------|
 UI_EOF
-  LOCK_FILES="$LOCK_FILES$rel"$'\n'
   ok "$rel（首装初始化）"
 }
 
-probe_uiux() {
+# 可选增强层：INSTALL | SKIP。默认 SKIP 且不发任何网络请求；
+# INSTALL 任一步失败降级为 SKIP (<原因>)，不改变安装结论。
+run_ui_ux_pro_max() {
   local target="$1"
-  local py=0 skill=0 d h
-  command -v python3 >/dev/null 2>&1 && py=1
-  for d in .qoder/skills .opencode/skills .trae/skills .cursor/skills; do
-    if [ -f "$target/$d/ui-ux-pro-max/scripts/search.py" ]; then skill=1; break; fi
-  done
-  if [ "$py" = 1 ] && [ "$skill" = 1 ]; then
-    info 'ui-ux-pro-max：enabled（python3 与技能目录均就绪）'
+  local h py=0 skill=0
+
+  if [ "$UI_UX_PRO_MAX" != "install" ]; then
+    for h in .qoder/skills .opencode/skills .trae/skills .cursor/skills; do
+      if [ -f "$target/$h/ui-ux-pro-max/scripts/search.py" ]; then skill=1; break; fi
+    done
+    if [ "$skill" = 1 ]; then
+      info 'ui-ux-pro-max：SKIP (already installed)'
+    else
+      info 'ui-ux-pro-max：SKIP'
+    fi
     return 0
   fi
-  if [ "$py" != 1 ]; then
-    info 'ui-ux-pro-max：SKIP（未检测到 python3；检索步骤降级为手工填写 ui-spec.md）'
-  else
-    info 'ui-ux-pro-max：SKIP（未检测到技能目录；检索步骤降级为手工填写 ui-spec.md）'
-  fi
-  info '  启用设计检索（可选，需 Node.js + Python3）：'
-  info '    npm install -g ui-ux-pro-max-cli'
-  for h in $(printf '%s' "$SCOPE" | tr '+' ' '); do
-    info "    uipro init --ai $h --offline    # 只保留 .$h/skills/ui-ux-pro-max 目录，其余 6 个伴生技能可删"
+
+  command -v python3 >/dev/null 2>&1 && py=1
+  for h in .qoder/skills .opencode/skills .trae/skills .cursor/skills; do
+    if [ -f "$target/$h/ui-ux-pro-max/scripts/search.py" ]; then skill=1; break; fi
   done
+  if [ "$py" = 1 ] && [ "$skill" = 1 ]; then
+    info 'ui-ux-pro-max：INSTALL (already installed)'
+    return 0
+  fi
+
+  if ! command -v npm >/dev/null 2>&1; then
+    info 'ui-ux-pro-max：SKIP (npm not found)'
+    return 0
+  fi
+  if ! npm install -g ui-ux-pro-max-cli >/dev/null 2>&1; then
+    info 'ui-ux-pro-max：SKIP (npm install failed)'
+    return 0
+  fi
+  if ! command -v uipro >/dev/null 2>&1; then
+    info 'ui-ux-pro-max：SKIP (uipro not found)'
+    return 0
+  fi
+  for h in $(printf '%s' "$SCOPE" | tr '+' ' '); do
+    if ! (cd "$target" && uipro init --ai "$h" --offline >/dev/null 2>&1); then
+      info "ui-ux-pro-max：SKIP (uipro init failed: $h)"
+      return 0
+    fi
+  done
+  info 'ui-ux-pro-max：INSTALL'
+  return 0
 }
 
 # 2.0.0 config 将 rules 缩进在 context 块内；提升为顶层并保留其余内容。
@@ -766,46 +802,7 @@ lock_value() {
 
 # 生成本次会写入的目标路径清单（每行一个）
 build_will_write() {
-  local rel
-  WILL_WRITE=""
-  for rel in $SCHEMA_FILES; do
-    WILL_WRITE="${WILL_WRITE}openspec/schemas/superspec/$rel"$'\n'
-  done
-  if [ "$USE_OPENCODE" = 1 ]; then
-    for rel in $OPENCODE_FILES; do
-      WILL_WRITE="$WILL_WRITE.opencode/${rel#opencode/}"$'\n'
-    done
-  fi
-  if [ "$USE_QODER" = 1 ]; then
-    for rel in $QODER_FILES; do
-      WILL_WRITE="$WILL_WRITE.qoder/${rel#qoder/}"$'\n'
-    done
-    for rel in $QODER_COMMAND_FILES; do
-      WILL_WRITE="$WILL_WRITE.${rel%%/*}/${rel#*/}"$'\n'
-    done
-  fi
-  if [ "$USE_TRAE" = 1 ]; then
-    for rel in $TRAE_FILES; do
-      WILL_WRITE="$WILL_WRITE.trae/${rel#trae/}"$'\n'
-    done
-    for rel in $TRAE_COMMAND_FILES; do
-      WILL_WRITE="$WILL_WRITE.${rel%%/*}/${rel#*/}"$'\n'
-    done
-  fi
-  if [ "$USE_CURSOR" = 1 ]; then
-    for rel in $CURSOR_FILES; do
-      WILL_WRITE="$WILL_WRITE.cursor/${rel#cursor/}"$'\n'
-    done
-    for rel in $CURSOR_COMMAND_FILES; do
-      WILL_WRITE="$WILL_WRITE.${rel%%/*}/${rel#*/}"$'\n'
-    done
-  fi
-  for rel in $TOOLING_FILES; do
-    WILL_WRITE="$WILL_WRITE$rel"$'\n'
-  done
-  for rel in $TOOLING_ALIAS_FILES; do
-    WILL_WRITE="$WILL_WRITE$rel"$'\n'
-  done
+  WILL_WRITE="$(plan_pairs all | cut -f2)"$'\n'
   WILL_WRITE="$WILL_WRITE""docs/ui-components.md"$'\n'
 }
 
@@ -839,6 +836,20 @@ remove_stale_files() {
   done < <(lock_files "$lock")
 }
 
+# 锁的 files 唯一来源：install-plan.tsv 中本轮激活 layer 的 target 集合。
+derive_expected_files() {
+  local allow="harness:all tooling project-generated"
+  [ "$USE_QODER" = 1 ] && allow="$allow harness:qoder"
+  [ "$USE_OPENCODE" = 1 ] && allow="$allow harness:opencode"
+  [ "$USE_TRAE" = 1 ] && allow="$allow harness:trae"
+  [ "$USE_CURSOR" = 1 ] && allow="$allow harness:cursor"
+  awk -F'\t' -v allow="$allow" '
+    BEGIN { n = split(allow, a, " "); for (i = 1; i <= n; i++) active[a[i]] = 1 }
+    /^#/ { next }
+    NF == 3 && active[$1] { print $3 }
+  ' "$PACK_ROOT/install-plan.tsv"
+}
+
 write_lock() {
   local target="$1"
   local version="$2"
@@ -849,7 +860,7 @@ write_lock() {
   [ "$USE_TRAE" = 1 ] && trae_bool="true" || trae_bool="false"
   [ "$USE_CURSOR" = 1 ] && cursor_bool="true" || cursor_bool="false"
 
-  files_json="$(printf '%s' "$LOCK_FILES" | grep -v '^$' | grep -v '^\.agents/skills/' | sort -u | sed 's/.*/    "&",/' | sed '$ s/,$//')"
+  files_json="$(derive_expected_files | grep -v '^$' | sort -u | sed 's/.*/    "&",/' | sed '$ s/,$//')"
 
   if [ "$DRY_RUN" = 1 ]; then
     info 'would write onePress.lock'
@@ -898,6 +909,8 @@ accept_skill_harness() {
   done
 
   if [ -f "$target/$harness_dir/skills/onepress-discipline/SKILL.md" ]; then
+    grep -q "onepress-version: \"$VERSION\"" "$target/$harness_dir/skills/onepress-discipline/SKILL.md" \
+      || bad "$harness_dir/skills/onepress-discipline/SKILL.md 缺少 onepress-version: \"$VERSION\""
     for kw in ui-spec.md ui_change sandbox-preview 44×44 prefers-reduced-motion 四态 无障碍 防呆 RED GREEN REFACTOR verification-evidence Root-Cause Critical; do
       grep -q "$kw" "$target/$harness_dir/skills/onepress-discipline/SKILL.md" || bad "$harness_dir/skills/onepress-discipline/SKILL.md 缺少铁律关键词：$kw"
     done
@@ -958,9 +971,7 @@ run_acceptance() {
   step '④ 验收自检'
 
   local count=0 expected=0
-  # shellcheck disable=SC2086
-  set -- $SCHEMA_FILES
-  expected=$#
+  expected="$(plan_pairs all | cut -f2 | grep -c '^openspec/schemas/superspec/' || true)"
   if [ -d "$target/openspec/schemas/superspec" ]; then
     count="$(find "$target/openspec/schemas/superspec" -type f | wc -l | tr -d ' ')"
   fi
@@ -997,30 +1008,24 @@ run_acceptance() {
   fi
 
   local src_rel dst_rel rel
-  for rel in $SCHEMA_FILES; do
-    src_rel="openspec-schema/superspec/$rel"
-    dst_rel="openspec/schemas/superspec/$rel"
+  while IFS=$'\t' read -r src_rel dst_rel; do
+    [ -n "$src_rel" ] || continue
     if in_list "$dst_rel" "$PROTECTED"; then
       skip "$dst_rel（受保护跳过，不计入失败）"
       continue
     fi
     [ -f "$target/$dst_rel" ] || bad "缺失目标文件：$dst_rel"
     cmp -s "$pack/$src_rel" "$target/$dst_rel" || bad "内容不一致：$dst_rel"
-  done
+  done < <(plan_pairs all)
 
-  if [ "$USE_OPENCODE" = 1 ]; then
-    for rel in $OPENCODE_FILES; do
-      dst_rel=".opencode/${rel#opencode/}"
-      if in_list "$dst_rel" "$PROTECTED"; then
-        skip "$dst_rel（受保护跳过，不计入失败）"
-        continue
-      fi
-      [ -f "$target/$dst_rel" ] || bad "缺失目标文件：$dst_rel"
-      cmp -s "$pack/$rel" "$target/$dst_rel" || bad "内容不一致：$dst_rel"
-    done
-    if [ -f "$target/.opencode/opencode.json" ]; then
-      grep -q '"' "$target/.opencode/opencode.json" || bad '.opencode/opencode.json 不像合法 JSON'
-    fi
+  if [ "$USE_OPENCODE" = 1 ] && [ -f "$target/.opencode/opencode.json" ]; then
+    grep -q '"' "$target/.opencode/opencode.json" || bad '.opencode/opencode.json 不像合法 JSON'
+  fi
+
+  # 技能 frontmatter 必须携带与包版本一致的 metadata.onepress-version。
+  if [ "$USE_OPENCODE" = 1 ] && [ -f "$target/.opencode/skills/superpowers-tdd/SKILL.md" ]; then
+    grep -q "onepress-version: \"$version\"" "$target/.opencode/skills/superpowers-tdd/SKILL.md" \
+      || bad ".opencode/skills/superpowers-tdd/SKILL.md 缺少 onepress-version: \"$version\""
   fi
 
   if [ "$USE_QODER$USE_OPENCODE$USE_TRAE$USE_CURSOR" != "0000" ]; then
@@ -1028,31 +1033,38 @@ run_acceptance() {
   fi
 
   if [ "$USE_QODER" = 1 ]; then
-    accept_skill_harness "$pack" "$target" .qoder qoder "$QODER_FILES"
-    [ -f "$target/.qoder/commands/openspec-review-change.md" ] || bad '缺失 .qoder/commands/openspec-review-change.md'
-    cmp -s "$pack/qoder/commands/openspec-review-change.md" "$target/.qoder/commands/openspec-review-change.md" || bad '内容不一致：.qoder/commands/openspec-review-change.md'
+    accept_skill_harness "$pack" "$target" .qoder qoder "$(plan_sources harness:qoder)"
   fi
 
   if [ "$USE_TRAE" = 1 ]; then
-    accept_skill_harness "$pack" "$target" .trae trae "$TRAE_FILES"
-    [ -f "$target/.trae/commands/openspec-review-change.md" ] || bad '缺失 .trae/commands/openspec-review-change.md'
-    cmp -s "$pack/trae/commands/openspec-review-change.md" "$target/.trae/commands/openspec-review-change.md" || bad '内容不一致：.trae/commands/openspec-review-change.md'
+    accept_skill_harness "$pack" "$target" .trae trae "$(plan_sources harness:trae)"
   fi
 
   if [ "$USE_CURSOR" = 1 ]; then
-    accept_skill_harness "$pack" "$target" .cursor cursor "$CURSOR_FILES"
-    [ -f "$target/.cursor/commands/openspec-review-change.md" ] || bad '缺失 .cursor/commands/openspec-review-change.md'
-    cmp -s "$pack/cursor/commands/openspec-review-change.md" "$target/.cursor/commands/openspec-review-change.md" || bad '内容不一致：.cursor/commands/openspec-review-change.md'
+    accept_skill_harness "$pack" "$target" .cursor cursor "$(plan_sources harness:cursor)"
   fi
 
-  for rel in $TOOLING_FILES $TOOLING_ALIAS_FILES; do
-    if in_list "$rel" "$PROTECTED"; then
-      skip "$rel（受保护跳过，不计入失败）"
+  # 退役入口不得复活：one.md / o.md 不应出现在任何已启用 harness 下。
+  for h in .qoder .opencode .trae .cursor; do
+    case "$h" in
+      .qoder)    [ "$USE_QODER" = 1 ] || continue ;;
+      .opencode) [ "$USE_OPENCODE" = 1 ] || continue ;;
+      .trae)     [ "$USE_TRAE" = 1 ] || continue ;;
+      .cursor)   [ "$USE_CURSOR" = 1 ] || continue ;;
+    esac
+    [ -f "$target/$h/commands/one.md" ] && bad "退役入口仍在：$h/commands/one.md"
+    [ -f "$target/$h/commands/o.md" ] && bad "退役入口仍在：$h/commands/o.md"
+  done
+
+  while IFS=$'\t' read -r src_rel dst_rel; do
+    case "$dst_rel" in scripts/*) ;; *) continue ;; esac
+    if in_list "$dst_rel" "$PROTECTED"; then
+      skip "$dst_rel（受保护跳过，不计入失败）"
       continue
     fi
-    [ -f "$target/$rel" ] || bad "缺失目标文件：$rel"
-    cmp -s "$pack/$rel" "$target/$rel" || bad "内容不一致：$rel"
-  done
+    [ -f "$target/$dst_rel" ] || bad "缺失目标文件：$dst_rel"
+    cmp -s "$pack/$src_rel" "$target/$dst_rel" || bad "内容不一致：$dst_rel"
+  done < <(plan_pairs all)
 
   if [ -f "$target/scripts/onepress-plan-lint.sh" ]; then
     bash -n "$target/scripts/onepress-plan-lint.sh" || bad 'onepress-plan-lint.sh 语法错误'
@@ -1107,6 +1119,16 @@ run_acceptance() {
     if grep -q '\.agents/skills/' "$target/onePress.lock"; then
       bad 'onePress.lock 不应记录 .agents/skills 文件'
     fi
+    # 2.6：lock.files 必须与 install-plan.tsv 派生集双向一致（多/少均 FAIL）。
+    LOCK_ACTUAL="$(sed -n '/"files"/,/^  \]/s/^    "\([^"]*\)",*$/\1/p' "$target/onePress.lock" | sort -u)"
+    LOCK_EXPECTED="$(derive_expected_files | grep -v '^$' | sort -u)"
+    if [ "$LOCK_ACTUAL" = "$LOCK_EXPECTED" ]; then
+      info 'lock/files 与 install-plan 派生集一致 ... OK'
+    else
+      LOCK_EXTRA="$(comm -13 <(printf '%s\n' "$LOCK_EXPECTED") <(printf '%s\n' "$LOCK_ACTUAL") | head -3 | tr '\n' ' ')"
+      LOCK_MISS="$(comm -23 <(printf '%s\n' "$LOCK_EXPECTED") <(printf '%s\n' "$LOCK_ACTUAL") | head -3 | tr '\n' ' ')"
+      bad "lock/files 与派生集不一致：多出[${LOCK_EXTRA}] 缺失[${LOCK_MISS}]"
+    fi
   else
     bad 'onePress.lock 缺失'
   fi
@@ -1124,6 +1146,14 @@ while [ $# -gt 0 ]; do
     --repo) REPO="${2:-}"; shift 2 ;;
     --ref) REF="${2:-}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
+    --reconcile-lock) RECONCILE_LOCK=1; shift ;;
+    --ui-ux-pro-max)
+      UI_UX_PRO_MAX="${2:-}"
+      case "$UI_UX_PRO_MAX" in
+        install|skip) ;;
+        *) die "无效 --ui-ux-pro-max：$UI_UX_PRO_MAX（可选 install|skip）" ;;
+      esac
+      shift 2 ;;
     --yes|-y) ASSUME_YES=1; shift ;;
     --no-init) NO_INIT=1; shift ;;
     -h|--help) usage; exit 0 ;;
@@ -1142,6 +1172,8 @@ TARGET_ROOT="$(cd "${TARGET:-.}" && pwd)" || die "目标目录不存在：${TARG
 
 PACK_ROOT="$(resolve_source "$SOURCE")" || exit 1
 VERSION="$(tr -d '\r\n' < "$PACK_ROOT/VERSION")"
+[ -f "$PACK_ROOT/install-plan.tsv" ] || die 'install-plan.tsv 缺失（pack 不完整）'
+validate_plan "$PACK_ROOT/install-plan.tsv"
 info "模板包：$PACK_ROOT（v$VERSION）"
 info "目标仓库：$TARGET_ROOT"
 
@@ -1176,53 +1208,49 @@ info "安装类型：$INSTALL_KIND"
 MODIFIED="$(modified_paths "$TARGET_ROOT")"
 UNTRACKED="$(untracked_paths "$TARGET_ROOT")"
 # alias（.ps1 对等实现）已由 copy_file 记入 lock，同时保留在 MANAGED 里：旧版 lock 未记录时也不会被当用户文件永久跳过。
-MANAGED="$(lock_files "$LOCK"; printf '%s\n' $TOOLING_ALIAS_FILES)"
+MANAGED="$(lock_files "$LOCK"; plan_pairs all | cut -f2)"
 if [ -n "$MODIFIED" ]; then
   warn "检测到 $(printf '%s\n' "$MODIFIED" | grep -c .) 个已跟踪文件存在未提交修改，命中的 harness 文件将被跳过"
 fi
 
+# --reconcile-lock：只重写 onePress.lock，不写资产、不做挂载、不跑 openspec init。
+if [ "$RECONCILE_LOCK" = 1 ]; then
+  if [ "$DRY_RUN" = 1 ]; then
+    info "would reconcile onePress.lock ($(derive_expected_files | grep -c .) entries)"
+  else
+    write_lock "$TARGET_ROOT" "$VERSION"
+    info 'lock reconciled (no files written)'
+  fi
+  exit 0
+fi
+
 step '② 分层安装'
+
+# 清理旧版 onePress 技能与退役路径：必须在任何写入之前，且用包内脚本（目标仓库可能尚无副本）。
+PRUNE_HARNESS=""
+[ "$USE_QODER" = 1 ] && PRUNE_HARNESS="${PRUNE_HARNESS:+$PRUNE_HARNESS,}qoder"
+[ "$USE_OPENCODE" = 1 ] && PRUNE_HARNESS="${PRUNE_HARNESS:+$PRUNE_HARNESS,}opencode"
+[ "$USE_TRAE" = 1 ] && PRUNE_HARNESS="${PRUNE_HARNESS:+$PRUNE_HARNESS,}trae"
+[ "$USE_CURSOR" = 1 ] && PRUNE_HARNESS="${PRUNE_HARNESS:+$PRUNE_HARNESS,}cursor"
+if [ -f "$PACK_ROOT/scripts/onepress-skills-prune.sh" ] && [ -n "$PRUNE_HARNESS" ]; then
+  PRUNE_DRY=""
+  [ "$DRY_RUN" = 1 ] && PRUNE_DRY="--dry-run"
+  # shellcheck disable=SC2086
+  bash "$PACK_ROOT/scripts/onepress-skills-prune.sh" \
+    --root "$TARGET_ROOT" --version "$VERSION" --harness "$PRUNE_HARNESS" $PRUNE_DRY \
+    || warn '技能清理阶段未完成，继续安装'
+fi
 
 build_will_write
 if [ -n "$OLD_VERSION" ]; then
   remove_stale_files "$TARGET_ROOT" "$LOCK"
 fi
 
-for rel in $SCHEMA_FILES; do
-  copy_file "$PACK_ROOT" "$TARGET_ROOT" "openspec-schema/superspec/$rel" "openspec/schemas/superspec/$rel"
-done
-
-if [ "$USE_OPENCODE" = 1 ]; then
-  for rel in $OPENCODE_FILES; do
-    copy_file "$PACK_ROOT" "$TARGET_ROOT" "$rel" ".opencode/${rel#opencode/}"
-  done
-fi
-
-if [ "$USE_QODER" = 1 ]; then
-  for rel in $QODER_FILES; do
-    copy_file "$PACK_ROOT" "$TARGET_ROOT" "$rel" ".qoder/${rel#qoder/}"
-  done
-fi
-
-if [ "$USE_TRAE" = 1 ]; then
-  for rel in $TRAE_FILES; do
-    copy_file "$PACK_ROOT" "$TARGET_ROOT" "$rel" ".trae/${rel#trae/}"
-  done
-fi
-
-if [ "$USE_CURSOR" = 1 ]; then
-  for rel in $CURSOR_FILES; do
-    copy_file "$PACK_ROOT" "$TARGET_ROOT" "$rel" ".cursor/${rel#cursor/}"
-  done
-fi
-
-for rel in $TOOLING_FILES; do
-  copy_file "$PACK_ROOT" "$TARGET_ROOT" "$rel" "$rel"
-done
-
-for rel in $TOOLING_ALIAS_FILES; do
-  copy_file "$PACK_ROOT" "$TARGET_ROOT" "$rel" "$rel"
-done
+# 阶段一：schema + 技能 + tooling（commands 留给 openspec init 之后写，避免被重建覆盖）。
+while IFS=$'\t' read -r src_rel dst_rel; do
+  [ -n "$src_rel" ] || continue
+  copy_file "$PACK_ROOT" "$TARGET_ROOT" "$src_rel" "$dst_rel"
+done < <(plan_pairs pre)
 
 init_ui_components "$TARGET_ROOT"
 
@@ -1235,24 +1263,21 @@ TOOLS_CSV=""
 [ "$USE_CURSOR" = 1 ] && TOOLS_CSV="${TOOLS_CSV:+$TOOLS_CSV,}cursor"
 ensure_skills "$TARGET_ROOT" "$TOOLS_CSV"
 
-if [ "$USE_QODER" = 1 ]; then
-  remove_legacy_commands "$TARGET_ROOT" .qoder
-  copy_command_files "$TARGET_ROOT" "$QODER_COMMAND_FILES"
-fi
+for h in qoder trae cursor opencode; do
+  case "$h" in
+    qoder) [ "$USE_QODER" = 1 ] || continue ;;
+    trae) [ "$USE_TRAE" = 1 ] || continue ;;
+    cursor) [ "$USE_CURSOR" = 1 ] || continue ;;
+    opencode) [ "$USE_OPENCODE" = 1 ] || continue ;;
+  esac
+  remove_legacy_commands "$TARGET_ROOT" ".$h"
+done
 
-if [ "$USE_TRAE" = 1 ]; then
-  remove_legacy_commands "$TARGET_ROOT" .trae
-  copy_command_files "$TARGET_ROOT" "$TRAE_COMMAND_FILES"
-fi
-
-if [ "$USE_CURSOR" = 1 ]; then
-  remove_legacy_commands "$TARGET_ROOT" .cursor
-  copy_command_files "$TARGET_ROOT" "$CURSOR_COMMAND_FILES"
-fi
-
-if [ "$USE_OPENCODE" = 1 ]; then
-  remove_legacy_commands "$TARGET_ROOT" .opencode
-fi
+# 阶段二：commands（在 openspec init 与旧命令清理之后写）。
+while IFS=$'\t' read -r src_rel dst_rel; do
+  [ -n "$src_rel" ] || continue
+  copy_file "$PACK_ROOT" "$TARGET_ROOT" "$src_rel" "$dst_rel"
+done < <(plan_pairs commands)
 
 if [ -n "$TOOLS_CSV" ]; then
   mount_skill_reference "$TARGET_ROOT"
@@ -1266,7 +1291,7 @@ if [ "$DRY_RUN" != 1 ]; then
 fi
 
 step '⑤ 可选增强层探测'
-probe_uiux "$TARGET_ROOT"
+run_ui_ux_pro_max "$TARGET_ROOT"
 
 step '⑥ 报告'
 info "安装范围：harnesses: $SCOPE"

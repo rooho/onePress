@@ -84,20 +84,20 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 
 | 目标仓库路径 | 内容 | 层级 | 安装条件 |
 |--------------|------|------|----------|
-| `.opencode/` | `opencode.json`、`agent/ux-architect.md`、`commands/openspec-review-change.md`、`commands/openspec-finish-change.md`、`skills/superpowers-tdd/` | harness | 仅选中 OpenCode |
+| `.opencode/` | `opencode.json`、`agent/ux-architect.md`、`commands/op-*.md`（14 个）、`commands/openspec-review-change.md`、`commands/openspec-finish-change.md`、`skills/superpowers-tdd/` | harness | 仅选中 OpenCode |
 | `.qoder/skills/onepress-discipline/SKILL.md` | 十三条铁律（契约 / 分流 / 检索 / 沙箱 / 门禁 / Token / 四态 / 无障碍 / 防呆 / 编码前评审 / TDD 与根因调试 / 验证双锁 / 任务与设计契约）+ TDD 纪律 | harness | 仅选中 Qoder |
 | `.agents/skills/openspec-*/SKILL.md`（12 个） | OpenSpec 2.0 工作流技能；仅在 frontmatter 后**新增一行**技能引用，正文不改 | harness | 始终（四 harness 共享） |
 | `.trae/skills/onepress-discipline/SKILL.md` | 十三条铁律 + TDD 纪律（Trae 载体） | harness | 仅选中 Trae |
-| `.trae/commands/openspec-review-change.md` | onePress 托管评审命令（斜杠入口 `/openspec-review-change`） | harness | 仅选中 Trae |
-| `.trae/commands/openspec-finish-change.md` | onePress 托管组合收尾命令（斜杠入口 `/openspec-finish-change`，等价 `/one verify`） | harness | 仅选中 Trae |
+| `.trae/commands/openspec-review-change.md` | onePress 托管评审命令（斜杠入口 `/op-review`） | harness | 仅选中 Trae |
+| `.trae/commands/openspec-finish-change.md` | onePress 托管组合收尾命令（内部命令；用户入口 `/op-finish`） | harness | 仅选中 Trae |
 | `.cursor/skills/onepress-discipline/SKILL.md` | 十三条铁律 + TDD 纪律（Cursor 载体） | harness | 仅选中 Cursor |
-| `.cursor/commands/openspec-review-change.md` | onePress 托管评审命令（斜杠入口 `/openspec-review-change`） | harness | 仅选中 Cursor |
-| `.cursor/commands/openspec-finish-change.md` | onePress 托管组合收尾命令（斜杠入口 `/openspec-finish-change`，等价 `/one verify`） | harness | 仅选中 Cursor |
+| `.cursor/commands/openspec-review-change.md` | onePress 托管评审命令（斜杠入口 `/op-review`） | harness | 仅选中 Cursor |
+| `.cursor/commands/openspec-finish-change.md` | onePress 托管组合收尾命令（内部命令；用户入口 `/op-finish`） | harness | 仅选中 Cursor |
 | `openspec/schemas/superspec/` | `schema.yaml` + 15 模板（共 16 文件，含 `ui-spec.md`、`review.md`、`review-ledger.md`、`review-rubric.md`、`verification.md` 与 `code-reviewer.md`） | harness | 始终 |
 | `onePress.lock` | 版本、安装范围与受保护资产清单 | harness | 始终 |
 | `docs/ui-components.md` | 组件注册表模板（四列，首次安装初始化为空表） | project | 始终 |
 
-> 命令命名分两层：**契约层**是 12 个 `openspec-*` 官方技能与 2 个 onePress 托管命令（`openspec-review-change`、`openspec-finish-change`）；**用户层**是单入口 `/one <子命令>`（propose / explore / new / continue / ff / update / apply / verify / sync / archive / bulk-archive / onboard / review），其中 `verify` 走组合收尾（verify-report → verify → finalize），它只做转发，不改写上游流程；未知子命令报错并列出全表。
+> 命令命名分两层：**契约层**是 12 个 `openspec-*` 官方技能与 2 个 onePress 内部命令（`openspec-review-change`、`openspec-finish-change`，`description` 以 `[internal]` 开头）；**用户层**是 14 个扁平入口 `/op-<key>`（`/op-propose`、`/op-explore`、`/op-new`、`/op-continue`、`/op-ff`、`/op-update`、`/op-apply`、`/op-verify`、`/op-finish`、`/op-sync`、`/op-archive`、`/op-bulk-archive`、`/op-onboard`、`/op-review`）。每个文件只转发到一个固定目标；`/op-finish` 走组合收尾（verify-report → verify → finalize），`/op-review` 走设计评审。不依赖前缀推断：未知键直接报错。`commands/one.md` 与 `commands/o.md` 已退役，安装时会被清理。
 
 > `docs/design-system/projectbaseline/MASTER.md` 由可选的 `ui-ux-pro-max` 技能**一次性**生成；onePress 在安装/升级时只保护它，不创建也不改写。
 
@@ -109,18 +109,18 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 
 | 步骤 | 命令 | 你提供 | 产物 | 通过标准 |
 |------|------|--------|------|----------|
-| 1 新建变更 | `/openspec-new-change <change>` | 功能描述 | `proposal.md`（含 `**UI Change**` 判定） | proposal 落盘 |
-| 2 补全规划 | `/openspec-continue-change` ×N 或 `/openspec-ff-change` | — | `brainstorm.md`、`design.md`（+ `ui-spec.md` / `sandbox-preview.html`）、`specs/`、`tasks.md`、`plan.md` | `openspec validate --strict` 与 plan-lint 通过；七章节齐全，沙箱 Light/Dark 可打开 |
-| 3 设计评审 | `/openspec-review-change <change>` | 人工批注（L3） | `review.md`（非 UI 变更写 `Result: SKIP`） | `P0 = 0`、`P1 = 0`、`Review-Status: APPROVED`，review-lint 通过 |
-| 4 实现 | `/openspec-apply-change` | — | 代码 + `apply.md` | `review.md` 存在且 Result 为 PASS/SKIP；TDD 证据（RED→GREEN→REFACTOR）；与沙箱 Light + Dark 对齐 |
-| 5 收集证据 | `/openspec-continue-change`（verify-report）或 `openspec instructions verify-report --change <change>` | — | `verification-evidence.md`、`code-review-packet.md`（仅 human 模式） | 实测命令输出、`Critical: 0`、`Important: 0`、evidence-lint 通过 |
-| 6 验证 | `/openspec-verify-change` | — | `verify.md` | 引用证据报告；八项 UI 门禁全绿，无 CRITICAL |
-| 7 归档 | `/openspec-archive-change` | — | 主 specs 更新 + `finalize.md` + 归档目录 | 组件已增量写入注册表 |
+| 1 新建变更 | `/op-new <change>` | 功能描述 | `proposal.md`（含 `**UI Change**` 判定） | proposal 落盘 |
+| 2 补全规划 | `/op-continue` ×N 或 `/op-ff` | — | `brainstorm.md`、`design.md`（+ `ui-spec.md` / `sandbox-preview.html`）、`specs/`、`tasks.md`、`plan.md` | `openspec validate --strict` 与 plan-lint 通过；七章节齐全，沙箱 Light/Dark 可打开 |
+| 3 设计评审 | `/op-review <change>` | 人工批注（L3） | `review.md`（非 UI 变更写 `Result: SKIP`） | `P0 = 0`、`P1 = 0`、`Review-Status: APPROVED`，review-lint 通过 |
+| 4 实现 | `/op-apply` | — | 代码 + `apply.md` | `review.md` 存在且 Result 为 PASS/SKIP；TDD 证据（RED→GREEN→REFACTOR）；与沙箱 Light + Dark 对齐 |
+| 5 收集证据 | `/op-continue`（verify-report）或 `openspec instructions verify-report --change <change>` | — | `verification-evidence.md`、`code-review-packet.md`（仅 human 模式） | 实测命令输出、`Critical: 0`、`Important: 0`、evidence-lint 通过 |
+| 6 验证 | `/op-verify` | — | `verify.md` | 引用证据报告；八项 UI 门禁全绿，无 CRITICAL |
+| 7 归档 | `/op-archive` | — | 主 specs 更新 + `finalize.md` + 归档目录 | 组件已增量写入注册表 |
 
-### 步骤 1：新建变更 `/openspec-new-change`
+### 步骤 1：新建变更 `/op-new`
 
 ```text
-/openspec-new-change feat-261103-001-user-role-permission
+/op-new feat-261103-001-user-role-permission
 ```
 
 做的事：
@@ -129,9 +129,9 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 2. 按三条规则判定 `**UI Change**: yes|no`（路由/页面；表格列、表单字段或状态展示；破坏性交互），并把结论写到 `proposal.md` 首行；
 3. 此时**不生成** `ui-spec.md` 或沙箱；UI 契约在步骤 2 的 `design` 工件中产出。
 
-### 步骤 2：补全规划工件 `/openspec-continue-change` / `/openspec-ff-change`
+### 步骤 2：补全规划工件 `/op-continue` / `/op-ff`
 
-superspec 的 DAG 工件共 11 个，`/openspec-continue-change` **每次只产出一个**：
+superspec 的 DAG 工件共 11 个，`/op-continue` **每次只产出一个**：
 
 ```text
 brainstorm → proposal → design → specs → tasks → plan → review → apply → verify-report → verify → finalize
@@ -153,12 +153,12 @@ brainstorm → proposal → design → specs → tasks → plan → review → a
 
 `review.md` 只在评审收敛时生成；失败轮次写入 `.review/round-<n>.md`。`ui-spec.md`、沙箱或 `plan.md` 任一变化都会使 `review.md` 失效，必须删除并复审。
 
-想一次性补齐规划工件：`/openspec-ff-change`；只想先看完整提案：`/openspec-propose`；只想讨论不落文件：`/openspec-explore`。
+想一次性补齐规划工件：`/op-ff`；只想先看完整提案：`/op-propose`；只想讨论不落文件：`/op-explore`。
 
-### 步骤 3：设计评审 `/openspec-review-change`
+### 步骤 3：设计评审 `/op-review`
 
 ```text
-/openspec-review-change feat-261103-001-user-role-permission
+/op-review feat-261103-001-user-role-permission
 ```
 
 - **L1 确定性预检**：沙箱四态 × 双主题，WCAG、热区、溢出、Hex/Emoji、CLS 代理指标；依赖缺失记 SKIP。
@@ -168,7 +168,7 @@ brainstorm → proposal → design → specs → tasks → plan → review → a
 - 非 UI 变更直接写 `Result: SKIP`，不产生 ui-spec/沙箱，也不进入 L1/L2/L3。
 
 
-### 步骤 4：实现 `/openspec-apply-change`（两阶段）
+### 步骤 4：实现 `/op-apply`（两阶段）
 
 | 阶段 | 做什么 | 产出 | 验收 |
 |------|--------|------|------|
@@ -181,7 +181,7 @@ brainstorm → proposal → design → specs → tasks → plan → review → a
 
 `verify` 之前必须完成 `verify-report` 工件并运行 `bash scripts/onepress-evidence-lint.sh --change openspec/changes/<change>`：它要求带退出码的实测输出、`Critical: 0`、`Important: 0`，以及 UI 变更的 `onepress-gate.sh` 证据。代码盲审必须使用 `templates/code-reviewer.md` 在冷上下文中执行（优先子代理，其次人类新会话）。
 
-### 步骤 6：验证 `/openspec-verify-change`
+### 步骤 6：验证 `/op-verify`
 
 八项门禁，任一失败打回 `apply` 对应阶段：
 
@@ -203,10 +203,10 @@ plan 阶段生成 `plan.md` 后运行 `bash scripts/onepress-plan-lint.sh --chan
 
 输出 `openspec/changes/<change>/verify.md`，结论三选一：`PASS` / `PASS WITH WARNINGS` / `FAIL`。有 CRITICAL 不允许归档。
 
-### 步骤 7：归档 `/openspec-archive-change`
+### 步骤 7：归档 `/op-archive`
 
 ```text
-/openspec-archive-change
+/op-archive
 ```
 
 1. 把 delta specs 同步进 `openspec/specs/<capability>/spec.md`（主规范）；
@@ -214,11 +214,11 @@ plan 阶段生成 `plan.md` 后运行 `bash scripts/onepress-plan-lint.sh --chan
 3. 整个变更目录移入 `openspec/changes/archive/YYYY-MM-DD-<change>/`；
 4. 写 `finalize.md` 收尾回执。
 
-> **OpenCode 与其它 harness 一致**：直接执行 `/openspec-archive-change`；归档后如需补记组件行：
+> **OpenCode 与其它 harness 一致**：直接执行 `/op-archive`；归档后如需补记组件行：
 > `bash scripts/onepress-registry-append.sh --root . --name <Name> --path <path> --archetype <Archetype> --props '<签名>'`
 > 脚本幂等，只向指定分区追加，不改动历史行。
 
-多个变更一起收：`/openspec-bulk-archive-change`。只想同步规范不归档：`/openspec-sync-specs`。
+多个变更一起收：`/op-bulk-archive`。只想同步规范不归档：`/op-sync`。
 
 ---
 
@@ -226,21 +226,24 @@ plan 阶段生成 `plan.md` 后运行 `bash scripts/onepress-plan-lint.sh --chan
 
 | 命令 | Qoder | OpenCode | Trae | Cursor | 用途 |
 |------|:----:|:--------:|:----:|:------:|------|
-| `/openspec-new-change <name>` | ✅ | ✅ | ✅ | ✅ | 契约初始化（proposal + design + ui-spec + 沙箱） |
-| `/openspec-continue-change` | ✅ | 用 CLI | ✅ | ✅ | 生成下一个工件 |
-| `/openspec-ff-change` | ✅ | 用 CLI | ✅ | ✅ | 一次补齐全部工件 |
-| `/openspec-propose` | ✅ | 用 CLI | ✅ | ✅ | 一步生成完整提案 |
-| `/openspec-explore` | ✅ | — | ✅ | ✅ | 只讨论，不落文件 |
-| `/openspec-apply-change` | ✅ | ✅ | ✅ | ✅ | 两阶段实现 |
-| `/openspec-verify-change` | ✅ | ✅ | ✅ | ✅ | 八道门禁 |
-| `/openspec-sync-specs` | ✅ | 用 CLI | ✅ | ✅ | 仅同步 delta specs |
-| `/openspec-archive-change` | ✅ | ✅ | ✅ | ✅ | 归档 + 注册表增量 |
-| `/openspec-bulk-archive-change` | ✅ | 用 CLI | ✅ | ✅ | 批量归档 |
-| `/openspec-onboard` | ✅ | 用 CLI | ✅ | ✅ | 首次全流程引导（原生） |
-| `/openspec-update-change` | ✅ | 用 CLI | ✅ | ✅ | 修订规划工件（原生，实验性） |
+| `/op-new <name>` | ✅ | ✅ | ✅ | ✅ | 契约初始化（proposal + design + ui-spec + 沙箱） |
+| `/op-continue` | ✅ | ✅ | ✅ | ✅ | 生成下一个工件 |
+| `/op-ff` | ✅ | ✅ | ✅ | ✅ | 一次补齐全部工件 |
+| `/op-propose` | ✅ | ✅ | ✅ | ✅ | 一步生成完整提案 |
+| `/op-explore` | ✅ | ✅ | ✅ | ✅ | 只讨论，不落文件 |
+| `/op-update` | ✅ | ✅ | ✅ | ✅ | 修订规划工件（原生，实验性） |
+| `/op-apply` | ✅ | ✅ | ✅ | ✅ | 两阶段实现 |
+| `/op-verify` | ✅ | ✅ | ✅ | ✅ | 八道门禁 |
+| `/op-finish` | ✅ | ✅ | ✅ | ✅ | 组合收尾（verify-report → verify → finalize） |
+| `/op-sync` | ✅ | ✅ | ✅ | ✅ | 仅同步 delta specs |
+| `/op-archive` | ✅ | ✅ | ✅ | ✅ | 归档 + 注册表增量 |
+| `/op-bulk-archive` | ✅ | ✅ | ✅ | ✅ | 批量归档 |
+| `/op-onboard` | ✅ | ✅ | ✅ | ✅ | 首次全流程引导（原生） |
+| `/op-review` | ✅ | ✅ | ✅ | ✅ | 编码前设计评审门禁（L1/L2/L3） |
 
-- **Qoder / Trae / Cursor**：OpenSpec 2.0 将 12 个技能统一安装到 `.agents/skills/`，安装器在每个 `SKILL.md` 的 frontmatter 后挂载一行 `onepress-discipline` 引用；另直投 1 个托管 `/openspec-review-change` 命令。
-- **OpenCode**：与其它 harness 共用 `.agents/skills/`，另随附 2 个托管命令（`commands/openspec-review-change.md`、`commands/openspec-finish-change.md`）；不再直投 `new` / `apply` / `verify` 命令：
+- **四端一致**：均随包分发同样的 14 个 `commands/op-<key>.md` 入口（同名文件逐字节一致），每个文件只转发到一个固定目标。
+- **Qoder / Trae / Cursor**：OpenSpec 2.0 将 12 个技能统一安装到 `.agents/skills/`，安装器在每个 `SKILL.md` 的 frontmatter 后挂载一行 `onepress-discipline` 引用；另随附 2 个内部命令，作为 `/op-review` 与 `/op-finish` 的转发目标。
+- **OpenCode**：与其它 harness 共用 `.agents/skills/`，同样随附 14 个 `/op-*` 入口，并额外提供 `commands/openspec-review-change.md` / `commands/openspec-finish-change.md` 作为内部转发目标：
 
 ```bash
 openspec status --change <name> --json          # 看进度与下一步
@@ -291,27 +294,33 @@ onePress/                    # 发布包根目录（由 studio/pack/ 生成）
 ├── README-ch.md            # 中文说明（默认）
 ├── README.md               # English README
 ├── VERSION                 # 版本号（升级判定基准）
+├── manifest.json           # 资产件数与分层的唯一真相源
+├── install-plan.tsv        # 由 manifest.json 派生；写入清单与 lock.files 的唯一来源
 ├── ASSETS.md               # 资产清单（归属层级 + 覆盖策略）
 ├── INSTALL_PROMPT.md       # AI 安装入口（五段结构，脚本的等价兜底）
 ├── install.ps1             # Windows 安装器（探测/写入/自检/报告一条命令）
 ├── install.sh              # macOS / Linux 安装器
-├── opencode/               # OpenCode harness 资产（5 文件）
+├── opencode/               # OpenCode harness 资产（19 文件）
 │   ├── opencode.json
 │   ├── agent/ux-architect.md
+│   ├── commands/op-*.md    # 14 个用户入口（/op-<key>）
 │   ├── commands/openspec-review-change.md
 │   ├── commands/openspec-finish-change.md
 │   └── skills/superpowers-tdd/SKILL.md
-├── qoder/                  # Qoder harness 资产（3 文件）
+├── qoder/                  # Qoder harness 资产（18 文件）
 │   ├── skills/onepress-discipline/SKILL.md
+│   ├── skills/testing-impl-story/SKILL.md
+│   ├── commands/op-*.md    # 14 个用户入口
 │   ├── commands/openspec-review-change.md
 │   └── commands/openspec-finish-change.md
-├── trae/                   # Trae harness 资产（3 文件）
+├── trae/                   # Trae harness 资产（17 文件）
 │   ├── skills/onepress-discipline/SKILL.md
+│   ├── commands/op-*.md    # 14 个用户入口
 │   ├── commands/openspec-review-change.md
 │   └── commands/openspec-finish-change.md
-├── cursor/                 # Cursor harness 资产（4 文件）
+├── cursor/                 # Cursor harness 资产（17 文件）
 │   ├── skills/onepress-discipline/SKILL.md
-│   ├── commands/one.md
+│   ├── commands/op-*.md    # 14 个用户入口
 │   ├── commands/openspec-review-change.md
 │   └── commands/openspec-finish-change.md
 ├── scripts/                # 发布包侧脚本
@@ -327,7 +336,7 @@ onePress/                    # 发布包根目录（由 studio/pack/ 生成）
 └── openspec-schema/superspec/   # 分发给目标仓库的 schema（16 文件，含 templates/ui-spec.md、review.md、review-ledger.md、review-rubric.md、verification.md 与 code-reviewer.md）
 ```
 
-> tooling 逻辑项计 **7** 项（`.ps1` 与同名 `.sh` 同计一项，`onepress-registry-append.sh` 为辅助脚本）：件数以 `manifest.json` 的 `counts.tooling` 为唯一真相源。
+> tooling 逻辑项计 **8** 项（`.ps1` 与同名 `.sh` 同计一项，`onepress-registry-append.sh` 为辅助脚本）：件数以 `manifest.json` 的 `counts.tooling` 为唯一真相源。`onepress-skills-prune.sh` 与 `onepress-skills-prune.ps1` 随其余 tooling 脚本一并安装，并在写入任何资产之前运行。
 
 > `blueprint/`（迭代纲领）与 `openspec/`（本方案自己的规范工作区）位于**开发仓**，永不进入发布包；发布包由 `studio/pack/` 生成。
 
@@ -338,7 +347,7 @@ onePress/                    # 发布包根目录（由 studio/pack/ 生成）
 **Q：AI 说克隆下来找不到 `INSTALL_PROMPT.md`？**
 A：多半是稀疏检出路径与实际布局不符（cone 模式对不存在的路径静默空检出、不报错）。让它先 `git ls-tree -r --name-only HEAD` 核对真实布局，再 `git sparse-checkout disable` 全量检出（包体仅 KB 级）。这条已写进上面的安装提示词，正常情况下它会自己兜住。
 
-**Q：没装 Superpowers 插件，`/openspec-continue-change` 卡在 plan 步骤报 `superpowers:writing-plans` 不可用？**
+**Q：没装 Superpowers 插件，`/op-continue` 卡在 plan 步骤报 `superpowers:writing-plans` 不可用？**
 A：1.0.4 起 superspec 的 Superpowers 技能引用全部带内联兜底（brainstorm / plan / apply 2c / finalize 四处），技能缺失时 AI 会按兜底步骤自行产出 `plan.md`（含 Spec / Global Constraints / Review Focus / Evidence Map / File Structure / Files / Interfaces / Self-Review），不会中断。旧版本（schema version ≤ 5）升级重装即可；生成后运行 `bash scripts/onepress-plan-lint.sh --change <change>` 自检。
 
 **Q：目标仓库没有 OpenSpec？**

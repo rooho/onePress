@@ -1,6 +1,6 @@
 ---
 name: "openspec-finish-change"
-description: "onePress 组合收尾命令：一次确认串行执行 verify-report → verify → finalize"
+description: "[internal] onePress 组合收尾命令：一次确认串行执行 verify-report → verify → finalize"
 ---
 
 # /openspec-finish-change `<change-name>`

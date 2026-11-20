@@ -1,6 +1,8 @@
 ﻿---
 name: superpowers-tdd
 description: onePress 执行纪律（OpenCode 载体）——纯逻辑 Hook TDD、Token 纯净度、四态状态机、无障碍与破坏性操作防呆
+metadata:
+  onepress-version: "2.4.0"
 ---
 
 # onePress 执行纪律（superpowers-tdd）

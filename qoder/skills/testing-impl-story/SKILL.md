@@ -1,6 +1,8 @@
 ---
 name: testing-impl-story
 description: Use when verifying feature functionality on a deployed test environment — covers test case extraction from any source (impl-story, PRD, test spec, verbal description), database precondition checks, code link verification, browser DOM-based UI validation, and structured acceptance reporting
+metadata:
+  onepress-version: "2.4.0"
 ---
 
 # 功能验收测试

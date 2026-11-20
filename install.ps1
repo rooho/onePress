@@ -13,6 +13,7 @@
         .\install.ps1 -Harness trae,cursor   # 只装 Trae + Cursor
         .\install.ps1 -Target D:\repo        # 指定目标仓库（默认当前目录）
         .\install.ps1 -DryRun                # 只打印计划，不落盘
+        .\install.ps1 -UiUxProMax install    # 可选 ui-ux-pro-max 增强层（默认 skip）
 
     源不是本地包时（例如只想下载脚本），脚本会自动浅克隆：
         .\install.ps1 -Source '' -Repo https://github.com/rooho/onePress.git -Ref main
@@ -28,6 +29,9 @@
 
 .PARAMETER DryRun
     只输出将要执行的动作，不写任何文件。
+
+.PARAMETER UiUxProMax
+    install | skip（默认 skip）。skip 不发起任何网络请求；install 失败降级为 SKIP (<原因>)。
 
 .PARAMETER Yes
     无人值守：harness 无法探测时直接失败而不是交互询问。
@@ -45,6 +49,11 @@ param(
     [string]$Ref = 'main',
 
     [switch]$DryRun,
+
+    [switch]$ReconcileLock,
+
+    [ValidateSet('install', 'skip')]
+    [string]$UiUxProMax = 'skip',
 
     [switch]$Yes,
 
@@ -80,63 +89,51 @@ $script:SkillSlugs = @(
     'verify-change'
 )
 
-# 模板包内需要安装的文件（显式清单，避免递归拷贝带入意外文件）
-$script:SchemaFiles = @(
-    'schema.yaml',
-    'templates/apply.md',
-    'templates/brainstorm.md',
-    'templates/code-reviewer.md',
-    'templates/design.md',
-    'templates/finalize.md',
-    'templates/plan.md',
-    'templates/proposal.md',
-    'templates/review-ledger.md',
-    'templates/review-rubric.md',
-    'templates/review.md',
-    'templates/spec.md',
-    'templates/tasks.md',
-    'templates/ui-spec.md',
-    'templates/verification.md',
-    'templates/verify.md'
-)
+# TSV 结构校验：非注释行必须恰好三列 Tab 分隔且三列非空，坏行立即中止（零写入）。
+function Test-PlanFile {
+    param([string]$Path)
 
-$script:OpenCodeFiles = @(
-    'opencode/opencode.json',
-    'opencode/agent/ux-architect.md',
-    'opencode/commands/openspec-review-change.md',
-    'opencode/commands/openspec-finish-change.md',
-    'opencode/commands/one.md',
-    'opencode/skills/superpowers-tdd/SKILL.md'
-)
+    $n = 0
+    foreach ($line in (Get-Content -LiteralPath $Path -Encoding UTF8)) {
+        $n++
+        if ($line.StartsWith('#')) { continue }
+        $cells = $line.Split("`t")
+        if ($cells.Count -ne 3 -or [string]::IsNullOrEmpty($cells[0]) -or
+            [string]::IsNullOrEmpty($cells[1]) -or [string]::IsNullOrEmpty($cells[2])) {
+            Stop-Install "install-plan.tsv: invalid separator at line $n"
+        }
+    }
+}
 
-$script:QoderFiles = @(
-    'qoder/skills/onepress-discipline/SKILL.md'
-)
+# 写入清单唯一来源：install-plan.tsv（由 manifest.json 派生）。
+function Get-PlanRows {
+    param([string]$PackRoot, [hashtable]$HarnessSet, [string]$Phase)
 
-$script:TraeFiles = @(
-    'trae/skills/onepress-discipline/SKILL.md'
-)
+    $planPath = Join-Rel $PackRoot 'install-plan.tsv'
+    if (-not (Test-Path -LiteralPath $planPath)) { return @() }
 
-$script:CursorFiles = @(
-    'cursor/skills/onepress-discipline/SKILL.md'
-)
+    $active = @('harness:all', 'tooling')
+    foreach ($h in @('qoder', 'opencode', 'trae', 'cursor')) {
+        if ($HarnessSet.$h) { $active += ('harness:' + $h) }
+    }
 
-$script:QoderCommandFiles = @('qoder/commands/openspec-review-change.md', 'qoder/commands/openspec-finish-change.md', 'qoder/commands/one.md')
-
-$script:TraeCommandFiles = @('trae/commands/openspec-review-change.md', 'trae/commands/openspec-finish-change.md', 'trae/commands/one.md')
-
-$script:CursorCommandFiles = @('cursor/commands/openspec-review-change.md', 'cursor/commands/openspec-finish-change.md', 'cursor/commands/one.md')
-
-$script:ToolingFiles = @(
-    'scripts/onepress-evidence-lint.sh',
-    'scripts/onepress-gate.sh',
-    'scripts/onepress-plan-lint.sh',
-    'scripts/onepress-review-lint.sh',
-    'scripts/onepress-telemetry.ps1',
-    'scripts/onepress-telemetry.sh',
-    'scripts/onepress-verify.sh',
-    'scripts/sandbox-preflight.spec.ts'
-)
+    $plan = New-Object System.Collections.ArrayList
+    foreach ($line in (Get-Content -LiteralPath $planPath -Encoding UTF8)) {
+        if ($line.StartsWith('#')) { continue }
+        $cells = $line.Split("`t")
+        if ($cells.Count -ne 3) { continue }
+        if ($active -notcontains $cells[0]) { continue }
+        $isCommand = $cells[2] -match '(^|/)commands/'
+        if ($Phase -eq 'pre' -and $isCommand) { continue }
+        if ($Phase -eq 'commands' -and -not $isCommand) { continue }
+        [void]$plan.Add([pscustomobject]@{
+                Source = $cells[1]
+                Target = $cells[2]
+                Layer  = $cells[0]
+            })
+    }
+    return $plan
+}
 
 $script:OpenSpecConfigTemplate = @'
 schema: superspec
@@ -409,53 +406,6 @@ function Get-GitStatusPaths {
     return $result
 }
 
-function Get-BuildPlan {
-    param([hashtable]$HarnessSet)
-
-    $plan = New-Object System.Collections.ArrayList
-
-    foreach ($file in $script:SchemaFiles) {
-        [void]$plan.Add([pscustomobject]@{
-                Source = "openspec-schema/superspec/$file"
-                Target = "openspec/schemas/superspec/$file"
-                Layer  = 'harness(common)'
-            })
-    }
-
-    if ($HarnessSet.opencode) {
-        foreach ($file in $script:OpenCodeFiles) {
-            $dest = $file -replace '^opencode/', '.opencode/'
-            [void]$plan.Add([pscustomobject]@{ Source = $file; Target = $dest; Layer = 'harness(opencode)' })
-        }
-    }
-
-    if ($HarnessSet.qoder) {
-        foreach ($file in $script:QoderFiles) {
-            $dest = $file -replace '^qoder/', '.qoder/'
-            [void]$plan.Add([pscustomobject]@{ Source = $file; Target = $dest; Layer = 'harness(qoder)' })
-        }
-    }
-
-    if ($HarnessSet.trae) {
-        foreach ($file in $script:TraeFiles) {
-            $dest = $file -replace '^trae/', '.trae/'
-            [void]$plan.Add([pscustomobject]@{ Source = $file; Target = $dest; Layer = 'harness(trae)' })
-        }
-    }
-
-    if ($HarnessSet.cursor) {
-        foreach ($file in $script:CursorFiles) {
-            $dest = $file -replace '^cursor/', '.cursor/'
-            [void]$plan.Add([pscustomobject]@{ Source = $file; Target = $dest; Layer = 'harness(cursor)' })
-        }
-    }
-
-    foreach ($file in $script:ToolingFiles) {
-        [void]$plan.Add([pscustomobject]@{ Source = $file; Target = $file; Layer = 'tooling' })
-    }
-
-    return $plan
-}
 
 function Copy-PackFile {
     param(
@@ -898,8 +848,29 @@ function Remove-StaleFiles {
     }
 }
 
+function Get-ExpectedFiles {
+    param([string]$PackRoot, [hashtable]$HarnessSet)
+
+    $planPath = Join-Rel $PackRoot 'install-plan.tsv'
+    if (-not (Test-Path -LiteralPath $planPath)) { return @() }
+
+    $active = @('harness:all', 'tooling', 'project-generated')
+    foreach ($h in @('qoder', 'opencode', 'trae', 'cursor')) {
+        if ($HarnessSet.$h) { $active += ('harness:' + $h) }
+    }
+
+    $out = New-Object System.Collections.ArrayList
+    foreach ($line in (Get-Content -LiteralPath $planPath -Encoding UTF8)) {
+        if ($line.StartsWith('#')) { continue }
+        $cells = $line.Split("`t")
+        if ($cells.Count -ne 3) { continue }
+        if ($active -contains $cells[0]) { [void]$out.Add($cells[2]) }
+    }
+    return $out.ToArray()
+}
+
 function Write-LockFile {
-    param([string]$TargetRoot, [string]$Version, [hashtable]$HarnessSet)
+    param([string]$TargetRoot, [string]$Version, [hashtable]$HarnessSet, [string]$PackRoot)
 
     $lock = [ordered]@{
         version         = $Version
@@ -911,7 +882,7 @@ function Write-LockFile {
             cursor   = [bool]$HarnessSet.cursor
         }
         protectedAssets = @('docs/ui-components.md', 'openspec/changes/')
-        files           = @($script:LockFiles | Where-Object { $_ -and $_ -notlike '.agents/skills/*' } | Sort-Object -Unique)
+        files           = @(Get-ExpectedFiles -PackRoot $PackRoot -HarnessSet $HarnessSet | Sort-Object -Unique)
     }
 
     $json = ($lock | ConvertTo-Json -Depth 5) + "`n"
@@ -926,11 +897,14 @@ function Write-LockFile {
 }
 
 function Test-SkillHarness {
-    param([string]$TargetRoot, [string]$HarnessDir)
+    param([string]$TargetRoot, [string]$HarnessDir, [string]$Version)
 
     $skill = Join-Rel $TargetRoot "$HarnessDir/skills/onepress-discipline/SKILL.md"
     if (Test-Path -LiteralPath $skill) {
         $skillText = [System.IO.File]::ReadAllText($skill, $script:Utf8NoBom)
+        if ($skillText -notmatch ('onepress-version:\s*"' + [regex]::Escape($Version) + '"')) {
+            Write-Fail "$HarnessDir/skills/onepress-discipline/SKILL.md 缺少 onepress-version: `"$Version`""
+        }
         foreach ($rule in @('ui-spec.md', 'ui_change', 'sandbox-preview', '44×44', 'prefers-reduced-motion', '四态', '无障碍', '防呆', 'RED', 'GREEN', 'REFACTOR', 'verification-evidence', 'Root-Cause', 'Critical')) {
             if ($skillText -notmatch $rule) { Write-Fail "$HarnessDir/skills/onepress-discipline/SKILL.md 缺少铁律关键词：$rule" }
         }
@@ -981,27 +955,49 @@ function Test-SkillsMount {
 }
 
 function Probe-UiUx {
-    param([string]$TargetRoot)
+    param([string]$TargetRoot, [string]$Mode, [string]$Scope)
 
-    $hasPy = $null -ne (Get-Command python3 -ErrorAction SilentlyContinue)
     $hasSkill = $false
     foreach ($d in @('.qoder/skills', '.opencode/skills', '.trae/skills', '.cursor/skills')) {
         if (Test-Path -LiteralPath (Join-Rel $TargetRoot "$d/ui-ux-pro-max/scripts/search.py")) { $hasSkill = $true; break }
     }
-    if ($hasPy -and $hasSkill) {
-        Write-Info 'ui-ux-pro-max：enabled（python3 与技能目录均就绪）'
+
+    if ($Mode -ne 'install') {
+        if ($hasSkill) { Write-Info 'ui-ux-pro-max：SKIP (already installed)' }
+        else { Write-Info 'ui-ux-pro-max：SKIP' }
         return
     }
-    if (-not $hasPy) {
-        Write-Info 'ui-ux-pro-max：SKIP（未检测到 python3；检索步骤降级为手工填写 ui-spec.md）'
-    } else {
-        Write-Info 'ui-ux-pro-max：SKIP（未检测到技能目录；检索步骤降级为手工填写 ui-spec.md）'
+
+    $hasPy = $null -ne (Get-Command python3 -ErrorAction SilentlyContinue)
+    if ($hasPy -and $hasSkill) {
+        Write-Info 'ui-ux-pro-max：INSTALL (already installed)'
+        return
     }
-    Write-Info '  启用设计检索（可选，需 Node.js + Python3）：'
-    Write-Info '    npm install -g ui-ux-pro-max-cli'
-    foreach ($h in ($scope -split '\+')) {
-        Write-Info "    uipro init --ai $h --offline    # 只保留 .$h/skills/ui-ux-pro-max 目录，其余 6 个伴生技能可删"
+
+    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+        Write-Info 'ui-ux-pro-max：SKIP (npm not found)'
+        return
     }
+    $npmCode = 1
+    try { & npm install -g ui-ux-pro-max-cli *> $null; $npmCode = $LASTEXITCODE } catch { $npmCode = 1 }
+    if ($npmCode -ne 0) {
+        Write-Info 'ui-ux-pro-max：SKIP (npm install failed)'
+        return
+    }
+    if (-not (Get-Command uipro -ErrorAction SilentlyContinue)) {
+        Write-Info 'ui-ux-pro-max：SKIP (uipro not found)'
+        return
+    }
+    foreach ($h in ($Scope -split '\+')) {
+        $initCode = 1
+        Push-Location $TargetRoot
+        try { & uipro init --ai $h --offline *> $null; $initCode = $LASTEXITCODE } catch { $initCode = 1 } finally { Pop-Location }
+        if ($initCode -ne 0) {
+            Write-Info "ui-ux-pro-max：SKIP (uipro init failed: $h)"
+            return
+        }
+    }
+    Write-Info 'ui-ux-pro-max：INSTALL'
 }
 
 function Test-Acceptance {
@@ -1014,7 +1010,8 @@ function Test-Acceptance {
     if (Test-Path -LiteralPath $schemaDir) {
         $schemaCount = @(Get-ChildItem -LiteralPath $schemaDir -Recurse -File).Count
     }
-    $schemaExpected = $script:SchemaFiles.Count
+    $schemaExpected = @(Get-PlanRows -PackRoot $PackRoot -HarnessSet $HarnessSet -Phase 'all' |
+        Where-Object { $_.Target -like 'openspec/schemas/superspec/*' }).Count
     if ($schemaCount -eq $schemaExpected) { Write-Ok "openspec/schemas/superspec 共 $schemaExpected 文件（含 ui-spec.md / review.md / review-rubric.md / verification.md / code-reviewer.md）" }
     else { Write-Fail "openspec/schemas/superspec 文件数应为 $schemaExpected，实际 $schemaCount" }
 
@@ -1056,7 +1053,7 @@ function Test-Acceptance {
         }
     }
 
-    $plan = Get-BuildPlan -HarnessSet $HarnessSet
+    $plan = Get-PlanRows -PackRoot $PackRoot -HarnessSet $HarnessSet -Phase 'all'
     foreach ($item in $plan) {
         $dstPath = Join-Rel $TargetRoot $item.Target
         $srcPath = Join-Rel $PackRoot $item.Source
@@ -1073,14 +1070,26 @@ function Test-Acceptance {
         if ($srcHash -ne $dstHash) { Write-Fail "内容不一致：$($item.Target)" }
     }
 
-    if ($HarnessSet.qoder) { Test-SkillHarness -TargetRoot $TargetRoot -HarnessDir '.qoder' }
-    if ($HarnessSet.trae) { Test-SkillHarness -TargetRoot $TargetRoot -HarnessDir '.trae' }
-    if ($HarnessSet.cursor) { Test-SkillHarness -TargetRoot $TargetRoot -HarnessDir '.cursor' }
+    if ($HarnessSet.qoder) { Test-SkillHarness -TargetRoot $TargetRoot -HarnessDir '.qoder' -Version $Version }
+    if ($HarnessSet.trae) { Test-SkillHarness -TargetRoot $TargetRoot -HarnessDir '.trae' -Version $Version }
+    if ($HarnessSet.cursor) { Test-SkillHarness -TargetRoot $TargetRoot -HarnessDir '.cursor' -Version $Version }
 
-    $cmdChecks = @()
-    if ($HarnessSet.qoder) { foreach ($f in $script:QoderCommandFiles) { $cmdChecks += [pscustomobject]@{ Source = $f; Target = ($f -replace '^qoder/', '.qoder/') } } }
-    if ($HarnessSet.trae) { foreach ($f in $script:TraeCommandFiles) { $cmdChecks += [pscustomobject]@{ Source = $f; Target = ($f -replace '^trae/', '.trae/') } } }
-    if ($HarnessSet.cursor) { foreach ($f in $script:CursorCommandFiles) { $cmdChecks += [pscustomobject]@{ Source = $f; Target = ($f -replace '^cursor/', '.cursor/') } } }
+    # 退役入口不得复活：one.md / o.md 不应出现在任何已启用 harness 下。
+    foreach ($h in @('.qoder', '.opencode', '.trae', '.cursor')) {
+        $enabled = switch ($h) {
+            '.qoder' { $HarnessSet.qoder }
+            '.opencode' { $HarnessSet.opencode }
+            '.trae' { $HarnessSet.trae }
+            '.cursor' { $HarnessSet.cursor }
+        }
+        if (-not $enabled) { continue }
+        foreach ($name in @('one.md', 'o.md')) {
+            $rel = "$h/commands/$name"
+            if (Test-Path -LiteralPath (Join-Rel $TargetRoot $rel)) { Write-Fail "退役入口仍在：$rel" }
+        }
+    }
+
+    $cmdChecks = Get-PlanRows -PackRoot $PackRoot -HarnessSet $HarnessSet -Phase 'commands'
     foreach ($c in $cmdChecks) {
         $dst = Join-Rel $TargetRoot $c.Target
         $src = Join-Rel $PackRoot $c.Source
@@ -1095,6 +1104,13 @@ function Test-Acceptance {
         if (Test-Path -LiteralPath $json) {
             try { Get-Content -LiteralPath $json -Raw -Encoding UTF8 | ConvertFrom-Json | Out-Null }
             catch { Write-Fail '.opencode/opencode.json 不是合法 JSON' }
+        }
+        $ocSkill = Join-Rel $TargetRoot '.opencode/skills/superpowers-tdd/SKILL.md'
+        if (Test-Path -LiteralPath $ocSkill) {
+            $ocText = [System.IO.File]::ReadAllText($ocSkill, $script:Utf8NoBom)
+            if ($ocText -notmatch ('onepress-version:\s*"' + [regex]::Escape($Version) + '"')) {
+                Write-Fail ".opencode/skills/superpowers-tdd/SKILL.md 缺少 onepress-version: `"$Version`""
+            }
         }
     }
 
@@ -1139,6 +1155,16 @@ function Test-Acceptance {
             if (@($lock.files | Where-Object { $_ -like '.agents/skills/*' }).Count -gt 0) {
                 Write-Fail 'onePress.lock 不应记录 .agents/skills 文件'
             }
+            # 2.6：lock.files 必须与 install-plan.tsv 派生集双向一致（多/少均 FAIL）。
+            $lockActual = @($lock.files | Sort-Object -Unique)
+            $lockExpected = @(Get-ExpectedFiles -PackRoot $PackRoot -HarnessSet $HarnessSet | Sort-Object -Unique)
+            $lockExtra = @($lockActual | Where-Object { $lockExpected -notcontains $_ })
+            $lockMissing = @($lockExpected | Where-Object { $lockActual -notcontains $_ })
+            if ($lockExtra.Count -eq 0 -and $lockMissing.Count -eq 0) {
+                Write-Ok 'lock/files 与 install-plan 派生集一致'
+            } else {
+                Write-Fail ("lock/files 与派生集不一致：多出[{0}] 缺失[{1}]" -f (($lockExtra | Select-Object -First 3) -join ' '), (($lockMissing | Select-Object -First 3) -join ' '))
+            }
         } catch {
             Write-Fail 'onePress.lock 无法解析'
         }
@@ -1164,6 +1190,9 @@ if (-not (Test-Path -LiteralPath (Join-Path $targetRoot '.git'))) {
 
 $packRoot = Resolve-PackSource -Path $Source
 $version = (Get-Content -LiteralPath (Join-Path $packRoot 'VERSION') -Raw -Encoding UTF8).Trim()
+$planPath = Join-Rel $packRoot 'install-plan.tsv'
+if (-not (Test-Path -LiteralPath $planPath)) { Stop-Install 'install-plan.tsv 缺失（pack 不完整）' }
+Test-PlanFile -Path $planPath
 Write-Info "模板包：$packRoot（v$version）"
 Write-Info "目标仓库：$targetRoot"
 
@@ -1179,6 +1208,18 @@ $installKind = if ($oldLock) {
 } else { '全新安装' }
 Write-Info "安装类型：$installKind"
 
+# -ReconcileLock：只重写 onePress.lock，不写资产、不做挂载、不跑 openspec init。
+if ($ReconcileLock) {
+    if ($DryRun) {
+        Write-Info "would reconcile onePress.lock ($((Get-ExpectedFiles -PackRoot $packRoot -HarnessSet $harnessSet).Count) entries)"
+    }
+    else {
+        Write-LockFile -TargetRoot $targetRoot -Version $version -HarnessSet $harnessSet -PackRoot $packRoot
+        Write-Info 'lock reconciled (no files written)'
+    }
+    exit 0
+}
+
 $gitStatus = Get-GitStatusPaths -TargetRoot $targetRoot
 $managedFiles = @{}
 if ($oldLock -and $oldLock.files) {
@@ -1187,8 +1228,8 @@ if ($oldLock -and $oldLock.files) {
     }
 }
 # .ps1 对等实现随包安装并记入 lock；未跟踪旧文件仍必须可被刷新。
-foreach ($file in $script:ToolingFiles) {
-    if ($file -like 'scripts/*.ps1') { $managedFiles[[string]$file] = $true }
+foreach ($row in (Get-PlanRows -PackRoot $packRoot -HarnessSet $harnessSet -Phase 'all')) {
+    if ($row.Target -like 'scripts/*.ps1') { $managedFiles[[string]$row.Target] = $true }
 }
 if ($gitStatus.modified.Count -gt 0) {
     Write-Warn "检测到 $($gitStatus.modified.Count) 个已跟踪文件存在未提交修改，命中的 harness 文件将被跳过"
@@ -1196,20 +1237,34 @@ if ($gitStatus.modified.Count -gt 0) {
 
 Write-Step '② 分层安装'
 
-$plan = Get-BuildPlan -HarnessSet $harnessSet
+# 清理旧版 onePress 技能与退役路径：必须在任何写入之前，且用包内脚本（目标仓库可能尚无副本）。
+$pruneHarnesses = @()
+foreach ($h in @('qoder', 'opencode', 'trae', 'cursor')) {
+    if ($harnessSet.$h) { $pruneHarnesses += $h }
+}
+$pruneScript = Join-Path $packRoot 'scripts/onepress-skills-prune.ps1'
+if ((Test-Path -LiteralPath $pruneScript) -and $pruneHarnesses.Count -gt 0) {
+    $pruneArgs = @('-NoProfile', '-File', $pruneScript,
+        '-Root', $targetRoot, '-Version', $version,
+        '-Harness', ($pruneHarnesses -join ','))
+    if ($DryRun) { $pruneArgs += '-DryRun' }
+    # 用当前宿主执行，兼容仅有 Windows PowerShell 5.1 的机器（不硬依赖 pwsh）。
+    $hostExe = (Get-Process -Id $PID).Path
+    if (-not $hostExe) { $hostExe = 'pwsh' }
+    try {
+        & $hostExe @pruneArgs
+        if ($LASTEXITCODE -ne 0) { Write-Warn '技能清理阶段未完成，继续安装' }
+    }
+    catch {
+        Write-Warn "技能清理阶段未能执行：$($_.Exception.Message)"
+    }
+}
+
+$plan = Get-PlanRows -PackRoot $packRoot -HarnessSet $harnessSet -Phase 'pre'
 $willWrite = @{}
 foreach ($item in $plan) { $willWrite[$item.Target] = $true }
 
-$commandPlan = New-Object System.Collections.ArrayList
-if ($harnessSet.qoder) {
-    foreach ($file in $script:QoderCommandFiles) { [void]$commandPlan.Add([pscustomobject]@{ Source = $file; Target = ($file -replace '^qoder/', '.qoder/') }) }
-}
-if ($harnessSet.trae) {
-    foreach ($file in $script:TraeCommandFiles) { [void]$commandPlan.Add([pscustomobject]@{ Source = $file; Target = ($file -replace '^trae/', '.trae/') }) }
-}
-if ($harnessSet.cursor) {
-    foreach ($file in $script:CursorCommandFiles) { [void]$commandPlan.Add([pscustomobject]@{ Source = $file; Target = ($file -replace '^cursor/', '.cursor/') }) }
-}
+$commandPlan = Get-PlanRows -PackRoot $packRoot -HarnessSet $harnessSet -Phase 'commands'
 foreach ($item in $commandPlan) { $willWrite[$item.Target] = $true }
 
 if ($oldLock) {
@@ -1250,6 +1305,9 @@ if ($harnessSet.cursor) {
 
 if ($harnessSet.opencode) {
     Remove-LegacyCommands -TargetRoot $targetRoot -HarnessDir '.opencode' -ModifiedFiles $gitStatus.modified
+    foreach ($item in $commandPlan) {
+        if ($item.Target -like '.opencode/*') { Copy-PackFile -PackRoot $packRoot -TargetRoot $targetRoot -GitStatus $gitStatus -ManagedFiles $managedFiles -Item $item }
+    }
 }
 
 if ($toolsCsv) {
@@ -1257,12 +1315,12 @@ if ($toolsCsv) {
 }
 
 Write-Step '③ 写入 onePress.lock'
-Write-LockFile -TargetRoot $targetRoot -Version $version -HarnessSet $harnessSet
+Write-LockFile -TargetRoot $targetRoot -Version $version -HarnessSet $harnessSet -PackRoot $packRoot
 
 if (-not $DryRun) { Test-Acceptance -PackRoot $packRoot -TargetRoot $targetRoot -HarnessSet $harnessSet -Version $version }
 
 Write-Step '⑤ 可选增强层探测'
-Probe-UiUx -TargetRoot $targetRoot
+Probe-UiUx -TargetRoot $targetRoot -Mode $UiUxProMax -Scope $scope
 
 Write-Step '⑥ 报告'
 Write-Info "安装范围：harnesses: $scope"

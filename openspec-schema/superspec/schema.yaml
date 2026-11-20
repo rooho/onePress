@@ -84,8 +84,8 @@ description: >
   Evidence Map with scope tiers, summary-only output, `--range` and
   `--churn`. Gate SKIP splits into `not-applicable` and `no-coverage`, the
   latter failing required gates; gate 4 detects pytest, vitest or npm test.
-  The review command is renamed `openspec-review-change`, and a `/one`
-  alias entry forwards to the canonical names.
+  The review command is renamed `openspec-review-change`, and 14 flat
+  `/op-<key>` entry files forward to the canonical names.
 
 artifacts:
   - id: brainstorm
@@ -574,7 +574,7 @@ artifacts:
     instruction: |
       ONE PRESS GATES (all harnesses):
       COMBINED ENTRY (V3.3): when this step is invoked through
-      `/one verify` (or `/openspec-finish-change <change>`), run it as a
+      `/op-finish` (or `/openspec-finish-change <change>`), run it as a
       chain: verify-report → verify → finalize, with a single user
       confirmation up front. Short-circuit and return to apply when the
       evidence has `Critical > 0` or `Important > 0`, or when verify is
@@ -805,7 +805,7 @@ artifacts:
          git branch -d "$WORKTREE_BRANCH"
 
       7.5 ARCHIVE BLOCKING REGRESSION (onePress): the archive step
-          (openspec-archive-change / `/one archive`) MUST run the full
+          (openspec-archive-change / `/op-archive`) MUST run the full
           self-test suite AFTER it syncs the delta specs and BEFORE it
           moves this change directory:
 
