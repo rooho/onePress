@@ -54,14 +54,35 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# evidence_round —— 冷审轮次由台账派生（**Review Round**: N）。
+# 没有台账时不写 round："未知"不能被当成"第一轮"，否则首轮通过率会被污染。
+evidence_round() {
+  local round=""
+  if [ -n "${ONEPRESS_EVIDENCE_ROUND:-}" ]; then
+    round="$ONEPRESS_EVIDENCE_ROUND"
+  elif [ -n "${CHANGE_DIR:-}" ] && [ -f "$CHANGE_DIR/review-ledger.md" ]; then
+    # 规范字段是 **review_round**（模板/verify 均用此名）；兼用旧写法 **Review Round**。
+    round="$(tr -d '\r' < "$CHANGE_DIR/review-ledger.md" \
+      | sed -nE 's/^\*\*(review_round|Review Round)\*\*:[[:space:]]*`?([0-9]+)`?.*$/\2/p' \
+      | head -n 1)"
+  fi
+  case "$round" in
+    ''|*[!0-9]*) return 0 ;;
+  esac
+  printf '%s' "$round"
+}
+
 # 遥测埋点：任何退出路径都写 1 条事件；失败静默，不改变退出码。
 _telemetry_on_exit() {
   local rc=$?
   local status=pass
+  local round=""
   [ "$rc" -eq 0 ] || status=fail
-  bash "${BASH_SOURCE[0]%/*}/onepress-telemetry.sh" emit evidence.finish \
-    --status "$status" --duration-ms "$((SECONDS * 1000))" \
-    --payload "{\"passed\":${PASS:-0},\"failed\":${FAIL:-0}}" >/dev/null 2>&1 || true
+  round="$(evidence_round)"
+  local -a args=(emit evidence.finish --status "$status" --duration-ms "$((SECONDS * 1000))")
+  [ -n "$round" ] && args+=(--round "$round")
+  args+=(--payload "{\"passed\":${PASS:-0},\"failed\":${FAIL:-0}}")
+  bash "${BASH_SOURCE[0]%/*}/onepress-telemetry.sh" "${args[@]}" >/dev/null 2>&1 || true
 }
 trap _telemetry_on_exit EXIT
 

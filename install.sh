@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # onePress installer for macOS / Linux (bash 3.2+).
 #
-# 发布版本锚点（dev/release-check.sh 校验四处版本一致）：2.3.0-alpha.1
-#
 # Installs the onePress pack (OpenSpec x Superpowers x Tailwind/shadcn) into a target repo.
 # All checks run inside this script; any failure aborts with a reason.
 #
@@ -17,6 +15,7 @@
 #   ./install.sh --source "" --repo https://github.com/rooho/onePress.git --ref main
 set -eo pipefail
 
+# 发布版本锚点（dev/release-check.sh 校验四处版本一致）：2.3.0-alpha.1
 HARNESS="auto"
 SOURCE=""
 TARGET=""
@@ -49,6 +48,9 @@ CURSOR_COMMAND_FILES="cursor/commands/openspec-review-change.md cursor/commands/
 
 TOOLING_FILES="scripts/onepress-evidence-lint.sh scripts/onepress-gate.sh scripts/onepress-plan-lint.sh scripts/onepress-review-lint.sh scripts/onepress-telemetry.sh scripts/onepress-verify.sh scripts/sandbox-preflight.spec.ts"
 
+# .ps1 对等实现：必须随包安装，但与同名 .sh 计同一逻辑项，不入 lock。
+TOOLING_ALIAS_FILES="scripts/onepress-telemetry.ps1"
+
 WRITTEN=""
 LOCK_FILES=""
 SKIPPED=""
@@ -72,7 +74,7 @@ PROTECTED=""
 MOUNT_SKIPPED=""
 
 usage() {
-  sed -n '2,16p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'
 }
 
 # ---------------------------------------------------------------- output
@@ -260,6 +262,7 @@ copy_file() {
   local target="$2"
   local src_rel="$3"
   local dst_rel="$4"
+  local record_lock="${5:-1}"
   local src="$pack/$src_rel"
   local dst="$target/$dst_rel"
 
@@ -283,13 +286,17 @@ copy_file() {
   if [ "$DRY_RUN" = 1 ]; then
     info "would write $dst_rel"
     WRITTEN="$WRITTEN$dst_rel"$'\n'
-    LOCK_FILES="$LOCK_FILES$dst_rel"$'\n'
+    if [ "$record_lock" = 1 ]; then
+      LOCK_FILES="$LOCK_FILES$dst_rel"$'\n'
+    fi
     return 0
   fi
 
   mkdir -p "$(dirname "$dst")"
   cp -f "$src" "$dst"
-  LOCK_FILES="$LOCK_FILES$dst_rel"$'\n'
+  if [ "$record_lock" = 1 ]; then
+    LOCK_FILES="$LOCK_FILES$dst_rel"$'\n'
+  fi
   ok "$dst_rel"
 }
 
@@ -405,6 +412,8 @@ init_ui_components() {
       info '  | 组件名称 | 路径 | 适用骨架 (Archetype) | 核心 Props 签名 |'
     fi
     skip "$rel（已存在，Protect Local 不覆盖）"
+    # 已存在也必须记入 lock：generated 资产不因重装而从受管清单里消失。
+    LOCK_FILES="$LOCK_FILES$rel"$'\n'
     return 0
   fi
 
@@ -794,6 +803,9 @@ build_will_write() {
   for rel in $TOOLING_FILES; do
     WILL_WRITE="$WILL_WRITE$rel"$'\n'
   done
+  for rel in $TOOLING_ALIAS_FILES; do
+    WILL_WRITE="$WILL_WRITE$rel"$'\n'
+  done
   WILL_WRITE="$WILL_WRITE""docs/ui-components.md"$'\n'
 }
 
@@ -1033,7 +1045,7 @@ run_acceptance() {
     cmp -s "$pack/cursor/commands/openspec-review-change.md" "$target/.cursor/commands/openspec-review-change.md" || bad '内容不一致：.cursor/commands/openspec-review-change.md'
   fi
 
-  for rel in $TOOLING_FILES; do
+  for rel in $TOOLING_FILES $TOOLING_ALIAS_FILES; do
     if in_list "$rel" "$PROTECTED"; then
       skip "$rel（受保护跳过，不计入失败）"
       continue
@@ -1130,7 +1142,6 @@ TARGET_ROOT="$(cd "${TARGET:-.}" && pwd)" || die "目标目录不存在：${TARG
 
 PACK_ROOT="$(resolve_source "$SOURCE")" || exit 1
 VERSION="$(tr -d '\r\n' < "$PACK_ROOT/VERSION")"
-telemetry_emit install.start pass "{\"harness\":\"$(printf '%s' "$SCOPE" | tr ',' ' ' | tr -d ' ' )\"}"
 info "模板包：$PACK_ROOT（v$VERSION）"
 info "目标仓库：$TARGET_ROOT"
 
@@ -1143,6 +1154,8 @@ SCOPE=""
 [ "$USE_TRAE" = 1 ] && SCOPE="${SCOPE:+$SCOPE+}trae"
 [ "$USE_CURSOR" = 1 ] && SCOPE="${SCOPE:+$SCOPE+}cursor"
 printf '   [OK]   安装范围 harnesses：%s\n' "$SCOPE"
+# 必须在 SCOPE 解析之后发事件，否则 payload.harness 恒为空。
+telemetry_emit install.start pass "{\"harness\":\"$SCOPE\"}"
 
 LOCK="$TARGET_ROOT/onePress.lock"
 OLD_VERSION=""
@@ -1162,7 +1175,8 @@ info "安装类型：$INSTALL_KIND"
 
 MODIFIED="$(modified_paths "$TARGET_ROOT")"
 UNTRACKED="$(untracked_paths "$TARGET_ROOT")"
-MANAGED="$(lock_files "$LOCK")"
+# alias（.ps1 对等实现）不入 lock，但仍属 onePress 管理：否则已存在且未跟踪时会被当用户文件永久跳过。
+MANAGED="$(lock_files "$LOCK"; printf '%s\n' $TOOLING_ALIAS_FILES)"
 if [ -n "$MODIFIED" ]; then
   warn "检测到 $(printf '%s\n' "$MODIFIED" | grep -c .) 个已跟踪文件存在未提交修改，命中的 harness 文件将被跳过"
 fi
@@ -1204,6 +1218,10 @@ fi
 
 for rel in $TOOLING_FILES; do
   copy_file "$PACK_ROOT" "$TARGET_ROOT" "$rel" "$rel"
+done
+
+for rel in $TOOLING_ALIAS_FILES; do
+  copy_file "$PACK_ROOT" "$TARGET_ROOT" "$rel" "$rel" 0
 done
 
 init_ui_components "$TARGET_ROOT"

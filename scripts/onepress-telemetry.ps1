@@ -25,6 +25,8 @@ $ErrorActionPreference = 'Stop'
 
 $TelemetryV = 1
 $LineLimit = 1800
+$SessionLimit = 128
+$FieldLimit = 96
 $MaxAttempts = 3
 $RetryDelayMs = 30
 
@@ -92,6 +94,31 @@ function Get-ProjectId {
   }
 }
 
+function ConvertTo-JsonString {
+  param([string]$Value)
+  return ($Value | ConvertTo-Json -Compress)
+}
+
+# 剔除 C0 控制字符与 DEL，与 bash 侧 json_escape 的口径一致。
+function Remove-ControlChars {
+  param([string]$Value)
+  if (-not $Value) { return '' }
+  return ($Value -replace '[\x00-\x1F\x7F]', '')
+}
+
+# 隐私闸：只放行标识符类字符串；任何路径分隔符、盘符、~、..、file: 或 URL 编码分隔符都拒绝。
+function Test-SafePayloadString {
+  param([string]$Value)
+  if ($Value.Length -gt 4096) { return $false }
+  if ($Value -match '[\\/]') { return $false }
+  if ($Value -match '^~') { return $false }
+  if ($Value -match '^[A-Za-z]:') { return $false }
+  if ($Value -match '\.\.') { return $false }
+  if ($Value -match '^file:') { return $false }
+  if ($Value -match '(?i)%2f|%5c') { return $false }
+  return $true
+}
+
 function Get-FilteredPayload {
   param([string]$Json)
   if (-not $Json) { return '' }
@@ -100,13 +127,18 @@ function Get-FilteredPayload {
   } catch {
     return ''
   }
+  if ($null -eq $object -or $object -is [array]) { return '' }
   $pairs = New-Object System.Collections.Generic.List[string]
   foreach ($prop in $object.PSObject.Properties) {
     if ($AllowedPayloadKeys -notcontains $prop.Name) { continue }
     $value = $prop.Value
     if ($null -eq $value) { continue }
-    if ($value -is [array] -or $value -is [System.Management.Automation.PSCustomObject]) { continue }
-    if ($value -is [string] -and $value.Contains('/')) { continue }
+    if ($value -is [array] -or $value -is [System.Management.Automation.PSCustomObject] -or $value -is [hashtable]) { continue }
+    if ($value -is [string]) {
+      if (-not (Test-SafePayloadString -Value $value)) { continue }
+    } elseif (-not ($value -is [int] -or $value -is [long] -or $value -is [double] -or $value -is [decimal] -or $value -is [bool])) {
+      continue
+    }
     $pairs.Add(('"{0}":{1}' -f $prop.Name, ($value | ConvertTo-Json -Compress -Depth 1)))
   }
   if ($pairs.Count -eq 0) { return '' }
@@ -117,33 +149,68 @@ function New-Envelope {
   $now = Get-Date
   $ts = $now.ToString("yyyy-MM-ddTHH:mm:sszzz")
   $month = $now.ToString('yyyy-MM')
-  $session = if ($env:ONEPRESS_SESSION_ID) { '"' + $env:ONEPRESS_SESSION_ID + '"' } else { 'null' }
   $version = 'unknown'
   $versionFile = Join-Path (Split-Path -Parent $PSScriptRoot) 'VERSION'
   if (Test-Path -LiteralPath $versionFile) {
     $version = (Get-Content -LiteralPath $versionFile -TotalCount 1).Trim()
     if (-not $version) { $version = 'unknown' }
   }
-  $extra = ''
-  if ($Step) { $extra += ',"step":"' + $Step + '"' }
-  if ($DurationMs -ge 0) { $extra += ',"duration_ms":' + $DurationMs }
+  if ([Text.Encoding]::UTF8.GetByteCount($version) -gt 32) { $version = 'unknown' }
+  $status = $Status
+  if (-not $status -or [Text.Encoding]::UTF8.GetByteCount($status) -gt 40) { $status = 'unknown' }
+  $step = $Step
+  if ($step -and [Text.Encoding]::UTF8.GetByteCount($step) -gt $FieldLimit) { $step = '' }
+
+  $sessionValue = $null
+  $sessionDropped = $false
+  if ($env:ONEPRESS_SESSION_ID) {
+    if ([Text.Encoding]::UTF8.GetByteCount($env:ONEPRESS_SESSION_ID) -gt $SessionLimit -or
+        -not (Test-SafePayloadString -Value $env:ONEPRESS_SESSION_ID)) {
+      $sessionDropped = $true
+    } else {
+      $sessionValue = Remove-ControlChars $env:ONEPRESS_SESSION_ID
+      if (-not $sessionValue) { $sessionValue = $null; $sessionDropped = $true }
+    }
+  }
+
+  $installId = Get-InstallId
+  if ([Text.Encoding]::UTF8.GetByteCount($installId) -gt 64 -or -not (Test-SafePayloadString -Value $installId)) { $installId = 'unknown' }
+  $projectId = Get-ProjectId
   $filtered = Get-FilteredPayload -Json $Payload
-  if ($filtered) { $extra += ',"payload":' + $filtered }
 
-  $head = '{"telemetry_v":' + $TelemetryV +
-    ',"event":"' + $EventName +
-    '","ts":"' + $ts +
-    '","install_id":"' + (Get-InstallId) +
-    '","project_id":"' + (Get-ProjectId) +
-    '","session_id":' + $session +
-    ',"onepress":"' + $version +
-    '","status":"' + $Status +
-    '","token_in_est":null,"token_out_est":null,"token_est_method":null'
+  # 整行由 JSON 序列化器生成：不再手拼引号，避免转义遗漏。
+  $build = {
+    param([bool]$WithSession, [bool]$WithPayload, [bool]$Truncated)
+    $envelope = [ordered]@{
+      telemetry_v      = $TelemetryV
+      event            = (Remove-ControlChars $EventName)
+      ts               = $ts
+      install_id       = (Remove-ControlChars $installId)
+      project_id       = (Remove-ControlChars $projectId)
+      session_id       = $(if ($WithSession) { Remove-ControlChars $sessionValue } else { $null })
+      onepress         = (Remove-ControlChars $version)
+      status           = (Remove-ControlChars $status)
+      token_in_est     = $null
+      token_out_est    = $null
+      token_est_method = $null
+    }
+    if ($step) { $envelope['step'] = (Remove-ControlChars $step) }
+    if ($DurationMs -ge 0) { $envelope['duration_ms'] = $DurationMs }
+    if ($WithPayload -and $filtered) { $envelope['payload'] = ($filtered | ConvertFrom-Json) }
+    if ($Truncated) { $envelope['truncated'] = $true }
+    return ($envelope | ConvertTo-Json -Compress -Depth 10)
+  }
 
-  $line = $head + $extra + '}'
-  $bytes = [Text.Encoding]::UTF8.GetBytes($line)
-  if ($bytes.Length -gt $LineLimit) {
-    $line = $head + ',"truncated":true}'
+  $hasSession = $null -ne $sessionValue
+  $line = & $build $hasSession $true $sessionDropped
+  if ([Text.Encoding]::UTF8.GetByteCount($line) -gt $LineLimit) {
+    $line = & $build $hasSession $false $true
+  }
+  if ([Text.Encoding]::UTF8.GetByteCount($line) -gt $LineLimit) {
+    $line = & $build $false $false $true
+  }
+  if ([Text.Encoding]::UTF8.GetByteCount($line) -gt $LineLimit) {
+    $line = '{"telemetry_v":' + $TelemetryV + ',"event":"unknown","ts":"1970-01-01T00:00:00+00:00","install_id":"unknown","project_id":"unknown","session_id":null,"onepress":"unknown","status":"unknown","token_in_est":null,"token_out_est":null,"token_est_method":null,"truncated":true}'
   }
   return @{ Line = $line; Month = $month }
 }

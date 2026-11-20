@@ -132,6 +132,8 @@ $script:ToolingFiles = @(
     'scripts/onepress-gate.sh',
     'scripts/onepress-plan-lint.sh',
     'scripts/onepress-review-lint.sh',
+    'scripts/onepress-telemetry.ps1',
+    'scripts/onepress-telemetry.sh',
     'scripts/onepress-verify.sh',
     'scripts/sandbox-preflight.spec.ts'
 )
@@ -817,6 +819,8 @@ function Initialize-UiComponents {
             Write-Info '  | 组件名称 | 路径 | 适用骨架 (Archetype) | 核心 Props 签名 |'
         }
         Write-Skip "$rel（已存在，Protect Local 不覆盖）"
+        # 已存在也必须记入 lock：generated 资产不因重装而从受管清单里消失。
+        [void]$script:LockFiles.Add($rel)
         return
     }
 
@@ -907,7 +911,7 @@ function Write-LockFile {
             cursor   = [bool]$HarnessSet.cursor
         }
         protectedAssets = @('docs/ui-components.md', 'openspec/changes/')
-        files           = @($script:LockFiles | Where-Object { $_ -and $_ -notlike '.agents/skills/*' } | Sort-Object -Unique)
+        files           = @($script:LockFiles | Where-Object { $_ -and $_ -notlike '.agents/skills/*' -and $_ -notlike 'scripts/*.ps1' } | Sort-Object -Unique)
     }
 
     $json = ($lock | ConvertTo-Json -Depth 5) + "`n"
@@ -1181,6 +1185,10 @@ if ($oldLock -and $oldLock.files) {
     foreach ($file in @($oldLock.files)) {
         if ($file) { $managedFiles[[string]$file] = $true }
     }
+}
+# .ps1 对等实现不入 lock，但仍属 onePress 管理：未跟踪旧文件必须可被刷新。
+foreach ($file in $script:ToolingFiles) {
+    if ($file -like 'scripts/*.ps1') { $managedFiles[[string]$file] = $true }
 }
 if ($gitStatus.modified.Count -gt 0) {
     Write-Warn "检测到 $($gitStatus.modified.Count) 个已跟踪文件存在未提交修改，命中的 harness 文件将被跳过"

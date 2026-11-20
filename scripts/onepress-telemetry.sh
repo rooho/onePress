@@ -22,6 +22,11 @@ TELEMETRY_V=1
 LINE_LIMIT=1800
 MAX_BYTES=5242880
 DEFAULT_KEEP_MONTHS=12
+# 可被外部输入撑大的字段：超限即丢弃，保证单行 1,800 B 是硬上限。
+SESSION_LIMIT=128
+STATUS_LIMIT=40
+STEP_LIMIT=96
+VERSION_LIMIT=32
 SUBCOMMANDS="emit step report show prune status export"
 # 稳定事件目录（M1）：未知事件名必须拒绝，避免指标被脏名字污染。
 EVENT_CATALOG="install.start install.finish gate.finish evidence.finish verify.finish step.start step.finish"
@@ -90,9 +95,9 @@ dispatch() {
 
 # ---------- 基础工具 ----------
 
-# json_escape <text> —— 去控制字符并转义反斜杠与双引号。
+# json_escape <text> —— 剔除全部 C0 控制字符与 DEL，并转义反斜杠与双引号。
 json_escape() {
-  printf '%s' "$1" | tr -d '\r\n\t' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
+  printf '%s' "$1" | LC_ALL=C tr -d '\000-\037\177' | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'
 }
 
 byte_len() {
@@ -305,22 +310,52 @@ month_index() {
 # ---------- 信封 ----------
 
 # filter_payload <json> —— 按白名单裁剪 payload：未知键、嵌套对象、含路径的值一律丢弃。
-# 纯 awk 实现，不依赖 jq；嵌套结构整段丢弃而非展开，保证输出保持合法 JSON。
+# 纯 awk 实现，不依赖 jq。隐私闸采用"先证明合法再放行"：键必须是完整带引号的标识符，
+# 值必须是数字/布尔/null 或完整字符串；字符串中出现路径分隔符、盘符、~、..、
+# file: 或 URL 编码分隔符（%2f/%5c）一律丢弃。这也是 JSON 合法性闸：不合法即丢弃。
 filter_payload() {
   printf '%s' "$1" | awk -v wl="$PAYLOAD_KEYS" '
-    function emit_pair(p,   i, k, v, key) {
-      if (p == "") return
-      i = index(p, ":")
-      if (i == 0) return
-      k = substr(p, 1, i - 1)
-      v = substr(p, i + 1)
-      gsub(/^[ \t]+/, "", k); gsub(/[ \t]+$/, "", k)
-      gsub(/^[ \t]+/, "", v); gsub(/[ \t]+$/, "", v)
-      key = k
-      gsub(/"/, "", key)
+    function trim(s) {
+      sub(/^[ \t\r\n]+/, "", s); sub(/[ \t\r\n]+$/, "", s)
+      return s
+    }
+    # safe_value <json-scalar> —— 1 表示可安全落盘；严格到不合法即拒绝。
+    function safe_value(v,   inner, low) {
+      if (v == "true" || v == "false" || v == "null") return 1
+      if (v ~ /^-?[0-9]+([.][0-9]+)?$/) return 1
+      if (v !~ /^".*"$/) return 0
+      inner = substr(v, 2, length(v) - 2)
+      if (inner ~ /(^|[^\\])"/) return 0
+      if (inner ~ /[[:cntrl:]]/) return 0
+      if (inner ~ /[\\\/]/) return 0
+      if (inner ~ /^~/) return 0
+      if (inner ~ /^[A-Za-z]:/) return 0
+      if (inner ~ /[.][.]/) return 0
+      low = tolower(inner)
+      if (low ~ /^file:/) return 0
+      if (low ~ /%2f|%5c/) return 0
+      return 1
+    }
+    function emit_pair(p,   i, c, key, rest, v) {
+      p = trim(p)
+      if (p == "" || substr(p, 1, 1) != "\"") return
+      key = ""
+      i = 2
+      while (i <= length(p)) {
+        c = substr(p, i, 1)
+        if (c == "\\") return
+        if (c == "\"") break
+        key = key c
+        if (length(key) > 32) return
+        i++
+      }
+      if (i > length(p)) return
+      rest = trim(substr(p, i + 1))
+      if (substr(rest, 1, 1) != ":") return
+      v = trim(substr(rest, 2))
       if (!(key in allowed)) return
-      if (v ~ /[\[\{]/) return
-      if (v ~ /\//) return
+      if (length(v) == 0 || length(v) > 4096) return
+      if (!safe_value(v)) return
       if (out != "") out = out ","
       out = out "\"" key "\":" v
     }
@@ -358,30 +393,71 @@ filter_payload() {
   '
 }
 
+# bounded_field <value> <max-bytes> —— 超限返回空串，调用方按缺失处理。
+bounded_field() {
+  if [ "$(byte_len "$1")" -le "$2" ]; then
+    printf '%s' "$1"
+  fi
+}
+
+# need_val <sub> <option> <argc> —— 选项缺值时统一返回 2。
+# 否则 `shift 2` 在参数不足时不减少 $#，会陷入 while 死循环。
+need_val() {
+  [ "$3" -ge 2 ] && return 0
+  printf '%s: %s needs a value\n' "$1" "$2" >&2
+  return 2
+}
+
 # build_envelope <event> <status> [step] [duration_ms] [payload]
 # 成功时把单行 JSON 写入 $ENVELOPE_LINE、分片月份写入 $ENVELOPE_MONTH。
 # 不用命令替换：子 shell 会丢掉这两个全局变量。
+# 1,800 B 是硬上限：session_id / status / step / version 与 payload 任一超限都会降级，
+# 最终降不下时就只保留必填字段并标 truncated。
 build_envelope() {
   local event="$1" status="${2:-unknown}" step="${3:-}" duration="${4:-}" payload="${5:-}"
-  local ts="" month="" install_id="" pid="" session_json="null" base="" extra="" line=""
-  ts="$(normalize_ts "$(now_ts)")"
+  local ts="" month="" install_id="" pid="" version="" sid="" sid_low=""
+  local session_json="null" session_dropped=0 prefix="" tail="" base="" extra="" line=""
+  local truncated=0
+  ts="$(bounded_field "$(normalize_ts "$(now_ts)")" 35)"
+  [ -n "$ts" ] || return 1
   month="$(ts_month "$ts")" || return 1
-  install_id="$(ensure_install_id)" || return 1
+  install_id="$(bounded_field "$(ensure_install_id)" 64)"
+  [ -n "$install_id" ] || return 1
   pid="$(project_id)" || return 1
+  version="$(bounded_field "$(onepress_version)" "$VERSION_LIMIT")"
+  [ -n "$version" ] || version="unknown"
+  status="$(bounded_field "$status" "$STATUS_LIMIT")"
+  [ -n "$status" ] || status="unknown"
+  step="$(bounded_field "$step" "$STEP_LIMIT")"
   if [ -n "${ONEPRESS_SESSION_ID:-}" ]; then
-    session_json="\"$(json_escape "$ONEPRESS_SESSION_ID")\""
+    # session_id 由宿主注入，同样不得携带路径信息（隐私闸不只管 payload）。
+    sid_low="$(printf '%s' "$ONEPRESS_SESSION_ID" | LC_ALL=C tr 'A-Z' 'a-z')"
+    case "$sid_low" in
+      *\\*|*/*|~*|*..*|*%2f*|*%5c*|[a-z]:*) session_dropped=1 ;;
+      *)
+        sid="$(json_escape "$ONEPRESS_SESSION_ID")"
+        if [ -n "$sid" ] && [ "$(byte_len "$sid")" -le "$SESSION_LIMIT" ]; then
+          session_json="\"$sid\""
+        else
+          session_dropped=1
+        fi
+        ;;
+    esac
   fi
   case "$duration" in
     ''|*[!0-9]*) duration="" ;;
   esac
+  [ -z "$duration" ] || [ "${#duration}" -le 12 ] || duration=""
+  prefix="$(printf '{"telemetry_v":%s,"event":"%s","ts":"%s","install_id":"%s","project_id":"%s"' \
+    "$TELEMETRY_V" "$(json_escape "$event")" "$(json_escape "$ts")" \
+    "$(json_escape "$install_id")" "$(json_escape "$pid")")"
+  tail="$(printf ',"onepress":"%s","status":"%s","token_in_est":%s,"token_out_est":%s,"token_est_method":%s' \
+    "$(json_escape "$version")" "$(json_escape "$status")" \
+    "$TOKEN_IN_JSON" "$TOKEN_OUT_JSON" "$TOKEN_METHOD_JSON")"
+  base="$prefix,\"session_id\":$session_json$tail"
   [ -n "$step" ] && extra="$extra,\"step\":\"$(json_escape "$step")\""
   [ -n "$duration" ] && extra="$extra,\"duration_ms\":$duration"
   [ -n "$CURRENT_ROUND" ] && extra="$extra,\"round\":$CURRENT_ROUND"
-  base="$(printf '{"telemetry_v":%s,"event":"%s","ts":"%s","install_id":"%s","project_id":"%s","session_id":%s,"onepress":"%s","status":"%s","token_in_est":%s,"token_out_est":%s,"token_est_method":%s' \
-    "$TELEMETRY_V" "$(json_escape "$event")" "$ts" "$install_id" "$pid" \
-    "$session_json" "$(onepress_version)" "$(json_escape "$status")" \
-    "$TOKEN_IN_JSON" "$TOKEN_OUT_JSON" "$TOKEN_METHOD_JSON")"
-  # 单行硬上限：能整体放下才写 payload，否则丢弃 payload 并标 truncated。
   if [ -n "$payload" ]; then
     payload="$(filter_payload "$payload")"
   fi
@@ -389,12 +465,24 @@ build_envelope() {
     if [ "$(byte_len "$base$extra,\"payload\":$payload}")" -le "$LINE_LIMIT" ]; then
       extra="$extra,\"payload\":$payload"
     else
-      extra="$extra,\"truncated\":true"
+      truncated=1
     fi
   fi
+  [ "$session_dropped" = 1 ] && truncated=1
   line="$base$extra}"
+  [ "$truncated" = 1 ] && line="$base$extra,\"truncated\":true}"
   if [ "$(byte_len "$line")" -gt "$LINE_LIMIT" ]; then
-    line="$base,\"truncated\":true}"
+    # session_id 是唯一可由环境注入的超长字段：先丢弃它，保留其余元数据。
+    base="$prefix,\"session_id\":null$tail"
+    extra=""
+    [ -n "$step" ] && extra="$extra,\"step\":\"$(json_escape "$step")\""
+    [ -n "$duration" ] && extra="$extra,\"duration_ms\":$duration"
+    [ -n "$CURRENT_ROUND" ] && extra="$extra,\"round\":$CURRENT_ROUND"
+    line="$base$extra,\"truncated\":true}"
+  fi
+  if [ "$(byte_len "$line")" -gt "$LINE_LIMIT" ]; then
+    # 最终兜底：只保留固定长度的必填字段，绝不超限。
+    line="$prefix,\"session_id\":null,\"onepress\":\"unknown\",\"status\":\"unknown\",\"token_in_est\":null,\"token_out_est\":null,\"token_est_method\":null,\"truncated\":true}"
   fi
   ENVELOPE_MONTH="$month"
   ENVELOPE_LINE="$line"
@@ -428,14 +516,14 @@ cmd_emit() {
   CURRENT_ROUND=""
   while [ $# -gt 0 ]; do
     case "$1" in
-      --status)      status="${2:-}"; shift 2 ;;
-      --step)        step="${2:-}"; shift 2 ;;
-      --round)       round="${2:-}"; shift 2 ;;
-      --duration-ms) duration="${2:-}"; shift 2 ;;
-      --payload)     payload="${2:-}"; shift 2 ;;
-      --token-in)    token_in="${2:-}"; shift 2 ;;
-      --token-out)   token_out="${2:-}"; shift 2 ;;
-      --token-method) token_method="${2:-}"; shift 2 ;;
+      --status)      need_val emit --status "$#" || return 2; status="${2:-}"; shift 2 ;;
+      --step)        need_val emit --step "$#" || return 2; step="${2:-}"; shift 2 ;;
+      --round)       need_val emit --round "$#" || return 2; round="${2:-}"; shift 2 ;;
+      --duration-ms) need_val emit --duration-ms "$#" || return 2; duration="${2:-}"; shift 2 ;;
+      --payload)     need_val emit --payload "$#" || return 2; payload="${2:-}"; shift 2 ;;
+      --token-in)    need_val emit --token-in "$#" || return 2; token_in="${2:-}"; shift 2 ;;
+      --token-out)   need_val emit --token-out "$#" || return 2; token_out="${2:-}"; shift 2 ;;
+      --token-method) need_val emit --token-method "$#" || return 2; token_method="${2:-}"; shift 2 ;;
       --no-telemetry) shift ;;
       -h|--help) usage; return 0 ;;
       -*) printf 'emit: unknown option: %s\n' "$1" >&2; return 2 ;;
@@ -635,8 +723,8 @@ cmd_report() {
   local r_p50="null" r_p90="null" since_json="null"
   while [ $# -gt 0 ]; do
     case "$1" in
-      --format) format="${2:-}"; shift 2 ;;
-      --since)  since="${2:-}"; shift 2 ;;
+      --format) need_val report --format "$#" || return 2; format="${2:-}"; shift 2 ;;
+      --since)  need_val report --since "$#" || return 2; since="${2:-}"; shift 2 ;;
       -h|--help) usage; return 0 ;;
       *) printf 'report: unknown option: %s\n' "$1" >&2; return 2 ;;
     esac
@@ -686,12 +774,14 @@ EOF
     printf '  "m2_metrics": "n/a (M2)"\n'
     printf '}\n'
   else
+    # 未知率输出 null，不伪造 0.0%
+    pct_fmt() { if [ "$1" = "null" ]; then printf 'null'; else printf '%s%%' "$1"; fi; }
     printf '# onePress telemetry report\n\n'
     printf '| 指标 | 值 |\n|---|---|\n'
     printf '| 事件总数 | %s |\n' "$r_events"
-    printf '| 安装成功数 / 总数 | %s%% / %s |\n' "$r_install_rate" "$r_install"
-    printf '| 门禁失败率 | %s%% |\n' "$r_gate_rate"
-    printf '| 证据首轮通过率 | %s%% |\n' "$r_evidence_rate"
+    printf '| 安装成功数 / 总数 | %s / %s |\n' "$(pct_fmt "$r_install_rate")" "$r_install"
+    printf '| 门禁失败率 | %s |\n' "$(pct_fmt "$r_gate_rate")"
+    printf '| 证据首轮通过率 | %s |\n' "$(pct_fmt "$r_evidence_rate")"
     printf '| 步骤耗时 p50 | %s ms |\n' "$r_p50"
     printf '| 步骤耗时 p90 | %s ms |\n' "$r_p90"
     printf '| 冷审轮次 | n/a (M2) |\n'
@@ -705,7 +795,7 @@ cmd_show() {
   local last=20 f=""
   while [ $# -gt 0 ]; do
     case "$1" in
-      --last) last="${2:-}"; shift 2 ;;
+      --last) need_val show --last "$#" || return 2; last="${2:-}"; shift 2 ;;
       -h|--help) usage; return 0 ;;
       *) printf 'show: unknown option: %s\n' "$1" >&2; return 2 ;;
     esac
@@ -727,7 +817,7 @@ cmd_prune() {
   local keep="${DEFAULT_KEEP_MONTHS}m" months="" current_idx=0 cutoff=0 f="" name="" idx=0
   while [ $# -gt 0 ]; do
     case "$1" in
-      --keep) keep="${2:-}"; shift 2 ;;
+      --keep) need_val prune --keep "$#" || return 2; keep="${2:-}"; shift 2 ;;
       -h|--help) usage; return 0 ;;
       *) printf 'prune: unknown option: %s\n' "$1" >&2; return 2 ;;
     esac
@@ -765,7 +855,149 @@ cmd_status() {
   return 0
 }
 
-cmd_export() { return 0; }
+# cmd_export --format otlp-json --out <file>
+# 只读本地 JSONL（含 spool，按去重键合并），按 OTel GenAI 语义映射后落盘；零网络。
+# 没有时长且没有 Token 的事件不是 GenAI 操作，不进入 spans（不伪造 0）。
+cmd_export() {
+  local format="otlp-json" out="" tmp=""
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --format) need_val export --format "$#" || return 2; format="${2:-}"; shift 2 ;;
+      --out)    need_val export --out "$#" || return 2; out="${2:-}"; shift 2 ;;
+      -h|--help) usage; return 0 ;;
+      *) printf 'export: unknown option: %s\n' "$1" >&2; return 2 ;;
+    esac
+  done
+  case "$format" in
+    otlp-json) ;;
+    *) printf 'export: expected --format otlp-json\n' >&2; return 2 ;;
+  esac
+  if [ -z "$out" ]; then
+    printf 'export: missing --out <file>\n' >&2
+    return 2
+  fi
+  mkdir -p "$(dirname "$out")" 2>/dev/null || {
+    printf 'export: cannot create directory for %s\n' "$out" >&2
+    return 1
+  }
+  tmp="$out.tmp.$$"
+  {
+    printf '{\n  "resourceSpans": [\n    {\n'
+    printf '      "resource": {"attributes": [{"key": "gen_ai.workflow.name", "value": {"stringValue": "onepress"}}]},\n'
+    printf '      "scopeSpans": [\n        {\n'
+    printf '          "scope": {"name": "onepress.telemetry", "version": "%s"},\n' "$TELEMETRY_V"
+    printf '          "spans": [\n'
+    report_events "" | LC_ALL=C awk '
+      # Howard Hinnant civil_from_days 逆向算法：无外部 date 依赖。
+      function days_from_civil(y, m, d,   era, yoe, doy, doe) {
+        if (m <= 2) y -= 1
+        era = int((y >= 0 ? y : y - 399) / 400)
+        yoe = y - era * 400
+        doy = int((153 * (m + (m > 2 ? -3 : 9)) + 2) / 5) + d - 1
+        doe = yoe * 365 + int(yoe / 4) - int(yoe / 100) + doy
+        return era * 146097 + doe - 719468
+      }
+      function epoch_seconds(ts,   y, mo, d, h, mi, s, tz, off) {
+        if (ts !~ /^[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]T/) return 0
+        y = substr(ts, 1, 4) + 0; mo = substr(ts, 6, 2) + 0; d = substr(ts, 9, 2) + 0
+        h = substr(ts, 12, 2) + 0; mi = substr(ts, 15, 2) + 0; s = substr(ts, 18, 2) + 0
+        s = days_from_civil(y, mo, d) * 86400 + h * 3600 + mi * 60 + s
+        tz = substr(ts, 20, 1)
+        if (tz == "+" || tz == "-") {
+          off = (substr(ts, 21, 2) + 0) * 3600 + (substr(ts, 24, 2) + 0) * 60
+          if (tz == "+") s -= off; else s += off
+        }
+        return s
+      }
+      # 提取 JSON 字符串内容；保留原有转义，便于直接回写。
+      function sval(line, key,   start, i, c, esc, out, klen) {
+        klen = length(key)
+        start = index(line, "\"" key "\":\"")
+        if (start == 0) return ""
+        i = start + klen + 4
+        out = ""; esc = 0
+        while (i <= length(line)) {
+          c = substr(line, i, 1)
+          if (esc) { out = out c; esc = 0; i++; continue }
+          if (c == "\\") { out = out c; esc = 1; i++; continue }
+          if (c == "\"") break
+          out = out c
+          i++
+        }
+        return out
+      }
+      function nval(line, key,   start, rest) {
+        start = index(line, "\"" key "\":")
+        if (start == 0) return ""
+        rest = substr(line, start + length(key) + 3)
+        if (match(rest, /^-?[0-9]+/)) return substr(rest, RSTART, RLENGTH)
+        return ""
+      }
+      # 稳定但唯一的 spanId：双 32 位滚动哈希，避免同 trace 内 spanId 重复。
+      function hex32(n,   s, i, d) {
+        s = ""
+        for (i = 0; i < 8; i++) {
+          d = n % 16
+          s = substr("0123456789abcdef", d + 1, 1) s
+          n = int(n / 16)
+        }
+        return s
+      }
+      function span_id(s,   i, c, h1, h2, code) {
+        h1 = 2166136261; h2 = 2166136261
+        for (i = 1; i <= length(s); i++) {
+          code = index("0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ-_.:|", substr(s, i, 1))
+          if (code == 0) code = 95
+          h1 = ((h1 + code) * 16777619) % 4294967296
+          h2 = ((h2 * 33) + code) % 4294967296
+        }
+        return hex32(h1) hex32(h2)
+      }
+      {
+        ev = sval($0, "event"); st = sval($0, "status")
+        sid = sval($0, "session_id"); iid = sval($0, "install_id")
+        ts = sval($0, "ts")
+        dur = nval($0, "duration_ms")
+        tin = nval($0, "token_in_est"); tout = nval($0, "token_out_est")
+        if (dur == "" && tin == "" && tout == "") next
+        secs = epoch_seconds(ts)
+        startns = (secs "") "000000000"
+        if (dur == "") endns = startns
+        else endns = ((secs * 1000 + dur) "") "000000"
+        at = "{\"key\": \"gen_ai.operation.name\", \"value\": {\"stringValue\": \"" ev "\"}}"
+        at = at ",{\"key\": \"gen_ai.workflow.name\", \"value\": {\"stringValue\": \"onepress\"}}"
+        if (st != "") at = at ",{\"key\": \"onepress.status\", \"value\": {\"stringValue\": \"" st "\"}}"
+        if (sid != "") at = at ",{\"key\": \"gen_ai.conversation.id\", \"value\": {\"stringValue\": \"" sid "\"}}"
+        if (dur != "") {
+          at = at ",{\"key\": \"gen_ai.client.operation.duration\", \"value\": {\"doubleValue\": " sprintf("%.3f", dur / 1000) "}}"
+          at = at ",{\"key\": \"gen_ai.client.operation.duration_ms\", \"value\": {\"intValue\": \"" dur "\"}}"
+        }
+        if (tin != "") at = at ",{\"key\": \"gen_ai.usage.input_tokens\", \"value\": {\"intValue\": \"" tin "\"}}"
+        if (tout != "") at = at ",{\"key\": \"gen_ai.usage.output_tokens\", \"value\": {\"intValue\": \"" tout "\"}}"
+        trace = "00000000000000000000000000000000"; span = "0000000000000000"
+        if (iid != "") {
+          gsub(/-/, "", iid)
+          if (length(iid) >= 32) trace = substr(iid, 1, 32)
+        }
+        span = span_id(ev "|" ts "|" startns)
+        if (n++) printf ",\n"
+        printf "            {\"traceId\": \"%s\", \"spanId\": \"%s\", \"name\": \"%s\", \"kind\": 1, \"startTimeUnixNano\": \"%s\", \"endTimeUnixNano\": \"%s\", \"attributes\": [%s]}", trace, span, ev, startns, endns, at
+      }
+      END { if (n > 0) printf "\n" }
+    '
+    printf '          ]\n        }\n      ]\n    }\n  ]\n}\n'
+  } > "$tmp" 2>/dev/null || {
+    rm -f "$tmp"
+    printf 'export: write failed: %s\n' "$out" >&2
+    return 1
+  }
+  mv -f "$tmp" "$out" 2>/dev/null || {
+    rm -f "$tmp"
+    printf 'export: cannot replace %s\n' "$out" >&2
+    return 1
+  }
+  return 0
+}
 
 main() {
   local sub="${1:-}" arg=""
