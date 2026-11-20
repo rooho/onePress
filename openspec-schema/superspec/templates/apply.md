@@ -2,10 +2,13 @@
 
 > Generated at the end of the apply phase to mark code-implementation
 > complete and provide verify with the state it needs.
-> Overwritten on each apply iteration; iteration counter grows.
+> Overwritten on each apply iteration; the repair-round counter grows.
+> Cross-round history lives in `review-ledger.md` — this file only keeps
+> the current iteration plus a pointer.
 
 **Change**: `<change-name>`
-**Iteration**: `1`
+**Iteration**: `1` (repair round, taken from `review-ledger.md`)
+**Ledger**: `review-ledger.md`
 **Applied at**: `YYYY-MM-DD HH:mm`
 **Executor**: `subagent-driven-development` | `executing-plans` | `inline-2c`
 
@@ -51,11 +54,17 @@ was deleted and the task returned to RED.
 
 ## Root-Cause Log
 
+> Current iteration only. Append every diagnosis to `review-ledger.md`
+> (`Action: root-cause`); do not carry previous iterations here.
+> When the same `Fingerprint` appears a second time, mark the ledger row
+> `Action: rewrite` with `FORCE-REWRITE`, rewrite the module, and add its
+> `## Boundary Matrix` instead of another local patch.
+
 | # | Trigger | Earliest cause / data source | Hypothesis | Experiment | Outcome |
 |---|---|---|---|---|---|
 | 1 | `<failing test or error>` | `<file:line>` | `I think X is the root cause because Y` | `<smallest change>` | `confirmed / disproved (reverted)` |
 
-Write `None` when no unexpected failure occurred.
+Write `None` when no unexpected failure occurred in this iteration.
 
 ---
 

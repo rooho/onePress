@@ -17,6 +17,7 @@ CHANGE_DIR=""
 UI_SPEC=""
 FILES_ARG=""
 BASE=""
+SCOPE_MODE="all"
 QUIET=0
 REVIEW_MODE=1
 
@@ -25,7 +26,16 @@ NOTE_COUNT=0
 declare -a FILE_LIST=()
 
 usage() {
-  sed -n '2,14p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+  cat <<'EOF'
+Usage:
+  bash scripts/onepress-gate.sh --root . --change openspec/changes/<change> \
+       [--scope files|package|all] [--base <ref>] [--files "a.tsx b.tsx"] [--quiet]
+  bash scripts/onepress-gate.sh --root . [--require-review|--no-require-review]
+
+Automates gates 0 / 0.5 / 2 / 4 / 5 / 6 / 7 and prints MANUAL for 1 / 3 / 8.
+SKIP is split: SKIP(not-applicable) never fails, SKIP(no-coverage) fails a
+required gate. Gate 4 detects pytest, vitest or an npm test script.
+EOF
 }
 
 while [ $# -gt 0 ]; do
@@ -35,6 +45,7 @@ while [ $# -gt 0 ]; do
     --ui-spec) UI_SPEC="${2:-}"; shift 2 ;;
     --files)   FILES_ARG="${2:-}"; shift 2 ;;
     --base)    BASE="${2:-}"; shift 2 ;;
+    --scope)   SCOPE_MODE="${2:-}"; shift 2 ;;
     --quiet)   QUIET=1; shift ;;
     --require-review)    REVIEW_MODE=1; shift ;;
     --no-require-review) REVIEW_MODE=0; shift ;;
@@ -45,6 +56,11 @@ done
 
 [ -d "$ROOT" ] || { printf 'root not found: %s\n' "$ROOT" >&2; exit 2; }
 ROOT="$(cd "$ROOT" && pwd)"
+
+case "$SCOPE_MODE" in
+  files|package|all) ;;
+  *) printf 'unknown --scope: %s (valid: files|package|all)\n' "$SCOPE_MODE" >&2; exit 2 ;;
+esac
 
 if [ -n "$CHANGE_DIR" ] && [ -z "$UI_SPEC" ]; then
   case "$CHANGE_DIR" in
@@ -57,7 +73,10 @@ fi
 hr() { [ "$QUIET" = 1 ] || printf '\n== %s\n' "$1"; }
 pass() { printf '  [PASS]   %s\n' "$1"; }
 fail() { printf '  [FAIL]   %s\n' "$1"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
-skip() { printf '  [SKIP]   %s\n' "$1"; }
+skip_na() { printf '  [SKIP(not-applicable)] %s\n' "$1"; }
+skip_nc() { printf '  [SKIP(no-coverage)]   %s\n' "$1"; FAIL_COUNT=$((FAIL_COUNT + 1)); }
+# Legacy name kept for not-applicable sites; new code must call skip_na / skip_nc.
+skip() { skip_na "$1"; }
 manual() { printf '  [MANUAL] %s\n' "$1"; }
 note() { NOTE_COUNT=$((NOTE_COUNT + 1)); [ "$QUIET" = 1 ] || printf '           %s\n' "$1"; }
 
@@ -69,10 +88,37 @@ collect_files() {
     FILE_LIST=($FILES_ARG)
     return
   fi
+  if [ "$SCOPE_MODE" != "all" ]; then
+    local sbase="${BASE:-HEAD}" changed dirs d f
+    # Tracked changes plus untracked files, so a freshly created view is scanned.
+    changed="$(
+      { git -C "$ROOT" diff --name-only "$sbase" 2>/dev/null || true
+        git -C "$ROOT" ls-files --others --exclude-standard 2>/dev/null || true
+      } | grep -E '\.(tsx|vue)$' || true
+    )"
+    if [ "$SCOPE_MODE" = "files" ]; then
+      while IFS= read -r f; do
+        [ -n "$f" ] && FILE_LIST+=("$ROOT/$f")
+      done <<< "$changed"
+    else
+      dirs="$(printf '%s\n' "$changed" | sed 's#/[^/]*$##' | sort -u)"
+      while IFS= read -r d; do
+        [ -n "$d" ] || continue
+        while IFS= read -r f; do
+          [ -n "$f" ] && FILE_LIST+=("$f")
+        done < <(find "$ROOT/$d" -type f \( -name '*.tsx' -o -name '*.vue' \) 2>/dev/null)
+      done <<< "$dirs"
+    fi
+    return
+  fi
   if [ -n "$BASE" ] && git -C "$ROOT" rev-parse --git-dir >/dev/null 2>&1; then
     while IFS= read -r f; do
       [ -n "$f" ] && FILE_LIST+=("$ROOT/$f")
-    done < <(git -C "$ROOT" diff --name-only "$BASE" -- '*.tsx' '*.vue' 2>/dev/null)
+    done < <(
+      { git -C "$ROOT" diff --name-only "$BASE" -- '*.tsx' '*.vue' 2>/dev/null || true
+        git -C "$ROOT" ls-files --others --exclude-standard -- '*.tsx' '*.vue' 2>/dev/null || true
+      } | sed '/^$/d'
+    )
     return
   fi
   while IFS= read -r f; do
@@ -123,6 +169,10 @@ gate0() {
   sandbox="$(dirname "$UI_SPEC")/sandbox-preview.html"
   [ -f "$sandbox" ] || { fail "缺少沙箱：$sandbox"; miss=1; }
   [ "$miss" = 0 ] && pass 'ui-spec.md 与 sandbox-preview.html 均存在'
+
+  if [ "${#FILE_LIST[@]}" -eq 0 ]; then
+    fail "契约与实现不匹配：UI Change 为 yes，但 --scope=$SCOPE_MODE 范围内没有任何 .tsx/.vue 文件"
+  fi
 }
 
 ui_change_is_no() {
@@ -159,7 +209,7 @@ gate05() {
   if [ "$status" = "APPROVED" ]; then
     pass 'Review-Status: APPROVED'
   elif [ "$status" = "PENDING" ]; then
-    fail 'Review-Status 为 PENDING：先运行 /opsx:review 并由人类批准'
+    fail 'Review-Status 为 PENDING：先运行 /openspec-review-change 并由人类批准'
   else
     fail '缺少合法的 Review-Status 行（期望第 3 行 > Review-Status: PENDING|APPROVED）'
   fi
@@ -274,30 +324,52 @@ gate2b() {
 
 gate4() {
   hr '门禁 4：状态机单测（AUTO）'
-  if [ ! -f "$ROOT/package.json" ]; then
-    skip '无 package.json'
-    return
-  fi
   local rtl
-  rtl="$(grep -rlE "from ['\"]@testing-library/react|render\(" \
+  rtl="$(grep -rlE "from ['\"]@testing-library/react|render\\(" \
            $(existing_files) 2>/dev/null || true)"
   if [ -n "$rtl" ]; then
     fail "检测到 RTL / DOM 渲染测试（门禁 4 禁止）：$(printf '%s' "$rtl" | tr '\n' ' ')"
   fi
-  if ! command -v npx >/dev/null 2>&1; then
-    skip 'npx 不可用'
+
+  local project="" runner="" out
+  if [ -f "$ROOT/package.json" ]; then project="js"; fi
+  if [ -f "$ROOT/pyproject.toml" ] || [ -f "$ROOT/pytest.ini" ]; then
+    project="${project:-py}"
+  fi
+
+  case "$project" in
+    "")
+      skip_na '无法判定项目类型（无 package.json / pyproject.toml / pytest.ini）'
+      return
+      ;;
+    js)
+      if grep -qE '"vitest"' "$ROOT/package.json" 2>/dev/null; then runner="vitest"
+      elif grep -qE '"test"[[:space:]]*:' "$ROOT/package.json" 2>/dev/null; then runner="npm-test"
+      fi
+      ;;
+    py)
+      if command -v python3 >/dev/null 2>&1 && python3 -m pytest --version >/dev/null 2>&1; then
+        runner="pytest"
+      fi
+      ;;
+  esac
+
+  if [ -z "$runner" ]; then
+    skip_nc "项目类型为 $project，但无可运行的测试命令（需 package.json 的 test/vitest 脚本或可用的 pytest）"
     return
   fi
-  local out
-  if out="$(cd "$ROOT" && npx --no-install vitest run --reporter=dot 2>&1)"; then
-    pass 'vitest run 通过'
+  note "runner: $runner"
+
+  case "$runner" in
+    pytest)   out="$(cd "$ROOT" && python3 -m pytest -q 2>&1)" ;;
+    vitest)   out="$(cd "$ROOT" && npx --no-install vitest run --reporter=dot 2>&1)" ;;
+    npm-test) out="$(cd "$ROOT" && npm test --silent 2>&1)" ;;
+  esac
+  if [ $? -eq 0 ]; then
+    pass "门禁 4 通过（runner: $runner）"
   else
-    if printf '%s' "$out" | grep -qiE 'could not|not found|missing script|command not found'; then
-      skip 'vitest 不可用'
-    else
-      fail 'vitest run 失败'
-      printf '%s\n' "$out" | tail -15 | sed 's/^/           /'
-    fi
+    fail "门禁 4 失败（runner: $runner）"
+    printf '%s\n' "$out" | tail -15 | sed 's/^/           /'
   fi
 }
 

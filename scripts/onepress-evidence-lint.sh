@@ -14,16 +14,18 @@ set -uo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  bash scripts/onepress-evidence-lint.sh --change openspec/changes/<name>
+  bash scripts/onepress-evidence-lint.sh --change openspec/changes/<name> [--legacy]
   bash scripts/onepress-evidence-lint.sh <path/to/verification-evidence.md>
 
-Checks the V3.2 verification evidence contract. Exit 0 when there is no
-FAIL; otherwise 1.
+Checks the V3.2 verification evidence contract. --legacy downgrades missing
+v8 fields (Review Round / Reviewed Range / Ledger) to WARN. Exit 0 when
+there is no FAIL; otherwise 1.
 EOF
 }
 
 CHANGE_DIR=""
 REPORT=""
+LEGACY=0
 
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -31,6 +33,10 @@ while [ $# -gt 0 ]; do
       [ $# -ge 2 ] && [ -n "$2" ] || { printf 'missing value for --change\n' >&2; exit 2; }
       CHANGE_DIR="$2"
       shift 2
+      ;;
+    --legacy)
+      LEGACY=1
+      shift
       ;;
     -h|--help)
       usage
@@ -79,6 +85,7 @@ FAIL=0
 ok()   { printf '  [PASS] %s\n' "$1"; PASS=$((PASS + 1)); }
 bad()  { printf '  [FAIL] %s\n' "$1" >&2; FAIL=$((FAIL + 1)); }
 skip() { printf '  [SKIP] %s\n' "$1"; }
+warn() { printf '  [WARN] %s\n' "$1"; }
 
 printf 'evidence-lint: %s\n' "$REPORT"
 
@@ -204,6 +211,63 @@ if printf '%s\n' "$TEXT" | grep -qE '^\*\*Validation Level\*\*:'; then
   fi
 else
   bad 'missing **Validation Level**: line'
+fi
+
+echo '== review range fields =='
+field_present() { printf '%s\n' "$TEXT" | grep -qE "^-?[[:space:]]*\*\*$1\*\*:"; }
+for f in 'Review Round' 'Reviewed Range' 'Ledger'; do
+  if field_present "$f"; then
+    ok "field: $f"
+  elif [ "$LEGACY" = 1 ]; then
+    warn "field: $f missing (legacy)"
+  else
+    bad "missing '- **$f**:' line"
+  fi
+done
+
+RANGE_VAL="$(printf '%s\n' "$TEXT" | sed -n 's/^-*[[:space:]]*\*\*Reviewed Range\*\*:[[:space:]]*`\{0,1\}\([^`]*\)`\{0,1\}.*/\1/p' | head -1)"
+if [ -n "$RANGE_VAL" ] && printf '%s\n' "$TEXT" | grep -qE '^- \[[xX]\].*PASS'; then
+  case "$RANGE_VAL" in
+    full*) ok 'PASS round uses a full range' ;;
+    *) bad "PASS round MUST record 'Reviewed Range: full ...' (got '$RANGE_VAL')" ;;
+  esac
+fi
+
+echo '== summary block size =='
+OVERSIZE="$(printf '%s\n' "$TEXT" | awk '
+  /^```text[[:space:]]*$/ { inb = 1; n = 0; haslog = 0; next }
+  /^```[[:space:]]*$/ {
+    if (inb && n > 40 && !haslog) printf "%d\n", n
+    inb = 0; next
+  }
+  inb { n++; if ($0 ~ /^log: /) haslog = 1 }')"
+if [ -n "$OVERSIZE" ]; then
+  bad "result block(s) exceed 40 lines without a 'log:' line: $(printf '%s' "$OVERSIZE" | tr '\n' ' ')"
+else
+  ok 'result blocks are summarized (<=40 lines or carry log:)'
+fi
+
+echo '== doc sync =='
+BASE_VAL="$(printf '%s\n' "$TEXT" | sed -n 's/^-*[[:space:]]*\*\*BASE_SHA\*\*:[[:space:]]*`\{0,1\}\([^`]*\)`\{0,1\}.*/\1/p' | head -1)"
+HEAD_VAL="$(printf '%s\n' "$TEXT" | sed -n 's/^-*[[:space:]]*\*\*HEAD_SHA\*\*:[[:space:]]*`\{0,1\}\([^`]*\)`\{0,1\}.*/\1/p' | head -1)"
+if [ -n "$BASE_VAL" ] && [ -n "$HEAD_VAL" ] \
+   && git -C "$CHANGE_DIR" rev-parse --git-dir >/dev/null 2>&1 \
+   && git -C "$CHANGE_DIR" cat-file -e "$BASE_VAL^{commit}" 2>/dev/null \
+   && git -C "$CHANGE_DIR" cat-file -e "$HEAD_VAL^{commit}" 2>/dev/null; then
+  CHANGED_FILES="$(git -C "$CHANGE_DIR" diff --name-only "$BASE_VAL..$HEAD_VAL" 2>/dev/null || true)"
+  IMPL_N="$(printf '%s\n' "$CHANGED_FILES" | grep -vE '(^|/)openspec/|\.md$' | grep -c . || true)"
+  DOC_N="$(printf '%s\n' "$CHANGED_FILES" | grep -E '(^|/)design\.md$|(^|/)specs/.*\.md$' | grep -c . || true)"
+  if [ "${IMPL_N:-0}" -gt 0 ] && [ "${DOC_N:-0}" -eq 0 ]; then
+    if printf '%s\n' "$EXCLUSION_BLOCK" | grep -qiE 'doc-sync:'; then
+      ok "doc-sync declared ($IMPL_N implementation files changed without doc updates)"
+    else
+      bad "$IMPL_N implementation file(s) changed without design/spec updates; add a 'doc-sync:' line under Warnings / exclusions"
+    fi
+  else
+    ok "doc-sync: no drift (impl=$IMPL_N docs=$DOC_N)"
+  fi
+else
+  skip 'doc-sync (git range not resolvable)'
 fi
 
 echo '== UI gate evidence =='

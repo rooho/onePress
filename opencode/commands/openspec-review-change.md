@@ -4,7 +4,7 @@ description: "编码前三级设计评审门禁（L1 确定性预检 / L2 冷上
 
 > onepress: 执行本命令时 MUST 先加载技能 `superpowers-tdd`（铁律 1–4：Token 纯净度 / 四态状态机 / 无障碍基线 / 防呆闭环）。
 
-# /opsx:review `<change-name>`
+# /openspec-review-change `<change-name>`
 
 编码前三级评审，产出 DAG 工件 `review.md`。只允许修订 `ui-spec.md`、`sandbox-preview.html`，**MUST NOT 修改业务代码**。
 

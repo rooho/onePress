@@ -27,9 +27,9 @@ TEMP_ROOT=""
 
 SKILL_REF='> onepress: 执行本技能时 MUST 先加载技能 `onepress-discipline`（Token 纯净度、四态状态机、无障碍基线、破坏性操作防呆铁律）。'
 
-SCHEMA_FILES="schema.yaml templates/apply.md templates/brainstorm.md templates/code-reviewer.md templates/design.md templates/finalize.md templates/plan.md templates/proposal.md templates/review-rubric.md templates/review.md templates/spec.md templates/tasks.md templates/ui-spec.md templates/verification.md templates/verify.md"
+SCHEMA_FILES="schema.yaml templates/apply.md templates/brainstorm.md templates/code-reviewer.md templates/design.md templates/finalize.md templates/plan.md templates/proposal.md templates/review-ledger.md templates/review-rubric.md templates/review.md templates/spec.md templates/tasks.md templates/ui-spec.md templates/verification.md templates/verify.md"
 
-OPENCODE_FILES="opencode/opencode.json opencode/agent/ux-architect.md opencode/commands/opsx-review.md opencode/skills/superpowers-tdd/SKILL.md"
+OPENCODE_FILES="opencode/opencode.json opencode/agent/ux-architect.md opencode/commands/openspec-review-change.md opencode/commands/one.md opencode/skills/superpowers-tdd/SKILL.md"
 
 SKILL_SLUGS="apply-change archive-change bulk-archive-change continue-change explore ff-change new-change onboard propose sync-specs update-change verify-change"
 
@@ -39,13 +39,13 @@ TRAE_FILES="trae/skills/onepress-discipline/SKILL.md"
 
 CURSOR_FILES="cursor/skills/onepress-discipline/SKILL.md"
 
-QODER_COMMAND_FILES="qoder/commands/opsx/review.md"
+QODER_COMMAND_FILES="qoder/commands/openspec-review-change.md qoder/commands/one.md"
 
-TRAE_COMMAND_FILES="trae/commands/opsx-review.md"
+TRAE_COMMAND_FILES="trae/commands/openspec-review-change.md trae/commands/one.md"
 
-CURSOR_COMMAND_FILES="cursor/commands/opsx-review.md"
+CURSOR_COMMAND_FILES="cursor/commands/openspec-review-change.md cursor/commands/one.md"
 
-TOOLING_FILES="scripts/onepress-evidence-lint.sh scripts/onepress-gate.sh scripts/onepress-plan-lint.sh scripts/onepress-review-lint.sh scripts/sandbox-preflight.spec.ts"
+TOOLING_FILES="scripts/onepress-evidence-lint.sh scripts/onepress-gate.sh scripts/onepress-plan-lint.sh scripts/onepress-review-lint.sh scripts/onepress-verify.sh scripts/sandbox-preflight.spec.ts"
 
 WRITTEN=""
 LOCK_FILES=""
@@ -688,7 +688,6 @@ remove_legacy_commands() {
       [ -d "$target/.qoder/commands/opsx" ] || return 0
       for path in "$target/.qoder/commands/opsx"/*.md; do
         [ -f "$path" ] || continue
-        case "$path" in */review.md) continue ;; esac
         rel=".qoder/commands/opsx/$(basename "$path")"
         if in_list "$rel" "$MODIFIED"; then
           warn "保留未提交修改，不清理 1.x 命令：$rel"
@@ -701,9 +700,10 @@ remove_legacy_commands() {
         rm -f "$path"
         info "清理 1.x 命令：$rel"
       done
+      [ "$DRY_RUN" = 1 ] || rmdir "$target/.qoder/commands/opsx" 2>/dev/null || true
       ;;
     *)
-      for rel in "$harness_dir/commands/opsx-new.md" "$harness_dir/commands/opsx-apply.md" "$harness_dir/commands/opsx-verify.md"; do
+      for rel in "$harness_dir/commands/opsx-new.md" "$harness_dir/commands/opsx-apply.md" "$harness_dir/commands/opsx-verify.md" "$harness_dir/commands/opsx-review.md"; do
         path="$target/$rel"
         [ -f "$path" ] || continue
         if in_list "$rel" "$MODIFIED"; then
@@ -901,7 +901,7 @@ accept_skills_mount() {
       else
         bad "1.x 命令残留：$legacy"
       fi
-    done < <(find "$target/.qoder/commands/opsx" -type f -name '*.md' ! -name 'review.md' 2>/dev/null)
+    done < <(find "$target/.qoder/commands/opsx" -type f -name '*.md' 2>/dev/null)
   fi
 
   for h in .trae .cursor .opencode; do
@@ -910,7 +910,7 @@ accept_skills_mount() {
       .cursor)  [ "$USE_CURSOR" = 1 ] || continue ;;
       .opencode) [ "$USE_OPENCODE" = 1 ] || continue ;;
     esac
-    for rel in "$h/commands/opsx-new.md" "$h/commands/opsx-apply.md" "$h/commands/opsx-verify.md"; do
+    for rel in "$h/commands/opsx-new.md" "$h/commands/opsx-apply.md" "$h/commands/opsx-verify.md" "$h/commands/opsx-review.md"; do
       [ -f "$target/$rel" ] || continue
       if in_list "$rel" "$MODIFIED"; then
         skip "$rel（未提交修改，受保护保留，不计入失败）"
@@ -1000,20 +1000,20 @@ run_acceptance() {
 
   if [ "$USE_QODER" = 1 ]; then
     accept_skill_harness "$pack" "$target" .qoder qoder "$QODER_FILES"
-    [ -f "$target/.qoder/commands/opsx/review.md" ] || bad '缺失 .qoder/commands/opsx/review.md'
-    cmp -s "$pack/qoder/commands/opsx/review.md" "$target/.qoder/commands/opsx/review.md" || bad '内容不一致：.qoder/commands/opsx/review.md'
+    [ -f "$target/.qoder/commands/openspec-review-change.md" ] || bad '缺失 .qoder/commands/openspec-review-change.md'
+    cmp -s "$pack/qoder/commands/openspec-review-change.md" "$target/.qoder/commands/openspec-review-change.md" || bad '内容不一致：.qoder/commands/openspec-review-change.md'
   fi
 
   if [ "$USE_TRAE" = 1 ]; then
     accept_skill_harness "$pack" "$target" .trae trae "$TRAE_FILES"
-    [ -f "$target/.trae/commands/opsx-review.md" ] || bad '缺失 .trae/commands/opsx-review.md'
-    cmp -s "$pack/trae/commands/opsx-review.md" "$target/.trae/commands/opsx-review.md" || bad '内容不一致：.trae/commands/opsx-review.md'
+    [ -f "$target/.trae/commands/openspec-review-change.md" ] || bad '缺失 .trae/commands/openspec-review-change.md'
+    cmp -s "$pack/trae/commands/openspec-review-change.md" "$target/.trae/commands/openspec-review-change.md" || bad '内容不一致：.trae/commands/openspec-review-change.md'
   fi
 
   if [ "$USE_CURSOR" = 1 ]; then
     accept_skill_harness "$pack" "$target" .cursor cursor "$CURSOR_FILES"
-    [ -f "$target/.cursor/commands/opsx-review.md" ] || bad '缺失 .cursor/commands/opsx-review.md'
-    cmp -s "$pack/cursor/commands/opsx-review.md" "$target/.cursor/commands/opsx-review.md" || bad '内容不一致：.cursor/commands/opsx-review.md'
+    [ -f "$target/.cursor/commands/openspec-review-change.md" ] || bad '缺失 .cursor/commands/openspec-review-change.md'
+    cmp -s "$pack/cursor/commands/openspec-review-change.md" "$target/.cursor/commands/openspec-review-change.md" || bad '内容不一致：.cursor/commands/openspec-review-change.md'
   fi
 
   for rel in $TOOLING_FILES; do
@@ -1033,6 +1033,9 @@ run_acceptance() {
   fi
   if [ -f "$target/scripts/onepress-review-lint.sh" ]; then
     bash -n "$target/scripts/onepress-review-lint.sh" || bad 'onepress-review-lint.sh 语法错误'
+  fi
+  if [ -f "$target/scripts/onepress-verify.sh" ]; then
+    bash -n "$target/scripts/onepress-verify.sh" || bad 'onepress-verify.sh 语法错误'
   fi
   if grep -q 'id: verify-report' "$target/openspec/schemas/superspec/schema.yaml" 2>/dev/null; then
     info 'schema.yaml verify-report 工件 ... OK'
@@ -1062,7 +1065,7 @@ run_acceptance() {
         bad "openspec/config.yaml 顶层 rules 缺少：$missing"
       fi
     else
-      bad 'openspec/config.yaml 缺少顶层 rules（规则不会按工件注入；请重装或按 2.2.0 模板重建 rules）'
+      bad 'openspec/config.yaml 缺少顶层 rules（规则不会按工件注入；请重装或按 2.2.1 模板重建 rules）'
     fi
   else
     bad 'openspec/config.yaml 缺失（安装器应已创建）'

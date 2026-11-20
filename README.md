@@ -83,16 +83,18 @@ The unselected harness gets no directory created and no files written. `onePress
 
 | Target path | Contents | Layer | Installed when |
 |-------------|----------|-------|----------------|
-| `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/opsx-review.md`, `skills/superpowers-tdd/` | harness | OpenCode selected |
+| `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/openspec-review-change.md`, `skills/superpowers-tdd/` | harness | OpenCode selected |
 | `.qoder/skills/onepress-discipline/SKILL.md` | Thirteen iron rules (contract / triage / retrieval / sandbox / gates / token / states / a11y / anti-mistake / pre-code review / TDD + root-cause / verification locks / task + design contract) + TDD discipline | harness | Qoder selected |
 | `.agents/skills/openspec-*/SKILL.md` (12) | OpenSpec 2.0 workflow skills; one reference line added after frontmatter, body untouched | harness | always (shared by all harnesses) |
 | `.trae/skills/onepress-discipline/SKILL.md` | Thirteen iron rules + TDD discipline (Trae carrier) | harness | Trae selected |
-| `.trae/commands/opsx-review.md` | onePress-managed review command (slash entry `/opsx:review`) | harness | Trae selected |
+| `.trae/commands/openspec-review-change.md` | onePress-managed review command (slash entry `/openspec-review-change`) | harness | Trae selected |
 | `.cursor/skills/onepress-discipline/SKILL.md` | Thirteen iron rules + TDD discipline (Cursor carrier) | harness | Cursor selected |
-| `.cursor/commands/opsx-review.md` | onePress-managed review command (slash entry `/opsx:review`) | harness | Cursor selected |
-| `openspec/schemas/superspec/` | `schema.yaml` + 14 templates incl. `ui-spec.md`, `review.md`, `review-rubric.md`, `verification.md`, `code-reviewer.md` (15 files) | harness | always |
+| `.cursor/commands/openspec-review-change.md` | onePress-managed review command (slash entry `/openspec-review-change`) | harness | Cursor selected |
+| `openspec/schemas/superspec/` | `schema.yaml` + 15 templates incl. `ui-spec.md`, `review.md`, `review-ledger.md`, `review-rubric.md`, `verification.md`, `code-reviewer.md` (16 files) | harness | always |
 | `onePress.lock` | Version, install scope, protected assets | harness | always |
 | `docs/ui-components.md` | Component registry template (four columns, empty tables on first install) | project | always |
+
+> Commands have two layers: the **contract layer** is the 13 canonical names (12 `openspec-*` skills + `openspec-review-change`); the **user layer** is the single entry `/one <subcommand>` (propose / explore / new / continue / ff / update / apply / verify / sync / archive / bulk-archive / onboard / review). It only forwards and never rewrites upstream steps; an unknown subcommand fails and prints the full table.
 
 > `docs/design-system/projectbaseline/MASTER.md` is generated **once** by the optional `ui-ux-pro-max` skill. onePress protects it on install/upgrade but never creates or rewrites it.
 
@@ -106,7 +108,7 @@ From zero to archive in 7 steps. **All `/openspec-*` skills run at the target re
 |------|---------|-------------|--------|---------------|
 | 1 New change | `/openspec-new-change <change>` | Feature description | `proposal.md` (with the `**UI Change**` verdict) | proposal written |
 | 2 Complete planning | `/openspec-continue-change` ×N or `/openspec-ff-change` | — | `brainstorm.md`, `design.md` (+ `ui-spec.md` / `sandbox-preview.html`), `specs/`, `tasks.md`, `plan.md` | `openspec validate --strict` and plan-lint pass; seven sections complete; sandbox opens in Light/Dark |
-| 3 Design review | `/opsx:review <change>` | Human annotations (L3) | `review.md` (`Result: SKIP` for non-UI) | `P0 = 0`, `P1 = 0`, `Review-Status: APPROVED`, review-lint passes |
+| 3 Design review | `/openspec-review-change <change>` | Human annotations (L3) | `review.md` (`Result: SKIP` for non-UI) | `P0 = 0`, `P1 = 0`, `Review-Status: APPROVED`, review-lint passes |
 | 4 Implement | `/openspec-apply-change` | — | Code + `apply.md` | `review.md` exists with Result PASS/SKIP; TDD evidence (RED→GREEN→REFACTOR); sandbox parity (Light + Dark) |
 | 5 Collect evidence | `/openspec-continue-change` (verify-report) or `openspec instructions verify-report --change <change>` | — | `verification-evidence.md`, `code-review-packet.md` (human mode only) | Fresh command output, `Critical: 0`, `Important: 0`, evidence-lint passes |
 | 6 Verify | `/openspec-verify-change` | — | `verify.md` | Evidence report cited; all eight UI gates green, no CRITICAL |
@@ -150,10 +152,10 @@ brainstorm → proposal → design → specs → tasks → plan → review → a
 
 Generate all planning artifacts at once: `/openspec-ff-change`. Proposal only: `/openspec-propose`. Discussion without writing files: `/openspec-explore`.
 
-### Step 3 — Design review `/opsx:review`
+### Step 3 — Design review `/openspec-review-change`
 
 ```text
-/opsx:review feat-261103-001-user-role-permission
+/openspec-review-change feat-261103-001-user-role-permission
 ```
 
 - **L1 deterministic preflight**: sandbox four states × two themes; WCAG, hit areas, overflow, Hex/Emoji, CLS proxy; missing dependencies are SKIP.
@@ -233,8 +235,8 @@ Batch: `/openspec-bulk-archive-change`. Sync specs only: `/openspec-sync-specs`.
 | `/openspec-onboard` | ✅ | CLI | ✅ | ✅ | Guided first-run walkthrough (native) |
 | `/openspec-update-change` | ✅ | CLI | ✅ | ✅ | Revise planning artifacts (native, experimental) |
 
-- **Qoder / Trae / Cursor**: OpenSpec 2.0 installs all 12 skills into `.agents/skills/`; the installer mounts one `onepress-discipline` reference line after each `SKILL.md` frontmatter and ships one managed `/opsx:review` command.
-- **OpenCode**: shares the same `.agents/skills/` and ships one managed `commands/opsx-review.md`; `new` / `apply` / `verify` commands are no longer shipped:
+- **Qoder / Trae / Cursor**: OpenSpec 2.0 installs all 12 skills into `.agents/skills/`; the installer mounts one `onepress-discipline` reference line after each `SKILL.md` frontmatter and ships one managed `/openspec-review-change` command.
+- **OpenCode**: shares the same `.agents/skills/` and ships one managed `commands/openspec-review-change.md`; `new` / `apply` / `verify` commands are no longer shipped:
 
 ```bash
 openspec status --change <name> --json          # progress and next step
@@ -274,7 +276,7 @@ Full details: `studio/openspec/CHANGE_NAMING.md`.
 
 Upgrade = re-run the script (`.\install.ps1` / `./install.sh`) with the new pack; `onePress.lock`'s `version` decides "fresh install" vs "upgrade", and stale managed files from the older version are cleaned using the lock manifest. A missing or corrupt lock means fresh install — project-level assets stay protected.
 
-Uninstall: remove everything except `protectedAssets` from `onePress.lock` (`.opencode/`, `.qoder/skills/onepress-discipline/`, `.trae/skills/onepress-discipline/`, `.trae/commands/opsx-review.md`, `.cursor/skills/onepress-discipline/`, `openspec/schemas/superspec/`), keeping `docs/ui-components.md` and `openspec/changes/`; `.agents/skills/` belongs to the OpenSpec CLI and is left in place (run `openspec update` to drop the reference lines).
+Uninstall: remove everything except `protectedAssets` from `onePress.lock` (`.opencode/`, `.qoder/skills/onepress-discipline/`, `.trae/skills/onepress-discipline/`, `.trae/commands/openspec-review-change.md`, `.cursor/skills/onepress-discipline/`, `openspec/schemas/superspec/`), keeping `docs/ui-components.md` and `openspec/changes/`; `.agents/skills/` belongs to the OpenSpec CLI and is left in place (run `openspec update` to drop the reference lines).
 
 ---
 
@@ -292,17 +294,17 @@ onePress/                    # release pack root (generated from studio/pack/)
 ├── opencode/               # OpenCode harness assets (4 files)
 │   ├── opencode.json
 │   ├── agent/ux-architect.md
-│   ├── commands/opsx-review.md
+│   ├── commands/openspec-review-change.md
 │   └── skills/superpowers-tdd/SKILL.md
 ├── qoder/                  # Qoder harness assets (2 files)
 │   ├── skills/onepress-discipline/SKILL.md
-│   └── commands/opsx/review.md
+│   └── commands/openspec-review-change.md
 ├── trae/                   # Trae harness assets (2 files)
 │   ├── skills/onepress-discipline/SKILL.md
-│   └── commands/opsx-review.md
+│   └── commands/openspec-review-change.md
 ├── cursor/                 # Cursor harness assets (2 files)
 │   ├── skills/onepress-discipline/SKILL.md
-│   └── commands/opsx-review.md
+│   └── commands/openspec-review-change.md
 ├── scripts/                # Pack-side scripts
 │   ├── onepress-gate.sh    # Gates 0/0.5/2/4/5/6/7 AUTO + MANUAL 1/3/8 (installed)
 │   ├── onepress-plan-lint.sh  # plan + design + tasks structural lint (installed)
@@ -310,7 +312,7 @@ onePress/                    # release pack root (generated from studio/pack/)
 │   ├── onepress-review-lint.sh  # review.md receipt + contract hash lint (installed)
 │   ├── sandbox-preflight.spec.ts  # L1 pre-flight (installed, optional deps)
 │   └── onepress-registry-append.sh  # Append a component row (shipped, run manually)
-└── openspec-schema/superspec/   # Schema installed into target repos (15 files, incl. templates/ui-spec.md + review.md + review-rubric.md + verification.md + code-reviewer.md)
+└── openspec-schema/superspec/   # Schema installed into target repos (16 files, incl. templates/ui-spec.md + review.md + review-ledger.md + review-rubric.md + verification.md + code-reviewer.md)
 ```
 
 > `blueprint/` (iteration blueprints) and `openspec/` (this toolkit's own spec workspace) live in the **studio repo**, never in this release pack. The release pack is generated from `studio/pack/`.
@@ -329,7 +331,7 @@ A: Since 1.0.4 every Superpowers skill reference in superspec carries an inline 
 A: Install still completes, but `/openspec-*` skills and `ui-spec.md`/`sandbox-preview.html` generation require OpenSpec. Run `openspec init --tools qoder|trae|cursor|opencode` first.
 
 **Q: Where are the workflow skills on OpenCode?**
-A: OpenSpec 2.0 installs them into `.agents/skills/openspec-*`, shared by all four harnesses; this pack only adds `commands/opsx-review.md`. If they are missing, run `openspec init --tools opencode` or `openspec update`.
+A: OpenSpec 2.0 installs them into `.agents/skills/openspec-*`, shared by all four harnesses; this pack only adds `commands/openspec-review-change.md`. If they are missing, run `openspec init --tools opencode` or `openspec update`.
 
 **Q: Can I install only one harness?**
 A: Yes — that is the default. The installer detects by directory: `.qoder/` only → Qoder only, `.trae/` only → Trae only, `.cursor/` only → Cursor only, several present → every detected harness, none → it asks first. You can also pass `--harness trae,cursor`. To add another harness later, re-run the install; only that harness is written and the existing one is untouched.

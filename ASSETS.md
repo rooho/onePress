@@ -1,4 +1,4 @@
-﻿# onePress 资产清单（ASSETS.md）
+﻿﻿# onePress 资产清单（ASSETS.md）
 
 > 本清单是模板包（SSOT）的归属声明，安装时按此执行覆盖策略。
 
@@ -9,20 +9,22 @@
 | `VERSION` | harness | 全量覆盖（随版本升级） |
 | `opencode/opencode.json` | harness | 全量覆盖 |
 | `opencode/agent/ux-architect.md` | harness | 全量覆盖 |
-| `opencode/commands/opsx-review.md` | harness | 全量覆盖（编码前三级评审命令） |
+| `opencode/commands/openspec-review-change.md` | harness | 全量覆盖（编码前三级评审命令） |
 | `opencode/skills/superpowers-tdd/SKILL.md` | harness | 全量覆盖 |
 | `qoder/skills/onepress-discipline/SKILL.md` | harness | 全量覆盖 |
-| `qoder/commands/opsx/review.md` | harness | 全量覆盖（onePress 托管命令，安装器直投） |
+| `qoder/commands/openspec-review-change.md` | harness | 全量覆盖（onePress 托管命令，安装器直投） |
 | `trae/skills/onepress-discipline/SKILL.md` | harness | 全量覆盖 |
-| `trae/commands/opsx-review.md` | harness | 全量覆盖（onePress 托管命令） |
+| `trae/commands/openspec-review-change.md` | harness | 全量覆盖（onePress 托管命令） |
 | `cursor/skills/onepress-discipline/SKILL.md` | harness | 全量覆盖 |
-| `cursor/commands/opsx-review.md` | harness | 全量覆盖（onePress 托管命令） |
-| `openspec-schema/superspec/**`（15 文件，含 `templates/ui-spec.md`、`templates/review.md`、`templates/review-rubric.md`、`templates/verification.md` 与 `templates/code-reviewer.md`） | harness | 全量覆盖 |
+| `cursor/commands/openspec-review-change.md` | harness | 全量覆盖（onePress 托管命令） |
+| `qoder/commands/one.md`、`trae/commands/one.md`、`cursor/commands/one.md`、`opencode/commands/one.md` | harness | 全量覆盖（用户层单入口 `/one`，13 项转发表，只转发不改写上游） |
+| `openspec-schema/superspec/**`（16 文件，含 `templates/ui-spec.md`、`templates/review.md`、`templates/review-ledger.md`、`templates/review-rubric.md`、`templates/verification.md` 与 `templates/code-reviewer.md`） | harness | 全量覆盖 |
 | `scripts/onepress-gate.sh` | tooling | 安装到目标仓库 `scripts/`（门禁 0.5 执行体；用户自建同名文件跳过） |
 | `scripts/onepress-plan-lint.sh` | tooling | 安装到目标仓库 `scripts/`（`plan.md` + `design.md` + `tasks.md` 结构门禁；plan 生成后运行） |
 | `scripts/onepress-evidence-lint.sh` | tooling | 安装到目标仓库 `scripts/`（`verification-evidence.md` 证据门禁；verify-report 阶段运行） |
 | `scripts/onepress-review-lint.sh` | tooling | 安装到目标仓库 `scripts/`（`review.md` 回执与契约哈希门禁；apply 前运行） |
 | `scripts/sandbox-preflight.spec.ts` | tooling | 安装到目标仓库 `scripts/`（L1 可选层；缺 Playwright 记 SKIP） |
+| `scripts/onepress-verify.sh` | tooling | 安装到目标仓库 `scripts/`（证据编排：Evidence Map 驱动、scope 分级、`--range`/`--churn`） |
 | `scripts/onepress-registry-append.sh` | installer | 不安装（归档后补记注册表，供无 `/openspec-archive-change` 的环境使用；仍随发布包分发） |
 | `README-ch.md` / `README.md` | docs | 不安装（仅仓库说明，不写入目标仓库） |
 | `docs/ui-components.md`（注册表模板） | project | 存在即跳过（Protect Local） |
@@ -32,9 +34,9 @@
 
 - `install.ps1`、`install.sh`、`INSTALL_PROMPT.md`、`ASSETS.md`、`README*.md` 属 installer / docs 层，一律不写入目标仓库；
 - `opencode/**` 仅在 `HARNESS_SET` 含 `opencode` 时写入；`qoder/**` 仅在含 `qoder` 时写入；`trae/**` 仅在含 `trae` 时写入；`cursor/**` 仅在含 `cursor` 时写入；
-- `openspec-schema/**`（15 文件，含 `templates/ui-spec.md`、`templates/review.md`、`templates/review-rubric.md`、`templates/verification.md` 与 `templates/code-reviewer.md`）、`onePress.lock`、`docs/ui-components.md` 与 harness 无关，始终处理；
-- `scripts/onepress-gate.sh`、`scripts/onepress-plan-lint.sh`、`scripts/onepress-evidence-lint.sh`、`scripts/onepress-review-lint.sh` 与 `scripts/sandbox-preflight.spec.ts` 属 tooling 层，始终安装到目标仓库 `scripts/`；其余 `scripts/*` 仅模板包自用；
+- `openspec-schema/**`（16 文件，含 `templates/ui-spec.md`、`templates/review.md`、`templates/review-ledger.md`、`templates/review-rubric.md`、`templates/verification.md` 与 `templates/code-reviewer.md`）、`onePress.lock`、`docs/ui-components.md` 与 harness 无关，始终处理；
+- `scripts/onepress-gate.sh`、`scripts/onepress-plan-lint.sh`、`scripts/onepress-evidence-lint.sh`、`scripts/onepress-review-lint.sh`、`scripts/onepress-verify.sh` 与 `scripts/sandbox-preflight.spec.ts` 属 tooling 层，始终安装到目标仓库 `scripts/`；其余 `scripts/*` 仅模板包自用；
 - `docs/design-system/projectbaseline/MASTER.md` 属项目级，存在即跳过（Protect Local）。
 - `.agents/skills/openspec-*`（12 个）由 OpenSpec CLI 生成并归其所有；安装器仅在 `SKILL.md` 的 frontmatter 后插入一行 `onepress-discipline` 引用，不纳入 `onePress.lock` 的 `files`。
-- 发布包 `VERSION` = `2.2.0`（V3.2 + review DAG 工件版本），要求 OpenSpec >= 2.0.0；1.x 环境请使用 onePress v1.1.0。
+- 发布包 `VERSION` = `2.2.1`（V3.2 + review DAG 工件版本），要求 OpenSpec >= 2.0.0；1.x 环境请使用 onePress v1.1.0。
 - 未选中的 harness：不创建目录、不写文件、不挂载引用；lock 中对应项记 `false`。

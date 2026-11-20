@@ -7,6 +7,9 @@
 
 **Change**: `<change-name>`
 **Iteration**: `<integer; copy from apply.md>`
+**Review Round**: `<integer; 1-3>`
+**Reviewed Range**: `<incremental <sha>..HEAD + regression surface (<n> files) | full <base>..HEAD>`
+**Ledger**: `<path to review-ledger.md>` (`absent (legacy: <reason>)` for changes created before v8)
 **BASE_SHA**: `<sha or "uncommitted: <branch-point>">`
 **HEAD_SHA**: `<sha or "working-tree">`
 **Captured at**: `YYYY-MM-DD HH:mm`
@@ -31,6 +34,10 @@
 > Paste raw terminal excerpts. Keep the exit code line for every command.
 > Long logs may be trimmed to the head and tail, but the pass/fail counts
 > and the final exit code MUST remain visible.
+>
+> Summary only: a result block MUST stay within 40 lines and MUST contain a
+> `log: <path>` line pointing at the full output. Full logs belong in
+> `temp/logs/<label>.log`, never inline in this report.
 
 ### 2.1 `<command label>`
 
@@ -83,6 +90,7 @@ exit code: <0>
 - **Protocol**: `openspec/schemas/superspec/templates/code-reviewer.md`
 - **Critical**: `0`
 - **Important**: `0`
+- **Debatable**: `<n>`
 - **Minor**: `<n>`
 
 | # | Level | File:line / hunk | Finding | Disposition |

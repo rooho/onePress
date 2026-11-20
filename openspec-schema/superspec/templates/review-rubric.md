@@ -1,7 +1,7 @@
 # Review Rubric — onePress V3.2 编码前评审判定表
 
 > 本文件是 L2 评分、认知负荷阈值、AI Slop 清单与 L1 断言清单的**唯一来源**。
-> 四份 `opsx-review` 命令体与三份 carrier skill 只引用本路径，不得复制锚点正文。
+> 四份 `openspec-review-change` 命令体与三份 carrier skill 只引用本路径，不得复制锚点正文。
 > 评分为**观察模式**：记录不单独阻断；阻断只由 `P0 > 0` 或 `P1 > 0` 触发。认知负荷与 P2/P3 均为建议项，不阻断 apply。
 
 ## 1. 缺陷级别（阻断判据）

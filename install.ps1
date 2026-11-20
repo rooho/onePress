@@ -90,6 +90,7 @@ $script:SchemaFiles = @(
     'templates/finalize.md',
     'templates/plan.md',
     'templates/proposal.md',
+    'templates/review-ledger.md',
     'templates/review-rubric.md',
     'templates/review.md',
     'templates/spec.md',
@@ -102,7 +103,8 @@ $script:SchemaFiles = @(
 $script:OpenCodeFiles = @(
     'opencode/opencode.json',
     'opencode/agent/ux-architect.md',
-    'opencode/commands/opsx-review.md',
+    'opencode/commands/openspec-review-change.md',
+    'opencode/commands/one.md',
     'opencode/skills/superpowers-tdd/SKILL.md'
 )
 
@@ -118,17 +120,18 @@ $script:CursorFiles = @(
     'cursor/skills/onepress-discipline/SKILL.md'
 )
 
-$script:QoderCommandFiles = @('qoder/commands/opsx/review.md')
+$script:QoderCommandFiles = @('qoder/commands/openspec-review-change.md', 'qoder/commands/one.md')
 
-$script:TraeCommandFiles = @('trae/commands/opsx-review.md')
+$script:TraeCommandFiles = @('trae/commands/openspec-review-change.md', 'trae/commands/one.md')
 
-$script:CursorCommandFiles = @('cursor/commands/opsx-review.md')
+$script:CursorCommandFiles = @('cursor/commands/openspec-review-change.md', 'cursor/commands/one.md')
 
 $script:ToolingFiles = @(
     'scripts/onepress-evidence-lint.sh',
     'scripts/onepress-gate.sh',
     'scripts/onepress-plan-lint.sh',
     'scripts/onepress-review-lint.sh',
+    'scripts/onepress-verify.sh',
     'scripts/sandbox-preflight.spec.ts'
 )
 
@@ -767,7 +770,6 @@ function Remove-LegacyCommands {
         $opsxDir = Join-Path (Join-Path $TargetRoot '.qoder') 'commands/opsx'
         if (-not (Test-Path -LiteralPath $opsxDir)) { return }
         foreach ($file in @(Get-ChildItem -LiteralPath $opsxDir -File -Filter '*.md' -ErrorAction SilentlyContinue)) {
-            if ($file.Name -eq 'review.md') { continue }
             $rel = ".qoder/commands/opsx/$($file.Name)"
             if ($ModifiedFiles -and $ModifiedFiles.ContainsKey($rel)) {
                 Write-Warn "保留未提交修改，不清理 1.x 命令：$rel"
@@ -780,10 +782,11 @@ function Remove-LegacyCommands {
             Remove-Item -LiteralPath $file.FullName -Force
             Write-Info "清理 1.x 命令：$rel"
         }
+        if (-not $DryRun) { Remove-Item -LiteralPath $opsxDir -Force -ErrorAction SilentlyContinue }
         return
     }
 
-    foreach ($name in @('opsx-new.md', 'opsx-apply.md', 'opsx-verify.md')) {
+    foreach ($name in @('opsx-new.md', 'opsx-apply.md', 'opsx-verify.md', 'opsx-review.md')) {
         $rel = "$HarnessDir/commands/$name"
         $path = Join-Rel $TargetRoot $rel
         if (-not (Test-Path -LiteralPath $path)) { continue }
@@ -949,7 +952,6 @@ function Test-SkillsMount {
         $opsxDir = Join-Path (Join-Path $TargetRoot '.qoder') 'commands/opsx'
         if (Test-Path -LiteralPath $opsxDir) {
             foreach ($file in @(Get-ChildItem -LiteralPath $opsxDir -File -Filter '*.md' -ErrorAction SilentlyContinue)) {
-                if ($file.Name -eq 'review.md') { continue }
                 $rel = ".qoder/commands/opsx/$($file.Name)"
                 if ($gitStatus.modified.ContainsKey($rel)) { Write-Skip "$rel（未提交修改，受保护保留，不计入失败）" }
                 else { Write-Fail "1.x 命令残留：$rel" }
@@ -964,7 +966,7 @@ function Test-SkillsMount {
             '.opencode' { $HarnessSet.opencode }
         }
         if (-not $enabled) { continue }
-        foreach ($name in @('opsx-new.md', 'opsx-apply.md', 'opsx-verify.md')) {
+        foreach ($name in @('opsx-new.md', 'opsx-apply.md', 'opsx-verify.md', 'opsx-review.md')) {
             $rel = "$h/commands/$name"
             if (-not (Test-Path -LiteralPath (Join-Rel $TargetRoot $rel))) { continue }
             if ($gitStatus.modified.ContainsKey($rel)) { Write-Skip "$rel（未提交修改，受保护保留，不计入失败）" }

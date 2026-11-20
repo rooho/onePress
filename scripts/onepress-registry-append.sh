@@ -7,7 +7,7 @@
 #        --props "{ searchKey: string; onReset: () => void }" \
 #        [--section domain|base] [--dry-run]
 #
-# 用途：OpenCode 没有 /opsx:archive，归档后用本脚本补记可复用组件。
+# 用途：归档后补记可复用组件行（OpenCode 与其它 harness 一样执行 openspec-archive-change，本脚本只补注册表）。
 # 退出码：0 写入成功或已存在（幂等）；1 参数或文件错误。
 
 set -uo pipefail

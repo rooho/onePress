@@ -1,4 +1,4 @@
-﻿# onePress 安装提示词（INSTALL_PROMPT.md）
+﻿﻿# onePress 安装提示词（INSTALL_PROMPT.md）
 
 > 本文件是 onePress 的 AI 侧安装入口。**首选 `install.ps1` / `install.sh`（一条命令完成同样的五段）；在没有脚本执行能力时，才把本文件完整内容交给任意具备文件读写能力的大模型**，它会按以下五段执行安装。**执行者只需通用文件读写能力，无需 Node.js、Python 或任何运行时。**
 >
@@ -61,7 +61,7 @@
 **红线（违反任一条立即中止安装并报告）：**
 
 1. 禁止覆盖项目级资产：`docs/ui-components.md`、`openspec/changes/` 及其下任何文件。
-2. 禁止修改目标仓库的业务代码与既有业务文档（仅允许写入 `HARNESS_SET` 内的 `.qoder/`、`.opencode/`、`.trae/`、`.cursor/`、`openspec/schemas/`、`scripts/onepress-gate.sh`、`scripts/onepress-plan-lint.sh`、`scripts/onepress-evidence-lint.sh`、`scripts/onepress-review-lint.sh`、`scripts/sandbox-preflight.spec.ts`、`onePress.lock`、`docs/ui-components.md`（首装初始化）、`.agents/skills/`（**仅允许插入技能引用行，禁止改写技能正文**））。
+2. 禁止修改目标仓库的业务代码与既有业务文档（仅允许写入 `HARNESS_SET` 内的 `.qoder/`、`.opencode/`、`.trae/`、`.cursor/`、`openspec/schemas/`、`scripts/onepress-gate.sh`、`scripts/onepress-plan-lint.sh`、`scripts/onepress-evidence-lint.sh`、`scripts/onepress-review-lint.sh`、`scripts/onepress-verify.sh`、`scripts/sandbox-preflight.spec.ts`、`onePress.lock`、`docs/ui-components.md`（首装初始化）、`.agents/skills/`（**仅允许插入技能引用行，禁止改写技能正文**））。
 3. 禁止删除用户本地文件（升级时仅允许删除将被全量覆盖的 harness 目录内的旧文件与 OpenSpec 1.x 生成物）。
 
 **逐字写入约束：模板包内所有文件必须逐字写入目标路径，禁止改写、精简或重排内容；无法逐字写入时中止并报告。**
@@ -70,11 +70,13 @@
 
 | 模板源路径 | 目标路径 |
 |-----------|---------|
-| `openspec-schema/superspec/**`（15 文件） | `openspec/schemas/superspec/`（schema.yaml + templates/ 14 文件，含 `ui-spec.md`、`review.md`、`review-rubric.md`、`verification.md` 与 `code-reviewer.md`） |
+| `openspec-schema/superspec/**`（16 文件） | `openspec/schemas/superspec/`（schema.yaml + templates/ 15 文件，含 `ui-spec.md`、`review.md`、`review-ledger.md`、`review-rubric.md`、`verification.md` 与 `code-reviewer.md`） |
 | `scripts/onepress-gate.sh` | `scripts/onepress-gate.sh`（tooling 层，UI 门禁 0.5） |
 | `scripts/onepress-plan-lint.sh` | `scripts/onepress-plan-lint.sh`（tooling 层，plan + design + tasks 结构门禁） |
 | `scripts/onepress-evidence-lint.sh` | `scripts/onepress-evidence-lint.sh`（tooling 层，verification-evidence 证据门禁） |
 | `scripts/onepress-review-lint.sh` | `scripts/onepress-review-lint.sh`（tooling 层，review.md 回执与哈希门禁） |
+| `scripts/onepress-verify.sh` | `scripts/onepress-verify.sh`（tooling 层，证据编排与 `--range`/`--churn`） |
+| `qoder|trae|cursor|opencode/commands/one.md` | 所选 harness 的 `commands/one.md`（用户层单入口 `/one`，13 项转发表，只转发） |
 | `scripts/sandbox-preflight.spec.ts` | `scripts/sandbox-preflight.spec.ts`（tooling 层，L1 可选） |
 
 ### skills 初始化（始终执行，先于挂载）
@@ -107,7 +109,7 @@ openspec init --tools <HARNESS_SET 逗号串> --no-animation
 |-----------|---------|
 | `opencode/opencode.json` | `.opencode/opencode.json` |
 | `opencode/agent/ux-architect.md` | `.opencode/agent/ux-architect.md` |
-| `opencode/commands/opsx-review.md` | `.opencode/commands/opsx-review.md` |
+| `opencode/commands/openspec-review-change.md` | `.opencode/commands/openspec-review-change.md` |
 | `opencode/skills/superpowers-tdd/SKILL.md` | `.opencode/skills/superpowers-tdd/SKILL.md` |
 
 **仅 Qoder（`HARNESS_SET` 含 `qoder` 时）**
@@ -115,21 +117,21 @@ openspec init --tools <HARNESS_SET 逗号串> --no-animation
 | 模板源路径 | 目标路径 |
 |-----------|---------|
 | `qoder/skills/onepress-discipline/SKILL.md` | `.qoder/skills/onepress-discipline/SKILL.md` |
-| `qoder/commands/opsx/review.md` | `.qoder/commands/opsx/review.md` |
+| `qoder/commands/openspec-review-change.md` | `.qoder/commands/openspec-review-change.md` |
 
 **仅 Trae（`HARNESS_SET` 含 `trae` 时）**
 
 | 模板源路径 | 目标路径 |
 |-----------|---------|
 | `trae/skills/onepress-discipline/SKILL.md` | `.trae/skills/onepress-discipline/SKILL.md` |
-| `trae/commands/opsx-review.md` | `.trae/commands/opsx-review.md` |
+| `trae/commands/openspec-review-change.md` | `.trae/commands/openspec-review-change.md` |
 
 **仅 Cursor（`HARNESS_SET` 含 `cursor` 时）**
 
 | 模板源路径 | 目标路径 |
 |-----------|---------|
 | `cursor/skills/onepress-discipline/SKILL.md` | `.cursor/skills/onepress-discipline/SKILL.md` |
-| `cursor/commands/opsx-review.md` | `.cursor/commands/opsx-review.md` |
+| `cursor/commands/openspec-review-change.md` | `.cursor/commands/openspec-review-change.md` |
 
 写入顺序：先创建目录，再逐文件写入。未选中的 harness 目录**保持不存在或原样不动**。
 
@@ -137,8 +139,8 @@ openspec init --tools <HARNESS_SET 逗号串> --no-animation
 
 按 `HARNESS_SET` 清理旧命令（存在未提交修改的跳过并记录）：
 
-- Qoder：`.qoder/commands/opsx/*.md`，**保留** `review.md`（onePress 托管）。
-- OpenCode / Trae / Cursor：`commands/opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`。
+- Qoder：`.qoder/commands/opsx/*.md`（整个 `opsx/` 目录删除），onePress 托管命令改为 `.qoder/commands/openspec-review-change.md`。
+- OpenCode / Trae / Cursor：`commands/opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`、`opsx-review.md`（旧评审命令，必须删除以避开双入口）。
 
 清理后不得重建任何 `/opsx:*` 工作流命令；工作流一律由 `.agents/skills/openspec-*` 承载。
 
@@ -253,7 +255,7 @@ rules:
 
 ```json
 {
-  "version": "2.2.0",
+  "version": "2.2.1",
   "installedAt": "2026-11-16T00:00:00Z",
   "harnesses": {
     "qoder": true,
@@ -268,7 +270,7 @@ rules:
   "files": [
     "openspec/schemas/superspec/schema.yaml",
     ".qoder/skills/onepress-discipline/SKILL.md",
-    ".qoder/commands/opsx/review.md",
+    ".qoder/commands/openspec-review-change.md",
     "scripts/onepress-gate.sh",
     "scripts/onepress-plan-lint.sh"
   ]
@@ -287,10 +289,10 @@ rules:
 ### 三档升级策略
 
 1. **Harness 核心全量覆盖（仅限已启用的 harness）**：升级时先删除**该 harness** 目录中由 onePress 管理的旧文件，再按第②段逐字写入，杜绝旧版本残留；未启用的 harness 目录不读不写。删除范围：
-   - OpenCode：`commands/`（`opsx-review.md` 除外）、`skills/`、`opencode.json`
+   - OpenCode：`commands/`（`openspec-review-change.md` 除外）、`skills/`、`opencode.json`
    - Trae：`skills/onepress-discipline/`、lock 中记录的命令文件，以及旧版随包直出的 `commands/opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`（**lock 未记录也要删**）
-   - Cursor：`skills/onepress-discipline/`、`commands/opsx-review.md`
-   - Qoder：`skills/onepress-discipline/`、`.qoder/commands/opsx/*.md`（保留 `review.md`）
+   - Cursor：`skills/onepress-discipline/`、`commands/openspec-review-change.md`
+   - Qoder：`skills/onepress-discipline/`、`.qoder/commands/openspec-review-change.md`；`.qoder/commands/opsx/` 整目录删除
    - 通用：`openspec/schemas/superspec/`
    - **`.agents/skills/`：只允许插入引用行，禁止删除或改写技能正文。**
 2. **项目级 Protect Local**：存在即跳过，仅首装初始化。
@@ -309,7 +311,7 @@ rules:
 ### .opencode 验收项（仅当 `HARNESS_SET` 含 `opencode`）
 
 - [ ] `.opencode/opencode.json` 存在且为合法 JSON
-- [ ] `.opencode/commands/opsx-review.md` 存在且与模板包逐字节一致
+- [ ] `.opencode/commands/openspec-review-change.md` 存在且与模板包逐字节一致
 - [ ] `.opencode/commands/` 下**不存在** `opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`
 - [ ] `.opencode/agent/ux-architect.md` frontmatter 含 `mode` 字段
 - [ ] `.opencode/skills/superpowers-tdd/SKILL.md` frontmatter `name: superpowers-tdd` 与目录名一致，`description` 长度 1–1024 字符
@@ -322,15 +324,16 @@ rules:
 - [ ] 该 SKILL.md 包含十三条铁律标题（ui-spec 契约先行 / 需求分流 / 设计检索与降级 / 高保真沙箱与两阶段 / 八项门禁 / Token 纯净度 / 四态状态机 / 无障碍基线 / 防呆与反馈闭环 / 编码前三级评审 / TDD 与根因调试 / 验证双锁 / 任务与设计契约）
 - [ ] 该 SKILL.md 包含 `ui-spec.md`、`sandbox-preview`、`ui_change`、`44×44`、`prefers-reduced-motion`、`Review-Status`、`review.md`、`RED`、`GREEN`、`REFACTOR`、`verification-evidence`、`Root-Cause`、`Critical` 十三个关键词
 - [ ] 该 SKILL.md 内容与模板包逐字一致
-- [ ] 对应目录下 `commands` 中存在 onePress 托管 review 命令（Qoder：`commands/opsx/review.md`；Cursor：`commands/opsx-review.md`），且与模板包逐字节一致
+- [ ] 对应目录下 `commands` 中存在 onePress 托管 review 命令（Qoder：`commands/openspec-review-change.md`；Cursor：`commands/openspec-review-change.md`），且与模板包逐字节一致
 - [ ] `.agents/skills/` 下 12 个 `openspec-<slug>/SKILL.md` 全部存在，且每个文件均含一行 `onepress-discipline` 技能引用
-- [ ] Qoder：`.qoder/commands/opsx/` 下除 `review.md` 外无其他 `*.md`（未提交修改受保护保留者除外）
+- [ ] Qoder：`.qoder/commands/opsx/` 目录不存在；`.qoder/commands/openspec-review-change.md` 存在
+- [ ] 所选 harness 的 `commands/one.md` 存在，转发表恰好 13 项，且 `review` 指向 `/openspec-review-change`（命令）而非技能
 - [ ] 项目级资产未被覆盖：`docs/ui-components.md`（若安装前已存在）内容不变
 
 ### .trae 验收项（仅当 `HARNESS_SET` 含 `trae`）
 
 - [ ] `.trae/skills/onepress-discipline/SKILL.md` 存在，包含十三条铁律与 `ui-spec.md` / `sandbox-preview` / `ui_change` / `44×44` / `prefers-reduced-motion` / `Review-Status` / `review.md` / `RED` / `GREEN` / `REFACTOR` / `verification-evidence` / `Root-Cause` / `Critical` 关键词，且与模板包逐字一致
-- [ ] `.trae/commands/opsx-review.md` 存在且与模板包逐字节一致
+- [ ] `.trae/commands/openspec-review-change.md` 存在且与模板包逐字节一致
 - [ ] `.trae/commands/` 下不存在 `opsx-new.md`、`opsx-apply.md`、`opsx-verify.md`
 - [ ] `.agents/skills/` 下 12 个技能均含一行 `onepress-discipline` 技能引用
 - [ ] 项目级资产未被覆盖：`docs/ui-components.md`（若安装前已存在）内容不变
@@ -343,14 +346,14 @@ rules:
 
 ### OpenSpec Schema 验收项
 
-- [ ] `openspec/schemas/superspec/schema.yaml` 与 `templates/` 14 个模板文件齐全（共 15 文件，含 `ui-spec.md`、`review.md`、`review-rubric.md`、`verification.md` 与 `code-reviewer.md`）
+- [ ] `openspec/schemas/superspec/schema.yaml` 与 `templates/` 15 个模板文件齐全（共 16 文件，含 `ui-spec.md`、`review.md`、`review-ledger.md`、`review-rubric.md`、`verification.md` 与 `code-reviewer.md`）
 - [ ] `schema.yaml` 含 `verify-report` 工件（生成 `verification-evidence.md`），且 `verify` 依赖 `verify-report`；含 `review` 工件（生成 `review.md`），且 `apply.requires` 包含 `review`
 - [ ] `openspec schemas` 可列出 `superspec (project)`
 - [ ] `openspec/config.yaml` 存在且顶层 `schema:` 为 `superspec`，顶层 `rules:` 含 `proposal` / `specs` / `design` / `tasks` / `plan` / `apply` / `verify-report` 七组键（缺失任一项即判定失败）
 - [ ] `openspec/schemas/superspec/schema.yaml` 中每一处 `superpowers:<skill>` 引用都配有 `FALLBACK` 兜底说明（brainstorm / plan / apply / finalize 四处齐全），缺一处即判定失败
 - [ ] `openspec/schemas/superspec/templates/plan.md` 含 `**Spec:**`、`## Global Constraints`、`## Review Focus`、`## Evidence Map`、`## File Structure`、`**Files:**`、`**Interfaces:**`、`## Self-Review` 八段结构，缺一段即判定失败
 - [ ] `schema.yaml` 的 plan 指令引用 `scripts/onepress-plan-lint.sh`，verify-report 指令引用 `scripts/onepress-evidence-lint.sh`，review 指令引用 `scripts/onepress-review-lint.sh`，且含 `Execution: OpenSpec apply` 适配说明
-- [ ] `schema.yaml` 中 `/opsx:` 仅允许出现 `/opsx:review`；不得出现 `/opsx:continue`、`/opsx:apply`、`/opsx:verify`、`/opsx:archive`、`/opsx:propose`
+- [ ] `schema.yaml` 不含任何 `/opsx:` 引用；评审命令入口统一为 `/openspec-review-change`
 
 ### 可选增强层验收项
 
@@ -358,8 +361,8 @@ rules:
 - [ ] `SKIP` 时附有启用指引，且安装结论仍为成功（不计入失败项）
 - [ ] 本次安装未执行任何 `npm install` / `uipro init` / 网络请求
 - [ ] `docs/design-system/projectbaseline/MASTER.md` 若已存在，内容逐字节不变
-- [ ] `scripts/onepress-gate.sh`、`scripts/onepress-plan-lint.sh`、`scripts/onepress-evidence-lint.sh`、`scripts/onepress-review-lint.sh` 与 `scripts/sandbox-preflight.spec.ts` 存在且与模板包逐字节一致（tooling 层）
-- [ ] `bash -n scripts/onepress-plan-lint.sh`、`bash -n scripts/onepress-evidence-lint.sh` 与 `bash -n scripts/onepress-review-lint.sh` 均返回 0
+- [ ] `scripts/onepress-gate.sh`、`scripts/onepress-plan-lint.sh`、`scripts/onepress-evidence-lint.sh`、`scripts/onepress-review-lint.sh`、`scripts/onepress-verify.sh` 与 `scripts/sandbox-preflight.spec.ts` 存在且与模板包逐字节一致（tooling 层）
+- [ ] `bash -n scripts/onepress-plan-lint.sh`、`bash -n scripts/onepress-evidence-lint.sh`、`bash -n scripts/onepress-review-lint.sh` 与 `bash -n scripts/onepress-verify.sh` 均返回 0
 - [ ] L1 预检依赖缺失时报告记 `SKIP`，且安装结论仍为成功（不计入失败项）
 
 ### 安装范围验收项
@@ -371,7 +374,7 @@ rules:
 ### 模板包结构验收项
 
 - [ ] 模板包根条目均在白名单内：`VERSION`、`ASSETS.md`、`INSTALL_PROMPT.md`、`install.ps1`、`install.sh`、`README-ch.md`、`README.md`、`opencode/`、`qoder/`、`trae/`、`cursor/`、`openspec-schema/`、`scripts/`；出现白名单外条目即判定失败并输出违规路径
-- [ ] `opencode/commands/` 仅含 `opsx-review.md`
+- [ ] `opencode/commands/` 仅含 `openspec-review-change.md`
 
 ## ⑤ 收尾
 

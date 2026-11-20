@@ -178,6 +178,86 @@ else
   ok 'no placeholder phrases'
 fi
 
+echo '== boundary matrix =='
+SEMANTIC_RE='归一化|抽取|单位换算|舍入|parser|normalize|extract'
+REVIEW_FOCUS="$(printf '%s\n' "$TEXT" | awk '
+  /^##[[:space:]]+Review Focus[[:space:]]*$/ { f = 1; next }
+  f && /^##[[:space:]]/ { exit }
+  f { print }')"
+TASK_LINES=""
+if [ -f "$PLAN_DIR/tasks.md" ]; then
+  TASK_LINES="$(grep -E '^- \[[ xX]\] [0-9]+\.[0-9]+ ' "$PLAN_DIR/tasks.md" 2>/dev/null || true)"
+fi
+SEMANTIC_TEXT="$REVIEW_FOCUS
+$TASK_LINES"
+MATRIX="$(printf '%s\n' "$TEXT" | awk '
+  /^##[[:space:]]+Boundary Matrix[[:space:]]*$/ { f = 1; next }
+  f && /^##[[:space:]]/ { exit }
+  f { print }')"
+if printf '%s\n' "$SEMANTIC_TEXT" | grep -qE "$SEMANTIC_RE"; then
+  if [ -z "$MATRIX" ]; then
+    bad 'semantic task detected (归一化/抽取/单位换算/舍入/parser/normalize/extract) but ## Boundary Matrix is missing'
+  else
+    MATRIX_STATS="$(printf '%s\n' "$MATRIX" | awk -F'|' '
+      /^\|/ {
+        if ($0 ~ /^\|[[:space:]]*:?-{3,}/) next
+        cat = $2
+        gsub(/^[[:space:]`]+|[[:space:]`]+$/, "", cat)
+        if (cat == "" || tolower(cat) ~ /^(类别|分类|category)$/) next
+        n++; cnt[cat]++
+        if ($0 ~ /反例|拒绝|reject/) rev[cat] = 1
+      }
+      END {
+        cats = 0; badcat = 0
+        for (c in cnt) { cats++; if (cnt[c] < 3 || !rev[c]) badcat++ }
+        printf "%d\t%d\t%d\n", n + 0, cats + 0, badcat + 0
+      }')"
+    IFS=$'\t' read -r m_total m_cats m_bad <<< "$MATRIX_STATS"
+    if [ "${m_total:-0}" -ge 20 ] && [ "${m_cats:-0}" -ge 6 ] && [ "${m_bad:-1}" -eq 0 ]; then
+      ok "boundary matrix: $m_total rows, $m_cats categories"
+    else
+      bad "boundary matrix too thin: rows=$m_total (need >=20), categories=$m_cats (need >=6), failing-categories=$m_bad (need 0; each category needs >=3 rows and one 反例)"
+    fi
+    MISSING_CATS=""
+    for pat in '抽取|extraction|extract' '单位|unit' '舍入|rounding' '区间|range' '名称|name' '日期|date'; do
+      printf '%s\n' "$MATRIX" | grep -qiE "^\|[[:space:]]*($pat)[[:space:]]*\|" || MISSING_CATS="$MISSING_CATS ${pat%%|*}"
+    done
+    if [ -z "$MISSING_CATS" ]; then
+      ok 'boundary matrix covers extraction/unit/rounding/range/name/date'
+    else
+      bad "boundary matrix missing required categories:$MISSING_CATS"
+    fi
+  fi
+else
+  printf '  [SKIP] no semantic task detected\n'
+fi
+
+echo '== scale threshold =='
+FS_COUNT="$(printf '%s\n' "$TEXT" | awk '
+  /^##[[:space:]]+File Structure[[:space:]]*$/ { f = 1; next }
+  f && /^##[[:space:]]/ { exit }
+  f && /^- `/ { n++ }
+  END { print n + 0 }')"
+TASK_TOTAL=0
+if [ -f "$PLAN_DIR/tasks.md" ]; then
+  TASK_TOTAL="$(grep -cE '^- \[[ xX]\] [0-9]+\.[0-9]+ ' "$PLAN_DIR/tasks.md" 2>/dev/null || true)"
+fi
+if [ "${FS_COUNT:-0}" -gt 30 ] || [ "${TASK_TOTAL:-0}" -gt 40 ]; then
+  if printf '%s\n' "$TEXT" | grep -qE '^\*\*Subsystems:\*\*'; then
+    SUBS="$(printf '%s\n' "$TEXT" | sed -n 's/^\*\*Subsystems:\*\*[[:space:]]*//p' | head -1)"
+    SUBS_N="$(printf '%s' "$SUBS" | sed 's/、/\n/g; s/，/\n/g; s/,/\n/g' | grep -c '[^[:space:]]' || true)"
+    if [ "${SUBS_N:-0}" -ge 2 ]; then
+      ok "scale: files=$FS_COUNT tasks=$TASK_TOTAL, $SUBS_N subsystems declared"
+    else
+      bad "scale: files=$FS_COUNT tasks=$TASK_TOTAL needs **Subsystems:** with >=2 names (got $SUBS_N)"
+    fi
+  else
+    bad "scale: files=$FS_COUNT (>30) or tasks=$TASK_TOTAL (>40) requires a **Subsystems:** declaration"
+  fi
+else
+  ok "scale: files=$FS_COUNT tasks=$TASK_TOTAL within thresholds"
+fi
+
 echo '== self-review =='
 for kw in 'Spec coverage' 'Step scan' 'Type consistency' 'Review Focus' 'Proportion'; do
   if printf '%s\n' "$TEXT" | grep -qi "$kw"; then

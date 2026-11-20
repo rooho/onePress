@@ -50,6 +50,17 @@ Follow existing project patterns; do not restructure unrelated files. -->
 
 - `exact/path/to/file` — <!-- responsibility -->
 
+<!-- Boundary Matrix: add a `## Boundary Matrix` section when this change parses,
+normalises, extracts, classifies, converts units or rounds values. Group rows by
+category (extraction / unit / rounding / range / name / date); each category needs
+at least three rows and one counter-example; at least 20 rows in total. Row shape:
+| category | input | expected | positive or counter-example |
+-->
+
+<!-- Subsystems: add `**Subsystems:** a、b` when `## File Structure` exceeds 30
+entries or `tasks.md` exceeds 40 items. List at least two subsystem names,
+otherwise plan-lint fails. `-->` is not part of the declaration. -->
+
 ---
 
 ## Task 1: <!-- Component Name -->
