@@ -1,4 +1,4 @@
-# Review Rubric — onePress V3.2 编码前评审判定表
+# Review Rubric — onePress V2.2 编码前评审判定表
 
 > 本文件是 L2 评分、认知负荷阈值、AI Slop 清单与 L1 断言清单的**唯一来源**。
 > 四份 `openspec-review-change` 命令体与三份 carrier skill 只引用本路径，不得复制锚点正文。

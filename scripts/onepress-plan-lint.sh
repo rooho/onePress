@@ -7,7 +7,7 @@
 #
 # Exit 0 when there is no FAIL. With --strict, WARN also fails the run.
 # --only-plan skips the sibling design.md / tasks.md contract checks (use it
-# for changes created before the V3.2 contract).
+# for changes created before the V2.2 contract).
 # The lint is intentionally structural: it checks that the plan carries the
 # onePress contract (Spec, Global Constraints, Review Focus, File Structure,
 # per-task Files/Interfaces, verification, commit, and Self-Review), not
@@ -61,6 +61,18 @@ while [ $# -gt 0 ]; do
       ;;
   esac
 done
+
+# 遥测埋点：任何退出路径都写 1 条事件；失败静默，不改变退出码。
+_telemetry_on_exit() {
+  local rc=$?
+  local status=pass
+  [ "$rc" -eq 0 ] || status=fail
+  bash "${BASH_SOURCE[0]%/*}/onepress-telemetry.sh" emit step.finish \
+    --status "$status" --step plan-lint \
+    --duration-ms "$((SECONDS * 1000))" \
+    --payload "{\"passed\":${PASS:-0},\"failed\":${FAIL:-0}}" >/dev/null 2>&1 || true
+}
+trap _telemetry_on_exit EXIT
 
 if [ -n "$CHANGE" ]; then
   PLAN="${CHANGE%/}/plan.md"
@@ -350,9 +362,9 @@ elif [ -f "$PLAN_DIR/tasks.md" ]; then
       next
     }
     in_task {
-      if ($0 ~ /^[[:space:]]+- \[[ xX]\] RED:/) rgb_red = 1
-      if ($0 ~ /^[[:space:]]+- \[[ xX]\] GREEN:/) rgb_green = 1
-      if ($0 ~ /^[[:space:]]+- \[[ xX]\] REFACTOR:/) rgb_ref = 1
+      if ($0 ~ /^[[:space:]]+- (\[[ xX]\] )?RED:/) rgb_red = 1
+      if ($0 ~ /^[[:space:]]+- (\[[ xX]\] )?GREEN:/) rgb_green = 1
+      if ($0 ~ /^[[:space:]]+- (\[[ xX]\] )?REFACTOR:/) rgb_ref = 1
       if ($0 ~ /TDD:[[:space:]]*N\/A/) has_na = 1
     }
     END { emit() }

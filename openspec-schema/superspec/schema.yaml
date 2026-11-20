@@ -46,7 +46,7 @@ description: >
   Spec path, Global Constraints, Review Focus, File Structure,
   per-task Files and Interfaces, anti-placeholder rules, and a
   five-point Self-Review.
-  v6 (historical): V3.2 pragmatic fusion. design carries an ADR /
+  v6 (historical): V2.2 pragmatic fusion. design carries an ADR /
   Non-Goals / Risks contract; specs carry Given/When/Then scenarios;
   tasks carry exact file paths and RED-GREEN-REFACTOR micro-steps;
   apply carries the TDD, root-cause debugging and fresh-evidence
@@ -174,7 +174,7 @@ artifacts:
       Focus on architecture and approach, not line-by-line implementation.
       Good design docs explain the "why" behind technical decisions.
 
-      V3.2 DEFENSIVE DESIGN CONTRACT (mandatory):
+      V2.2 DEFENSIVE DESIGN CONTRACT (mandatory):
       - Include at least one ADR with Context, Decision, Alternatives
         considered, Rationale, and Consequences.
       - Include 3-5 explicit Non-Goals (YAGNI). Fewer than 3 or more
@@ -231,7 +231,7 @@ artifacts:
 
       Specs should be testable - each scenario is a potential test case.
 
-      V3.2 SCENARIO CONTRACT:
+      V2.2 SCENARIO CONTRACT:
       - Every Requirement MUST have at least one GIVEN/WHEN/THEN
         scenario with an observable, testable outcome.
       - Cover at least one error path or boundary input per capability.
@@ -365,7 +365,7 @@ artifacts:
           and fix every FAIL before finishing. The lint checks
           `plan.md`, sibling `design.md` (ADR / Non-Goals / Risks) and
           sibling `tasks.md` (exact file paths + RGB micro-steps). For a
-          change created before the V3.2 contract, add `--only-plan` to
+          change created before the V2.2 contract, add `--only-plan` to
           skip the sibling checks instead of rewriting its artifacts.
 
       IMPORTANT output redirection:
@@ -466,7 +466,7 @@ artifacts:
     description: Fresh terminal evidence plus one cold-context code review, collected before verify
     template: verification.md
     instruction: |
-      V3.2 EVIDENCE AND COLD-REVIEW GATE — run this before verify.
+      V2.2 EVIDENCE AND COLD-REVIEW GATE — run this before verify.
 
       This artifact exists to make completion claims falsifiable. Do
       NOT reuse any output from the apply session or from an earlier
@@ -519,7 +519,8 @@ artifacts:
 
       5. Cold-context code review (once per round, read-only):
          - Assemble exactly five inputs: the diff for the recorded
-           `Reviewed Range`, `design.md`, `tasks.md`, `specs/**/*.md`
+           `Reviewed Range` and its `Regression Surface` line,
+           `design.md`, `tasks.md`, `specs/**/*.md`
            and `review-ledger.md`. Do not include the apply session
            history and do not widen the range on your own.
          - If the harness supports subagents (for example a CodeReview
@@ -545,7 +546,8 @@ artifacts:
            block; every Debatable MUST carry a reproducer request.
          - Round budget: at most 3 cold-review rounds. Only the round
            that declares `Overall Decision: PASS` may use
-           `Reviewed Range: full`; earlier rounds review the increment
+           `Reviewed Range: full` and record the matching
+           `Regression Surface` line; earlier rounds review the increment
            plus regression surface. Without convergence by round 3,
            record `ESCALATE` and stop; do not start round 4.
          - Ledger write-back (mandatory): before ending this artifact,
@@ -571,7 +573,16 @@ artifacts:
     template: verify.md
     instruction: |
       ONE PRESS GATES (all harnesses):
-      EVIDENCE FIRST (V3.2): verify MUST NOT run before
+      COMBINED ENTRY (V3.3): when this step is invoked through
+      `/one verify` (or `/openspec-finish-change <change>`), run it as a
+      chain: verify-report → verify → finalize, with a single user
+      confirmation up front. Short-circuit and return to apply when the
+      evidence has `Critical > 0` or `Important > 0`, or when verify is
+      FAIL. PASS and PASS WITH WARNINGS continue to finalize. Each step
+      still writes its own artifact; the chain changes the interaction,
+      not the evidence rules. Standalone invocation of any step remains
+      valid and unchanged.
+      EVIDENCE FIRST (V2.2): verify MUST NOT run before
       verification-evidence.md exists and
       `bash scripts/onepress-evidence-lint.sh --change <change-dir>`
       exits 0. Re-run the commands yourself only if the evidence is older
@@ -792,6 +803,29 @@ artifacts:
       7. Delete the local worktree branch:
 
          git branch -d "$WORKTREE_BRANCH"
+
+      7.5 ARCHIVE BLOCKING REGRESSION (onePress): the archive step
+          (openspec-archive-change / `/one archive`) MUST run the full
+          self-test suite AFTER it syncs the delta specs and BEFORE it
+          moves this change directory:
+
+            bash dev/scripts/verify-manifest.sh
+            bash dev/scripts/verify-carriers.sh
+            bash dev/scripts/verify-telemetry.sh
+            bash dev/scripts/verify-gate.sh
+            bash dev/scripts/verify-plan-lint.sh
+            bash dev/scripts/verify-evidence-lint.sh
+            bash dev/scripts/verify-review-lint.sh
+            bash dev/scripts/verify-verify.sh
+            bash dev/release-check.sh
+
+          Any failing suite MUST abort the archive: the change directory
+          stays in `openspec/changes/`, the failing suite names are printed,
+          and no half-written archive is left behind. Record the outcome in
+          finalize.md as `Archive blocking regression: PASS|FAIL (<suite>)`.
+          When the installer was not applied to this repo, suites whose
+          scripts are absent are recorded as `SKIP (not installed)` — never
+          as PASS.
 
       8. Write finalize.md per templates/finalize.md to
          openspec/changes/<change-name>/finalize.md. Required values
@@ -1078,7 +1112,7 @@ apply:
       a non-zero exit means the review is missing, stale (hashes changed),
       or not approved. STOP and re-run the review artifact.
 
-    V3.2 EXECUTION IRON LAWS (all changes):
+    V2.2 EXECUTION IRON LAWS (all changes):
     1. TDD iron law: for every logic task, the first output MUST be the
        failing test plus its test-run command. Do NOT output production
        code before a recorded RED failure. If you claim GREEN without a

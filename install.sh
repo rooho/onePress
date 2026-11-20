@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # onePress installer for macOS / Linux (bash 3.2+).
 #
+# 发布版本锚点（dev/release-check.sh 校验四处版本一致）：2.3.0-alpha.1
+#
 # Installs the onePress pack (OpenSpec x Superpowers x Tailwind/shadcn) into a target repo.
 # All checks run inside this script; any failure aborts with a reason.
 #
@@ -29,7 +31,7 @@ SKILL_REF='> onepress: 执行本技能时 MUST 先加载技能 `onepress-discipl
 
 SCHEMA_FILES="schema.yaml templates/apply.md templates/brainstorm.md templates/code-reviewer.md templates/design.md templates/finalize.md templates/plan.md templates/proposal.md templates/review-ledger.md templates/review-rubric.md templates/review.md templates/spec.md templates/tasks.md templates/ui-spec.md templates/verification.md templates/verify.md"
 
-OPENCODE_FILES="opencode/opencode.json opencode/agent/ux-architect.md opencode/commands/openspec-review-change.md opencode/commands/one.md opencode/skills/superpowers-tdd/SKILL.md"
+OPENCODE_FILES="opencode/opencode.json opencode/agent/ux-architect.md opencode/commands/openspec-review-change.md opencode/commands/openspec-finish-change.md opencode/commands/one.md opencode/skills/superpowers-tdd/SKILL.md"
 
 SKILL_SLUGS="apply-change archive-change bulk-archive-change continue-change explore ff-change new-change onboard propose sync-specs update-change verify-change"
 
@@ -39,18 +41,33 @@ TRAE_FILES="trae/skills/onepress-discipline/SKILL.md"
 
 CURSOR_FILES="cursor/skills/onepress-discipline/SKILL.md"
 
-QODER_COMMAND_FILES="qoder/commands/openspec-review-change.md qoder/commands/one.md"
+QODER_COMMAND_FILES="qoder/commands/openspec-review-change.md qoder/commands/openspec-finish-change.md qoder/commands/one.md"
 
-TRAE_COMMAND_FILES="trae/commands/openspec-review-change.md trae/commands/one.md"
+TRAE_COMMAND_FILES="trae/commands/openspec-review-change.md trae/commands/openspec-finish-change.md trae/commands/one.md"
 
-CURSOR_COMMAND_FILES="cursor/commands/openspec-review-change.md cursor/commands/one.md"
+CURSOR_COMMAND_FILES="cursor/commands/openspec-review-change.md cursor/commands/openspec-finish-change.md cursor/commands/one.md"
 
-TOOLING_FILES="scripts/onepress-evidence-lint.sh scripts/onepress-gate.sh scripts/onepress-plan-lint.sh scripts/onepress-review-lint.sh scripts/onepress-verify.sh scripts/sandbox-preflight.spec.ts"
+TOOLING_FILES="scripts/onepress-evidence-lint.sh scripts/onepress-gate.sh scripts/onepress-plan-lint.sh scripts/onepress-review-lint.sh scripts/onepress-telemetry.sh scripts/onepress-verify.sh scripts/sandbox-preflight.spec.ts"
 
 WRITTEN=""
 LOCK_FILES=""
 SKIPPED=""
 FAILURES=""
+
+# 遥测埋点：失败静默，绝不阻断安装；dry-run 不写事件。
+telemetry_emit() {
+  local event="$1" status="$2" payload="${3:-}"
+  [ "$DRY_RUN" = 1 ] && return 0
+  [ -f "$PACK_ROOT/scripts/onepress-telemetry.sh" ] || return 0
+  if [ -n "$payload" ]; then
+    bash "$PACK_ROOT/scripts/onepress-telemetry.sh" emit "$event" \
+      --status "$status" --payload "$payload" >/dev/null 2>&1 || true
+  else
+    bash "$PACK_ROOT/scripts/onepress-telemetry.sh" emit "$event" \
+      --status "$status" >/dev/null 2>&1 || true
+  fi
+  return 0
+}
 PROTECTED=""
 MOUNT_SKIPPED=""
 
@@ -1065,7 +1082,7 @@ run_acceptance() {
         bad "openspec/config.yaml 顶层 rules 缺少：$missing"
       fi
     else
-      bad 'openspec/config.yaml 缺少顶层 rules（规则不会按工件注入；请重装或按 2.2.1 模板重建 rules）'
+      bad 'openspec/config.yaml 缺少顶层 rules（规则不会按工件注入；请重装或按当前模板重建 rules）'
     fi
   else
     bad 'openspec/config.yaml 缺失（安装器应已创建）'
@@ -1113,6 +1130,7 @@ TARGET_ROOT="$(cd "${TARGET:-.}" && pwd)" || die "目标目录不存在：${TARG
 
 PACK_ROOT="$(resolve_source "$SOURCE")" || exit 1
 VERSION="$(tr -d '\r\n' < "$PACK_ROOT/VERSION")"
+telemetry_emit install.start pass "{\"harness\":\"$(printf '%s' "$SCOPE" | tr ',' ' ' | tr -d ' ' )\"}"
 info "模板包：$PACK_ROOT（v$VERSION）"
 info "目标仓库：$TARGET_ROOT"
 
@@ -1247,8 +1265,10 @@ fi
 
 printf '\n'
 if [ -n "$FAILURES" ]; then
+  telemetry_emit install.finish fail "{\"failed\":$(printf '%s' "$FAILURES" | grep -c . || true)}"
   printf 'onePress v%s 安装失败（harnesses: %s）\n' "$VERSION" "$SCOPE" >&2
   exit 1
 fi
+telemetry_emit install.finish pass
 printf 'onePress v%s 安装完成（harnesses: %s）\n' "$VERSION" "$SCOPE"
 exit 0

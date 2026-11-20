@@ -104,6 +104,7 @@ $script:OpenCodeFiles = @(
     'opencode/opencode.json',
     'opencode/agent/ux-architect.md',
     'opencode/commands/openspec-review-change.md',
+    'opencode/commands/openspec-finish-change.md',
     'opencode/commands/one.md',
     'opencode/skills/superpowers-tdd/SKILL.md'
 )
@@ -120,11 +121,11 @@ $script:CursorFiles = @(
     'cursor/skills/onepress-discipline/SKILL.md'
 )
 
-$script:QoderCommandFiles = @('qoder/commands/openspec-review-change.md', 'qoder/commands/one.md')
+$script:QoderCommandFiles = @('qoder/commands/openspec-review-change.md', 'qoder/commands/openspec-finish-change.md', 'qoder/commands/one.md')
 
-$script:TraeCommandFiles = @('trae/commands/openspec-review-change.md', 'trae/commands/one.md')
+$script:TraeCommandFiles = @('trae/commands/openspec-review-change.md', 'trae/commands/openspec-finish-change.md', 'trae/commands/one.md')
 
-$script:CursorCommandFiles = @('cursor/commands/openspec-review-change.md', 'cursor/commands/one.md')
+$script:CursorCommandFiles = @('cursor/commands/openspec-review-change.md', 'cursor/commands/openspec-finish-change.md', 'cursor/commands/one.md')
 
 $script:ToolingFiles = @(
     'scripts/onepress-evidence-lint.sh',

@@ -131,13 +131,13 @@ python3 .trae/skills/ui-ux-pro-max/scripts/search.py "data table empty state sha
 - 仅对纯逻辑层（数据转换、Zod 校验、状态机函数）执行 TDD：先写失败测试，再写实现。
 - DOM 渲染单测不做，四态验收靠沙箱对照肉眼点检。
 
-## 铁律 11：TDD 与根因调试（V3.2）
+## 铁律 11：TDD 与根因调试（V2.2）
 
 - **TDD 铁律**：含逻辑修改的任务 MUST 先写失败测试并实际运行、取得 RED 输出，之后才允许写生产代码；声称 GREEN 但无 RED 运行记录时，MUST 删除该生产代码并退回 RED。纯文档/配置任务 MUST 在 `apply.md` 记录 `TDD: N/A (<reason>)`。
 - **根因调试铁律**：出现非预期失败或连续两次修复无效时 MUST 停止打补丁，按「证据收集 → 数据流回溯 → 单一假设 → 最小实验」四阶段溯源；假设被证伪后 MUST 回退到原始错误状态再重新假设，诊断记录写入 `review-ledger.md` 的 `Action: root-cause` 行（原 `Root-Cause Log` 的承载位置），`apply.md` 只留当前迭代与指向台账的指针。同一 `Fingerprint`（`<file>::<defect-class>`）第二次出现时 MUST 标 `FORCE-REWRITE`，重写该模块并补齐 `## Boundary Matrix`，MUST NOT 输出第三个局部补丁。
 - **实时证据**：每个任务完成时 MUST 在 `apply.md` 粘贴真实命令输出与退出码；MUST NOT 使用「应该能通过」「看起来正确」等推测性措辞。
 
-## 铁律 12：验证双锁（V3.2 / v8 有状态版）
+## 铁律 12：验证双锁（V2.2 / v8 有状态版）
 
 - **跨轮台账**：变更目录 MUST 维护 `review-ledger.md`（append-only），记录 `F-<n>`、`Fingerprint`、`Level`、`File`、`Round`、`Status`、`Fix-SHA`、`Action`、`Note` 与 `last_reviewed_sha`；已登记项 MUST NOT 重复计分，同指纹再次出现 MUST 标 `REGRESSION of <ID>`。
 - **证据报告**：`/openspec-verify-change` 之前 MUST 存在 `verification-evidence.md`（`verify-report` 工件），含实测命令、退出码、通过数、`Review Round`、`Reviewed Range`、`Ledger` 与 `Critical: 0` / `Important: 0` / `Debatable: <n>`；结果块 MUST ≤40 行且带 `log:` 路径；`bash scripts/onepress-evidence-lint.sh --change <change-name>` MUST 退出 0。
@@ -145,7 +145,7 @@ python3 .trae/skills/ui-ux-pro-max/scripts/search.py "data table empty state sha
 - **严重度校准**：`Critical` / `Important` MUST 附带「具体输入 → 期望输出 → 实际输出」；无法复现的 finding 记 `Debatable`，不计入阻断计数、归档前由人类结案。
 - **反馈处置**：MUST NOT 表演性同意；逐条对照代码接受或以证据反驳；`Minor` 记录但不阻断。
 
-## 铁律 13：任务精准拆分与防御性设计（V3.2）
+## 铁律 13：任务精准拆分与防御性设计（V2.2）
 
 - `tasks.md` 每条任务 MUST 为 2–5 分钟粒度，MUST 标注反引号文件路径与验证命令；逻辑任务 MUST 内嵌 `RED` / `GREEN` / `REFACTOR` 三个勾选；纯文档/配置任务 MUST 写 `TDD: N/A (<reason>)`。
 - `design.md`（若产出）MUST 含 ADR（Context / Decision / Alternatives / Rationale / Consequences）、3–5 条 Non-Goals 与 Risks / Trade-offs；`specs/**` 每条需求 MUST 含 Given/When/Then 场景。

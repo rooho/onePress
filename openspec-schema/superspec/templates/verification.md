@@ -8,7 +8,8 @@
 **Change**: `<change-name>`
 **Iteration**: `<integer; copy from apply.md>`
 **Review Round**: `<integer; 1-3>`
-**Reviewed Range**: `<incremental <sha>..HEAD + regression surface (<n> files) | full <base>..HEAD>`
+**Reviewed Range**: `<full <base>..HEAD | incremental <last_reviewed_sha>..HEAD>`
+**Regression Surface**: `<regression surface (<n> files): <paths | none>>`
 **Ledger**: `<path to review-ledger.md>` (`absent (legacy: <reason>)` for changes created before v8)
 **BASE_SHA**: `<sha or "uncommitted: <branch-point>">`
 **HEAD_SHA**: `<sha or "working-tree">`

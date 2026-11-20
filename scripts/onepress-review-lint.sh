@@ -28,6 +28,18 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# 遥测埋点：任何退出路径都写 1 条事件；失败静默，不改变退出码。
+_telemetry_on_exit() {
+  local rc=$?
+  local status=pass
+  [ "$rc" -eq 0 ] || status=fail
+  bash "${BASH_SOURCE[0]%/*}/onepress-telemetry.sh" emit step.finish \
+    --status "$status" --step review-lint \
+    --duration-ms "$((SECONDS * 1000))" \
+    --payload "{\"failed\":${FAILURES:-0}}" >/dev/null 2>&1 || true
+}
+trap _telemetry_on_exit EXIT
+
 [ -n "$CHANGE" ] || { usage >&2; exit 2; }
 case "$CHANGE" in
   /*) DIR="$CHANGE" ;;

@@ -8,6 +8,7 @@
 **Verified at**: `YYYY-MM-DD HH:mm`
 **Iteration**: `<integer; copy from apply.md>`
 **Verifier**: `<who / which agent>`
+**Entry**: `standalone | combined (/one verify)`
 
 ---
 

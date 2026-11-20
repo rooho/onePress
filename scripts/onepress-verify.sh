@@ -63,6 +63,16 @@ while [ $# -gt 0 ]; do
   esac
 done
 
+# 遥测埋点：任何退出路径都写 1 条事件；失败静默，不改变退出码。
+_telemetry_on_exit() {
+  local rc=$?
+  local status=pass
+  [ "$rc" -eq 0 ] || status=fail
+  bash "${BASH_SOURCE[0]%/*}/onepress-telemetry.sh" emit verify.finish \
+    --status "$status" --duration-ms "$((SECONDS * 1000))" >/dev/null 2>&1 || true
+}
+trap _telemetry_on_exit EXIT
+
 [ -n "$CHANGE" ] || { usage >&2; exit 2; }
 CHANGE="${CHANGE%/}"
 [ -d "$CHANGE" ] || { err "change directory not found: $CHANGE"; exit 2; }
@@ -308,7 +318,7 @@ while IFS=$'\t' read -r task cmd sig; do
     logrel="${log#"$ROOT"/}"
   fi
 
-  RUN=$((RUN + 1))
+  [ "$FB" = 1 ] || RUN=$((RUN + 1))
   status="PASS"
   if [ "$code" -ne 0 ]; then
     FAILED=$((FAILED + 1))
@@ -356,6 +366,23 @@ if [ -f "$EVIDENCE" ] && ! grep -q '^\*\*Validation Level\*\*:' "$EVIDENCE"; the
   mv "$WORKDIR/withheader.md" "$EVIDENCE"
 fi
 
+# pick_fence <file> — a backtick fence longer than any leading run in <file>,
+# so a log line made of backticks cannot close the block early.
+pick_fence() {
+  local n
+  n="$(awk '{ line = $0; sub(/[^`].*/, "", line); if (length(line) > m) m = length(line) } END { print m + 0 }' "$1")"
+  if [ "$n" -lt 3 ]; then n=3; else n=$((n + 1)); fi
+  awk -v n="$n" 'BEGIN { for (i = 0; i < n; i++) printf "`"; printf "\n" }'
+}
+
+# row_state <status> — single mapping from row status to the evidence table columns.
+row_state() {
+  case "$1" in
+    SKIP) printf 'skipped' ;;
+    *) printf 'ran' ;;
+  esac
+}
+
 REGION="$WORKDIR/region.md"
 {
   printf '## 1. Commands\n\n'
@@ -368,18 +395,25 @@ REGION="$WORKDIR/region.md"
       continue
     fi
     if [ -n "$logrel" ] && [ -f "$ROOT/$logrel" ]; then src="$ROOT/$logrel"; else src="$WORKDIR/$i.inline"; fi
-    printf '### 2.%s %s\n\n```text\n$ %s\n' "$i" "$task" "$cmd"
-    [ -f "$src" ] && tail -n 15 "$src" | cut -c1-200
-    printf 'counts: %s\n' "$(counts_of "$src")"
-    [ -n "$logrel" ] && printf 'log: %s\n' "$logrel"
-    printf 'exit code: %s\n```\n\n' "$code"
+    EXCERPT="$WORKDIR/$i.excerpt"
+    {
+      printf '$ %s\n' "$cmd"
+      [ -f "$src" ] && tail -n 15 "$src" | cut -c1-200
+      printf 'counts: %s\n' "$(counts_of "$src")"
+      [ -n "$logrel" ] && printf 'log: %s\n' "$logrel"
+      printf 'exit code: %s\n' "$code"
+    } > "$EXCERPT"
+    fence="$(pick_fence "$EXCERPT")"
+    printf '### 2.%s %s\n\n%stext\n' "$i" "$task" "$fence"
+    cat "$EXCERPT"
+    printf '%s\n\n' "$fence"
   done < "$RESULTS"
   printf '## 3. Evidence Table\n\n'
   printf '| # | Command | Exit code | Pass / fail counts | Run at | Fresh? |\n|---|---|---|---|---|---|\n'
   now="$(date +%H:%M)"
   while IFS=$'\t' read -r i task cmd status code logrel; do
-    if [ "$status" = "SKIP" ]; then
-      printf '| %s | `%s` | `—` | `skipped (out of scope)` | `%s` | `yes` |\n' "$i" "$cmd" "$now"
+    if [ "$(row_state "$status")" = "skipped" ]; then
+      printf '| %s | `%s` | `—` | `skipped (out of scope)` | `n/a` | `no` |\n' "$i" "$cmd"
       continue
     fi
     if [ -n "$logrel" ] && [ -f "$ROOT/$logrel" ]; then counts="$(counts_of "$ROOT/$logrel")"

@@ -5,7 +5,7 @@
 #   bash scripts/onepress-evidence-lint.sh --change openspec/changes/<name>
 #   bash scripts/onepress-evidence-lint.sh <path/to/verification-evidence.md>
 #
-# Checks the V3.2 evidence contract: required sections, fresh command
+# Checks the V2.2 evidence contract: required sections, fresh command
 # output blocks with exit codes, an evidence table, zero Critical /
 # Important findings, no speculative wording, and UI gate evidence when
 # ui-spec.md exists. Exit 0 when there is no FAIL; otherwise 1.
@@ -17,7 +17,7 @@ Usage:
   bash scripts/onepress-evidence-lint.sh --change openspec/changes/<name> [--legacy]
   bash scripts/onepress-evidence-lint.sh <path/to/verification-evidence.md>
 
-Checks the V3.2 verification evidence contract. --legacy downgrades missing
+Checks the V2.2 verification evidence contract. --legacy downgrades missing
 v8 fields (Review Round / Reviewed Range / Ledger) to WARN. Exit 0 when
 there is no FAIL; otherwise 1.
 EOF
@@ -53,6 +53,17 @@ while [ $# -gt 0 ]; do
       ;;
   esac
 done
+
+# 遥测埋点：任何退出路径都写 1 条事件；失败静默，不改变退出码。
+_telemetry_on_exit() {
+  local rc=$?
+  local status=pass
+  [ "$rc" -eq 0 ] || status=fail
+  bash "${BASH_SOURCE[0]%/*}/onepress-telemetry.sh" emit evidence.finish \
+    --status "$status" --duration-ms "$((SECONDS * 1000))" \
+    --payload "{\"passed\":${PASS:-0},\"failed\":${FAIL:-0}}" >/dev/null 2>&1 || true
+}
+trap _telemetry_on_exit EXIT
 
 if [ -n "$CHANGE_DIR" ]; then
   CHANGE_DIR="${CHANGE_DIR%/}"

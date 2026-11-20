@@ -505,6 +505,13 @@ gate7
 gate_manual
 
 printf '\n== 结论\n'
+# 遥测埋点：一条门禁事件；失败静默，不改变退出码。
+_TELEMETRY_STATUS=pass
+if [ "$FAIL_COUNT" -gt 0 ]; then _TELEMETRY_STATUS=fail; fi
+bash "${BASH_SOURCE[0]%/*}/onepress-telemetry.sh" emit gate.finish \
+  --status "$_TELEMETRY_STATUS" --duration-ms "$((SECONDS * 1000))" \
+  --payload "{\"failed\":$FAIL_COUNT}" >/dev/null 2>&1 || true
+
 if [ "$FAIL_COUNT" -gt 0 ]; then
   printf '  FAIL（%d 项失败，%d 条提示）\n' "$FAIL_COUNT" "$NOTE_COUNT"
   exit 1

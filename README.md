@@ -7,6 +7,7 @@ onePress targets teams with **no dedicated designer**, where developers drive th
 1. **Design by guesswork** → AI consults a local design knowledge base and writes a seven-section `ui-spec.md` (component hierarchy / 16-channel tokens / four-state matrix / responsive rules / micro-motion / anti-patterns / sandbox preview).
 2. **Delivery by vibes** → a single-file `sandbox-preview.html` locks colour, type, density and motion — with four-state and Light/Dark toggles — before any production component is written.
 3. **Quality by willpower** → eight UI gates (token purity + WCAG contrast + anti-patterns + touch targets + a11y + pure-logic state tests + human checks) executed by `scripts/onepress-gate.sh`; the plan stage is checked by `scripts/onepress-plan-lint.sh` (plan + design + tasks); the execution stage enforces TDD, root-cause debugging and fresh evidence; verification requires `verification-evidence.md` with a cold-context code review, checked by `scripts/onepress-evidence-lint.sh`.
+4. **Black-box runs** → `scripts/onepress-telemetry.sh` writes local-only JSONL events (install / gate / evidence / verify / step) under `~/.onepress/telemetry/`, with a four-level opt-out (`--no-telemetry` > `ONEPRESS_TELEMETRY=off` > `DO_NOT_TRACK=1` > `CI`), a 1,800 B per-line cap, a payload allow-list and zero network access. `status`, `show --last N`, `report` and `export --format otlp-json` all run offline. M1 installs **no hooks**.
 
 First-class support for four harnesses: `.qoder/`, `.opencode/`, `.trae/` and `.cursor/`. Zero runtime dependencies — any model with file read/write access can install it.
 
@@ -83,18 +84,20 @@ The unselected harness gets no directory created and no files written. `onePress
 
 | Target path | Contents | Layer | Installed when |
 |-------------|----------|-------|----------------|
-| `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/openspec-review-change.md`, `skills/superpowers-tdd/` | harness | OpenCode selected |
+| `.opencode/` | `opencode.json`, `agent/ux-architect.md`, `commands/openspec-review-change.md`, `commands/openspec-finish-change.md`, `skills/superpowers-tdd/` | harness | OpenCode selected |
 | `.qoder/skills/onepress-discipline/SKILL.md` | Thirteen iron rules (contract / triage / retrieval / sandbox / gates / token / states / a11y / anti-mistake / pre-code review / TDD + root-cause / verification locks / task + design contract) + TDD discipline | harness | Qoder selected |
 | `.agents/skills/openspec-*/SKILL.md` (12) | OpenSpec 2.0 workflow skills; one reference line added after frontmatter, body untouched | harness | always (shared by all harnesses) |
 | `.trae/skills/onepress-discipline/SKILL.md` | Thirteen iron rules + TDD discipline (Trae carrier) | harness | Trae selected |
 | `.trae/commands/openspec-review-change.md` | onePress-managed review command (slash entry `/openspec-review-change`) | harness | Trae selected |
+| `.trae/commands/openspec-finish-change.md` | onePress-managed combined closeout (slash entry `/openspec-finish-change`; also `/one verify`) | harness | Trae selected |
 | `.cursor/skills/onepress-discipline/SKILL.md` | Thirteen iron rules + TDD discipline (Cursor carrier) | harness | Cursor selected |
 | `.cursor/commands/openspec-review-change.md` | onePress-managed review command (slash entry `/openspec-review-change`) | harness | Cursor selected |
+| `.cursor/commands/openspec-finish-change.md` | onePress-managed combined closeout (slash entry `/openspec-finish-change`; also `/one verify`) | harness | Cursor selected |
 | `openspec/schemas/superspec/` | `schema.yaml` + 15 templates incl. `ui-spec.md`, `review.md`, `review-ledger.md`, `review-rubric.md`, `verification.md`, `code-reviewer.md` (16 files) | harness | always |
 | `onePress.lock` | Version, install scope, protected assets | harness | always |
 | `docs/ui-components.md` | Component registry template (four columns, empty tables on first install) | project | always |
 
-> Commands have two layers: the **contract layer** is the 13 canonical names (12 `openspec-*` skills + `openspec-review-change`); the **user layer** is the single entry `/one <subcommand>` (propose / explore / new / continue / ff / update / apply / verify / sync / archive / bulk-archive / onboard / review). It only forwards and never rewrites upstream steps; an unknown subcommand fails and prints the full table.
+> Commands have two layers: the **contract layer** is 12 `openspec-*` skills plus 2 onePress-managed commands (`openspec-review-change`, `openspec-finish-change`); the **user layer** is the single entry `/one <subcommand>` (propose / explore / new / continue / ff / update / apply / verify / sync / archive / bulk-archive / onboard / review). `verify` runs the combined closeout (verify-report → verify → finalize). It only forwards and never rewrites upstream steps; an unknown subcommand fails and prints the full table.
 
 > `docs/design-system/projectbaseline/MASTER.md` is generated **once** by the optional `ui-ux-pro-max` skill. onePress protects it on install/upgrade but never creates or rewrites it.
 
@@ -236,7 +239,7 @@ Batch: `/openspec-bulk-archive-change`. Sync specs only: `/openspec-sync-specs`.
 | `/openspec-update-change` | ✅ | CLI | ✅ | ✅ | Revise planning artifacts (native, experimental) |
 
 - **Qoder / Trae / Cursor**: OpenSpec 2.0 installs all 12 skills into `.agents/skills/`; the installer mounts one `onepress-discipline` reference line after each `SKILL.md` frontmatter and ships one managed `/openspec-review-change` command.
-- **OpenCode**: shares the same `.agents/skills/` and ships one managed `commands/openspec-review-change.md`; `new` / `apply` / `verify` commands are no longer shipped:
+- **OpenCode**: shares the same `.agents/skills/` and ships two managed commands (`commands/openspec-review-change.md`, `commands/openspec-finish-change.md`); `new` / `apply` / `verify` commands are no longer shipped:
 
 ```bash
 openspec status --change <name> --json          # progress and next step
@@ -276,7 +279,7 @@ Full details: `studio/openspec/CHANGE_NAMING.md`.
 
 Upgrade = re-run the script (`.\install.ps1` / `./install.sh`) with the new pack; `onePress.lock`'s `version` decides "fresh install" vs "upgrade", and stale managed files from the older version are cleaned using the lock manifest. A missing or corrupt lock means fresh install — project-level assets stay protected.
 
-Uninstall: remove everything except `protectedAssets` from `onePress.lock` (`.opencode/`, `.qoder/skills/onepress-discipline/`, `.trae/skills/onepress-discipline/`, `.trae/commands/openspec-review-change.md`, `.cursor/skills/onepress-discipline/`, `openspec/schemas/superspec/`), keeping `docs/ui-components.md` and `openspec/changes/`; `.agents/skills/` belongs to the OpenSpec CLI and is left in place (run `openspec update` to drop the reference lines).
+Uninstall: remove everything except `protectedAssets` from `onePress.lock` (`.opencode/`, `.qoder/skills/onepress-discipline/`, `.trae/skills/onepress-discipline/`, `.trae/commands/openspec-review-change.md`, `.trae/commands/openspec-finish-change.md`, `.cursor/skills/onepress-discipline/`, `openspec/schemas/superspec/`), keeping `docs/ui-components.md` and `openspec/changes/`; `.agents/skills/` belongs to the OpenSpec CLI and is left in place (run `openspec update` to drop the reference lines).
 
 ---
 
@@ -291,29 +294,43 @@ onePress/                    # release pack root (generated from studio/pack/)
 ├── INSTALL_PROMPT.md       # AI install entry (five sections, script-equivalent fallback)
 ├── install.ps1             # Windows installer (detect/write/check/report in one command)
 ├── install.sh              # macOS / Linux installer
-├── opencode/               # OpenCode harness assets (4 files)
+├── opencode/               # OpenCode harness assets (6 files)
 │   ├── opencode.json
 │   ├── agent/ux-architect.md
+│   ├── commands/one.md
 │   ├── commands/openspec-review-change.md
+│   ├── commands/openspec-finish-change.md
 │   └── skills/superpowers-tdd/SKILL.md
-├── qoder/                  # Qoder harness assets (2 files)
+├── qoder/                  # Qoder harness assets (5 files)
 │   ├── skills/onepress-discipline/SKILL.md
-│   └── commands/openspec-review-change.md
-├── trae/                   # Trae harness assets (2 files)
+│   ├── skills/testing-impl-story/SKILL.md
+│   ├── commands/one.md
+│   ├── commands/openspec-review-change.md
+│   └── commands/openspec-finish-change.md
+├── trae/                   # Trae harness assets (4 files)
 │   ├── skills/onepress-discipline/SKILL.md
-│   └── commands/openspec-review-change.md
-├── cursor/                 # Cursor harness assets (2 files)
+│   ├── commands/one.md
+│   ├── commands/openspec-review-change.md
+│   └── commands/openspec-finish-change.md
+├── cursor/                 # Cursor harness assets (4 files)
 │   ├── skills/onepress-discipline/SKILL.md
-│   └── commands/openspec-review-change.md
+│   ├── commands/one.md
+│   ├── commands/openspec-review-change.md
+│   └── commands/openspec-finish-change.md
 ├── scripts/                # Pack-side scripts
 │   ├── onepress-gate.sh    # Gates 0/0.5/2/4/5/6/7 AUTO + MANUAL 1/3/8 (installed)
 │   ├── onepress-plan-lint.sh  # plan + design + tasks structural lint (installed)
 │   ├── onepress-evidence-lint.sh  # verification-evidence lint (installed)
 │   ├── onepress-review-lint.sh  # review.md receipt + contract hash lint (installed)
+│   ├── onepress-verify.sh  # Evidence Map orchestration + --scope/--range/--churn (installed)
+│   ├── onepress-telemetry.sh  # local JSONL telemetry (installed)
+│   ├── onepress-telemetry.ps1  # Windows peer writer with spool fallback (installed)
 │   ├── sandbox-preflight.spec.ts  # L1 pre-flight (installed, optional deps)
 │   └── onepress-registry-append.sh  # Append a component row (shipped, run manually)
 └── openspec-schema/superspec/   # Schema installed into target repos (16 files, incl. templates/ui-spec.md + review.md + review-ledger.md + review-rubric.md + verification.md + code-reviewer.md)
 ```
+
+> Tooling logical items count **7** (`.ps1` shares an item with its `.sh`; `onepress-registry-append.sh` is an assistant script): `manifest.json` → `counts.tooling` is the single source of truth.
 
 > `blueprint/` (iteration blueprints) and `openspec/` (this toolkit's own spec workspace) live in the **studio repo**, never in this release pack. The release pack is generated from `studio/pack/`.
 
@@ -340,7 +357,7 @@ A: Yes — that is the default. The installer detects by directory: `.qoder/` on
 A: No — they are local environment config. Do commit `onePress.lock` and `docs/ui-components.md`.
 
 **Q: How do I confirm the install?**
-A: Check the exit code and the report — `0` plus the closing line `onePress v<version> 安装完成（harnesses: <scope>）` means success; skipped items and check results are already listed. To double-check yourself, three spots — `onePress.lock` exists with the matching `version`; every `.qoder/commands/`, `.trae/commands/` and `.cursor/commands/` file has one `onepress-discipline` reference line; `openspec/schemas/superspec/` has 12 files (incl. `templates/ui-spec.md` and `templates/review-rubric.md`).
+A: Check the exit code and the report — `0` plus the closing line `onePress v<version> 安装完成（harnesses: <scope>）` means success; skipped items and check results are already listed. To double-check yourself, three spots — `onePress.lock` exists with the matching `version`; every `.qoder/commands/`, `.trae/commands/` and `.cursor/commands/` file has one `onepress-discipline` reference line; `openspec/schemas/superspec/` has 16 files (incl. `templates/ui-spec.md` and `templates/review-rubric.md`).
 
 **Q: Will a re-install clobber my edits to tooling files?**
 A: No. Tracked files with uncommitted changes are reported and skipped; existing skill reference lines are skipped, and command bodies are never rewritten.

@@ -10,7 +10,7 @@ Hard formatting rules (validated by OpenSpec):
 - Requirement sentences MUST contain `SHALL` or `MUST`
 - Each Requirement MUST have at least one `#### Scenario:`
 - Scenarios MUST use level-4 (`####`) — level-3 or bullet will silently fail
-- V3.2: every scenario MUST use GIVEN / WHEN / THEN with an observable,
+- V2.2: every scenario MUST use GIVEN / WHEN / THEN with an observable,
   testable outcome; cover at least one error path or boundary input per
   capability. A scenario is a test case, not an echo of the implementation.
 -->
