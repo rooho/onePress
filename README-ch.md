@@ -2,9 +2,9 @@
 
 > OpenSpec × Superpowers × Tailwind/shadcn 的桥接方案包——用一段提示词把**整套前端工程流程**装进任意仓库。
 
-onePress 面向"没有专职设计师、由程序员主导"的团队，解决三个具体问题：
+onePress 面向"没有专职设计师、由程序员主导"的团队，解决四个具体问题：
 
-1. **设计靠猜**：让 AI 检索本地设计知识库，产出七章节 `ui-spec.md`（组件层级 / 16 通道 Token / 四态矩阵 / 响应式规则 / 微动效 / 行业反模式 / 沙箱预览），不再凭训练数据均值配色。
+1. **设计靠猜**：以四层 UI 设计底座（知识基线 / 七章节契约 / 可点沙箱 / 组件注册表）加一套默认技术栈（React + Tailwind + shadcn）把设计变成可审计的产物，不再凭训练数据均值配色。底座构成与默认技术栈见 **§2**，"它能不能自己设计 UI 与交互"见 **§2.3**，完整设计路径见 **§2.4**。
 2. **交付靠感觉**：先出单文件 `sandbox-preview.html`（四态 + Light/Dark 切换），把色彩、字体、密度、动效锁死，再写生产组件。
 3. **质量靠自觉**：八项 UI 门禁（Token 纯净度 + WCAG 对比度 + 反模式 + 热区 + 无障碍 + 纯逻辑状态测试 + 人工项）由 `scripts/onepress-gate.sh` 执行；plan 阶段由 `scripts/onepress-plan-lint.sh` 检查 plan + design + tasks 结构；执行阶段强制 TDD、根因调试与实时证据；验证阶段要求 `verification-evidence.md` 与冷上下文代码盲审，由 `scripts/onepress-evidence-lint.sh` 检查。
 4. **运行黑盒**：`scripts/onepress-telemetry.sh` 把安装 / 门禁 / 证据 / 验证 / 步骤事件以单行 JSONL 写到本机 `~/.onepress/telemetry/`，四级关闭（`--no-telemetry` > `ONEPRESS_TELEMETRY=off` > `DO_NOT_TRACK=1` > `CI`），单行 ≤1,800 B、payload 白名单、零网络外联；`status` / `show --last N` / `report` / `export --format otlp-json` 全部离线。M1 **不安装任何 hooks**。
@@ -19,7 +19,7 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 |----|------|
 | 目标仓库 | 已初始化 git |
 | OpenSpec CLI | `npm install -g @fission-ai/openspec@latest`（**>= 2.0.0**；1.x 环境请改用 onePress v1.1.0） |
-| 设计检索（可选） | `npm install -g ui-ux-pro-max-cli` + `uipro init --ai <harness> --offline`；缺失时自动降级 |
+| UI 设计底座（可选增强） | `npm install -g ui-ux-pro-max-cli` + `uipro init --ai <harness> --offline`，或安装时传 `--ui-ux-pro-max install`（默认 `skip`）；缺失时输出 `SKIP` 并降级为手工填写契约，不阻断流程 |
 | AI 助手 | Qoder / OpenCode / Trae / Cursor / 任意具备文件读写与命令执行能力的 Agent |
 
 ---
@@ -45,9 +45,11 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 .\install.ps1 -Target D:\repo    # 指定目标仓库
 .\install.ps1 -DryRun            # 只打印计划，不落盘
 .\install.ps1 -Source D:\pack    # 指定模板包目录（默认脚本所在目录）
+.\install.ps1 -UiUxProMax install  # 同时装可选设计检索层（默认 skip，不联网）
 ```
 ```bash
 ./install.sh --harness qoder --target ~/repo --dry-run --source ~/pack
+./install.sh --ui-ux-pro-max install
 ```
 
 脚本一键做完六件事：**探测 harness → 分层写入 → 对齐 OpenSpec 配置 → 写 `onePress.lock` → 自检 → 输出报告**。其中"对齐配置"包括：`openspec/config.yaml` 不存在时创建（`schema: superspec`）、已存在但值不对时只改那一行（CRLF 也保留），以及 `.qoder/`、`.trae/`、`.cursor/` 的 `commands/` 为空时自动 `openspec init --tools <qoder|trae|cursor>` 生成命令。自检覆盖布局、逐字一致、schema 16 文件齐全、`schema: superspec`、顶层 `rules`、review 托管命令与挂载、命令非空且已挂载、lock 与安装范围一致；失败即中止并给出原因，退出码 `0` 成功 / `1` 失败。你不需要手动核对任何东西。
@@ -103,7 +105,130 @@ onePress 面向"没有专职设计师、由程序员主导"的团队，解决三
 
 ---
 
-## 二、完整开发流程
+## 二、UI 设计底座与默认技术栈
+
+这一节回答三个问题：**底座由什么构成**、**默认技术栈是什么**、**它能不能自己设计 UI 与交互**。
+
+### 2.1 底座是四层载体，不是一套组件库
+
+onePress 不自带 UI 组件库，也不追求"生成一个看起来还行的页面"。它把 UI 设计拆成四个可审计、可版本化的载体：
+
+| 层 | 载体（目标仓库内） | 作用 | 谁产生 | 缺失时 |
+|----|--------------------|------|--------|--------|
+| 知识底座 | `docs/design-system/projectbaseline/MASTER.md` | 全仓唯一设计基线：色板、字体、密度、动效、行业反模式 | `ui-ux-pro-max` 一次性生成（`--design-system --persist`）；onePress 只保护不改写 | 退化为手工基线，取值改由人明确提供 |
+| 契约底座 | `openspec/changes/<change>/ui-spec.md` | **UI 唯一真源**，七章节全部必填 | `design` 工件（`/op-continue`），仅 `**UI Change**: yes` 时产出 | 门禁 0 FAIL，`/op-apply` 不启动 |
+| 视觉验收面 | `openspec/changes/<change>/sandbox-preview.html` | 单文件预览（inline CSS + JS）：四态 × Light/Dark、`data-review-id`、`Alt/⌘ + Click` Pin-to-AI 批注器 | 同上 | 评审失去可比对的视觉基准，门禁 0 / 8 无法通过 |
+| 复用底座 | `docs/ui-components.md` | base / domain 组件注册表（名称 / 路径 / 适用骨架 / Props） | 安装时初始化为空表，`/op-archive` 只追加 | 每次从零造组件，归档时补记 |
+
+`ui-spec.md` 的七章节固定为：① 组件层级拆解 ② Design Token 映射（16 通道）③ 四态状态机矩阵 ④ 响应式断点与排版 ⑤ 交互热点与微动效 ⑥ 行业反模式黑名单 ⑦ 沙箱预览要求。
+
+工艺层约束来自 `onepress-discipline` 技能：13 条铁律 + 八项门禁（0 / 0.5 / 1–8）+ 编码前三级评审（L1 确定性预检 → L2 冷上下文盲审 → L3 人类签批）。
+
+**三条硬边界**：UI 契约只写 `ui-spec.md`，严禁回写 `design.md`；`ui-spec.md`、沙箱或 `plan.md` 任一变化，`review.md` 立即失效；`Review-Status: APPROVED` 只能由人类签署，Agent 不得自签。
+
+### 2.2 默认技术栈
+
+| 维度 | 默认取值 | 强制约束 |
+|------|----------|----------|
+| 组件形态 | React + TSX，`features/<feature>/container.tsx` + `view.tsx` | View 100% Props 受控；Stage 1 直接写生产组件，**禁止**从沙箱 HTML 转译 |
+| 样式 | **Tailwind（v4 优先）** | 零内联 style、零 `#hex`/`rgb()`/`hsl()`、零任意像素（`p-[13px]`） |
+| 组件库 | **shadcn/ui + Radix** | 焦点环继承 `focus-visible:ring-2`；删除/覆盖必须 `<AlertDialog variant="destructive">` 二次确认；操作结果必须 `toast` |
+| Token | 16 个语义通道 + 对应 foreground | `On *` 必须改名 `--primary-foreground` 等，禁用 `--color-on-*`；`:root` / `.dark` 定义变量，`@theme inline` 映射类名 |
+| 暗色策略 | Background `#0F172A`、Card `#111827`、Muted FG `#CBD5E1`、Border `#334155`；Ring 取与暗底 ≥3:1 者 | 正文对比度 ≥4.5:1；大字与控件边界 ≥3:1 |
+| 图标 | `@phosphor-icons/react`（备选 Heroicons / Lucide） | 描边全站统一；严禁 Emoji 充当图标 |
+| 字体 | Google Fonts `<link>` 主副配对 | 正文 16px / 行高 1.5 |
+| 动效 | Tailwind transition 150–250ms | 热区 ≥44×44px、相邻间距 ≥8px；必须 `motion-reduce:` 降级；未声明 `gsap` 的项目禁止引入 GSAP |
+| 测试 | 纯逻辑层 TDD（vitest / pytest / npm test） | 禁 RTL / DOM 快照；四态与视觉靠沙箱人工对照 |
+
+框架不绑定：Next.js、Vite、Remix 均可，onePress 只要求上面的分层与类名约定。但门禁 2/5/6 是**正则与启发式扫描**（扫 `.tsx/.vue` 与含 `:root`/`.dark` 的 CSS），识别的正是 Tailwind/shadcn 约定的信号（`cursor-pointer`、`size-11`、`focus-visible:ring`、`duration-*`）；若目标仓库不用这套约定，需先对齐这些信号，否则会持续误判 FAIL。
+
+可选增强层（缺失即 `SKIP`，不联网、不执行 `npm install`、不改变安装结论）：
+
+| 增强 | 提供什么 | 启用方式 |
+|------|----------|----------|
+| `ui-ux-pro-max` | 设计检索与基线生成（`--design-system` / `--domain ux` / `--stack shadcn`），需 Node.js + Python3 | `./install.sh --ui-ux-pro-max install`，或手动 `npm install -g ui-ux-pro-max-cli` + `uipro init --ai <harness> --offline` |
+| `playwright` + `@axe-core/playwright` | L1 预检：四态 × 双主题 8 视图、WCAG、热区、溢出、CLS 代理指标 | 自行安装；缺失时 `/op-review` 记 `L1: SKIP`，不阻断 |
+
+### 2.3 它能自己设计 UI 与交互吗？
+
+**能，但它是"约束驱动生成"，不是自由美术创作。**
+
+能做：
+
+- 从一段需求推导页面骨架（Bento Grid / Swiss Grid 12–16 列 / Dashboard-Grid 等）与 Container/View 边界；
+- 产出 16 通道 Token 的 Light/Dark 取值，暗色按固定策略收敛，不靠随机配色；
+- 定义每个数据组件的 Idle / Loading / Empty / Error 四态，以及提交锁定、二次确认、toast 反馈闭环；
+- 给出断点规则、长串折行、Chip/Badge `+n` 展开等防破版约束；
+- 定死热区（≥44×44px）、按压/悬停时序（150 / 200–250ms）、缓动与 `prefers-reduced-motion` 降级；
+- 摘录行业反模式黑名单，作为一票否决项；
+- 产出可点击的单文件沙箱，并把同一份契约落成生产组件。
+
+不做：
+
+- 品牌视觉从零创作（logo、插画、配图、品牌语气）；
+- 像素级还原 Figma 稿（没有稿子时取值来自 `MASTER.md` 与检索结果，而非凭感觉）；
+- 替你签字（L3 只能人类 `APPROVED`）；
+- 写 DOM/RTL 快照测试（四态验收靠沙箱人工点检）。
+
+降级语义：`ui-ux-pro-max` 缺失时输出 `SKIP: ui-ux-pro-max 不可用`，改为手工填七章节；**取值仍必须来自 `MASTER.md`、检索结果或人工明确输入，严禁凭空猜测配色、字体与间距**。`**UI Change**: no` 的需求不进入本流程。
+
+### 2.4 UI 变更的完整使用路径
+
+```text
+需求
+ ├─ 1 分流     /op-new <change>          → proposal.md 首行写 **UI Change**: yes
+ ├─ 2 基线     读 MASTER.md；不存在则 --design-system 生成一次（或手工建）
+ ├─ 3 检索     search.py --domain ux  +  search.py --stack shadcn（各 2–5 个英文词）
+ ├─ 4 契约     /op-continue              → ui-spec.md 七章节 + Review-Status: PENDING
+ ├─ 5 沙箱     同上                       → sandbox-preview.html（四态 × 双主题）
+ ├─ 6 评审     /op-review <change>       → L1 预检 → L2 盲审 → L3 人工批注
+                                           → review.md（P0=P1=0 + 三个 sha256）
+ ├─ 7 实现     /op-apply                 → Stage1 直出 View → Stage2 接线 Container
+ └─ 8 验证归档 /op-verify → /op-archive  → 八门禁 + 沙箱对照 → 追加组件注册表
+```
+
+最短命令序列：
+
+```text
+/op-new feat-261121-001-order-list
+/op-continue            # 逐次产出 design（含 ui-spec + 沙箱）、specs、tasks、plan、review
+/op-review feat-261121-001-order-list
+/op-apply
+/op-verify
+/op-archive
+```
+
+设计检索三条命令（`--json` 供脚本解析，人工阅读可省略）：
+
+```bash
+# 基线：全项目只生成一次
+python3 .qoder/skills/ui-ux-pro-max/scripts/search.py \
+  "B2B SaaS analytics dashboard data_heavy modern clean" \
+  --design-system --variance 4 --motion 3 --density 8 \
+  --persist -p "ProjectBaseline" --output-dir "./docs"
+
+# 第一步：语义 UX（交互、无障碍、防破版）
+python3 .qoder/skills/ui-ux-pro-max/scripts/search.py "keyboard focus dialog accessible" --domain ux
+
+# 第二步：技术栈实现（Shadcn / Tailwind）
+python3 .qoder/skills/ui-ux-pro-max/scripts/search.py "data table empty state shadcn" --stack shadcn
+```
+
+> `.qoder/` 换成实际 harness 目录（`.cursor/` / `.trae/` / `.opencode/` 同理）。
+
+### 2.5 常见误区
+
+| 误区 | 正确做法 |
+|------|----------|
+| 直接改沙箱里的颜色/间距 | 先改 `ui-spec.md` 第 2 节 Token，再重生沙箱，然后重跑 L1/L2 |
+| 把 UI 需求写进 `design.md` | `ui-spec.md` 是唯一真源 |
+| 手动把 `Review-Status` 改成 APPROVED | 只有人类评审者可签；Agent 自签视为无效 |
+| 改完契约不重跑评审 | 契约/沙箱/plan 任一变更都会让 `review.md` 失效 |
+| 用 Emoji 或灰底灰字凑数 | 图标统一用 Phosphor/Heroicons/Lucide；反模式命中即门禁 7 FAIL |
+
+---
+
+## 三、完整开发流程
 
 一条需求从零到归档，共 7 步。**所有 `/openspec-*` 技能都在目标仓库根目录执行**（即包含 `openspec/` 的那一层；OpenSpec 2.0 skills 交付形态）。
 
@@ -222,7 +347,7 @@ plan 阶段生成 `plan.md` 后运行 `bash scripts/onepress-plan-lint.sh --chan
 
 ---
 
-## 三、命令参考
+## 四、命令参考
 
 | 命令 | Qoder | OpenCode | Trae | Cursor | 用途 |
 |------|:----:|:--------:|:----:|:------:|------|
@@ -254,7 +379,7 @@ openspec archive <name> --yes                   # 归档并同步 specs
 
 ---
 
-## 四、变更命名规范
+## 五、变更命名规范
 
 ```text
 {type}-{YYMMDD}-{NNN}-{slug}
@@ -273,7 +398,7 @@ openspec archive <name> --yes                   # 归档并同步 specs
 
 ---
 
-## 五、资产分层与升级
+## 六、资产分层与升级
 
 | 层级 | 资产 | 升级行为 |
 |------|------|----------|
@@ -287,7 +412,7 @@ openspec archive <name> --yes                   # 归档并同步 specs
 
 ---
 
-## 六、模板包结构
+## 七、模板包结构
 
 ```text
 onePress/                    # 发布包根目录（由 studio/pack/ 生成）
@@ -342,7 +467,7 @@ onePress/                    # 发布包根目录（由 studio/pack/ 生成）
 
 ---
 
-## 七、FAQ
+## 八、FAQ
 
 **Q：AI 说克隆下来找不到 `INSTALL_PROMPT.md`？**
 A：多半是稀疏检出路径与实际布局不符（cone 模式对不存在的路径静默空检出、不报错）。让它先 `git ls-tree -r --name-only HEAD` 核对真实布局，再 `git sparse-checkout disable` 全量检出（包体仅 KB 级）。这条已写进上面的安装提示词，正常情况下它会自己兜住。
@@ -355,6 +480,9 @@ A：安装能完成，但 `/openspec-*` 技能与 `ui-spec.md` / `sandbox-previe
 
 **Q：OpenCode 下工作流技能在哪里？**
 A：OpenSpec 2.0 统一安装到 `.agents/skills/openspec-*`，四 harness 共享；本包仅额外随附 `commands/openspec-review-change.md`。若技能缺失，执行 `openspec init --tools opencode` 或 `openspec update` 补齐。
+
+**Q：这套东西能自己设计 UI 与交互吗？**
+A：能，但要区分口径：它是"约束驱动生成"，不是自由美术创作。输入需求 + `MASTER.md` 基线 + 检索结果 + 组件注册表，它能推导页面骨架、16 通道 Token（含暗色）、四态矩阵、断点规则、微动效时序与反模式清单，并产出可点的 `sandbox-preview.html` 与生产组件；但它不做 logo/插画/品牌语气，不替代人类签批，也不写 DOM 快照测试。完整能力边界见 **§2.3**，路径见 **§2.4**。
 
 **Q：能不能只装某一个平台？**
 A：能，且默认就是这样。安装器按目录探测判定：只有 `.qoder/` 只装 Qoder，只有 `.trae/` 只装 Trae，只有 `.cursor/` 只装 Cursor，多个目录存在则对应多套都装，一个都没有会先问你。也可以用 `--harness trae,cursor` 显式指定。事后想补装另一个环境，再跑一次安装即可，只会增量写那一套，已装的不受影响。

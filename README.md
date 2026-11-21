@@ -2,9 +2,9 @@
 
 > An OpenSpec × Superpowers × Tailwind/shadcn bridge toolkit — install a **complete frontend workflow** into any repository with a single prompt.
 
-onePress targets teams with **no dedicated designer**, where developers drive the work. It solves three concrete problems:
+onePress targets teams with **no dedicated designer**, where developers drive the work. It solves four concrete problems:
 
-1. **Design by guesswork** → AI consults a local design knowledge base and writes a seven-section `ui-spec.md` (component hierarchy / 16-channel tokens / four-state matrix / responsive rules / micro-motion / anti-patterns / sandbox preview).
+1. **Design by guesswork** → a four-layer UI foundation (knowledge baseline / seven-section contract / clickable sandbox / component registry) plus a default stack (React + Tailwind + shadcn) turns design into auditable artifacts. Foundation and stack: **§2**. Can it design UI on its own: **§2.3**. The full UI path: **§2.4**.
 2. **Delivery by vibes** → a single-file `sandbox-preview.html` locks colour, type, density and motion — with four-state and Light/Dark toggles — before any production component is written.
 3. **Quality by willpower** → eight UI gates (token purity + WCAG contrast + anti-patterns + touch targets + a11y + pure-logic state tests + human checks) executed by `scripts/onepress-gate.sh`; the plan stage is checked by `scripts/onepress-plan-lint.sh` (plan + design + tasks); the execution stage enforces TDD, root-cause debugging and fresh evidence; verification requires `verification-evidence.md` with a cold-context code review, checked by `scripts/onepress-evidence-lint.sh`.
 4. **Black-box runs** → `scripts/onepress-telemetry.sh` writes local-only JSONL events (install / gate / evidence / verify / step) under `~/.onepress/telemetry/`, with a four-level opt-out (`--no-telemetry` > `ONEPRESS_TELEMETRY=off` > `DO_NOT_TRACK=1` > `CI`), a 1,800 B per-line cap, a payload allow-list and zero network access. `status`, `show --last N`, `report` and `export --format otlp-json` all run offline. M1 installs **no hooks**.
@@ -19,7 +19,7 @@ First-class support for four harnesses: `.qoder/`, `.opencode/`, `.trae/` and `.
 |------|-------------|
 | Target repo | git initialized |
 | OpenSpec CLI | `npm install -g @fission-ai/openspec@latest` (**>= 2.0.0**; on 1.x use onePress v1.1.0 instead) |
-| Design retrieval (optional) | `npm install -g ui-ux-pro-max-cli` + `uipro init --ai <harness> --offline`; skipped gracefully when absent |
+| UI design foundation (optional) | `npm install -g ui-ux-pro-max-cli` + `uipro init --ai <harness> --offline`, or pass `--ui-ux-pro-max install` at install time (default `skip`); when absent it reports `SKIP` and falls back to hand-filled contracts |
 | AI assistant | Qoder / OpenCode / Trae / Cursor / any agent with file and command access |
 
 ---
@@ -45,9 +45,11 @@ Common options (equivalent on both sides):
 .\install.ps1 -Target D:\repo    # explicit target repo
 .\install.ps1 -DryRun            # print the plan, write nothing
 .\install.ps1 -Source D:\pack    # pack directory (default: the script's directory)
+.\install.ps1 -UiUxProMax install  # also install the optional design-retrieval layer (default: skip, no network)
 ```
 ```bash
 ./install.sh --harness qoder --target ~/repo --dry-run --source ~/pack
+./install.sh --ui-ux-pro-max install
 ```
 
 The script does six things in one go: **detect harness → layered write → align OpenSpec config → write `onePress.lock` → self-check → report**. "Align config" means: create `openspec/config.yaml` (`schema: superspec`) when missing, rewrite only that line when the value is wrong (CRLF preserved), and run `openspec init --tools qoder|trae|cursor` automatically when the corresponding `.qoder/commands/`, `.trae/commands/` or `.cursor/commands/` is empty. Checks cover layout, verbatim content, all 14 schema files, `schema: superspec`, top-level `rules`, non-empty commands with reference lines, and lock/scope consistency; any failure aborts with a reason. Exit code `0` = success, `1` = failure. Nothing to verify by hand.
@@ -103,7 +105,130 @@ The unselected harness gets no directory created and no files written. `onePress
 
 ---
 
-## 2. The full development workflow
+## 2. UI design foundation and default stack
+
+Three questions answered here: **what the foundation is made of**, **which stack is assumed**, and **whether it can design UI and interaction by itself**.
+
+### 2.1 The foundation is four artifacts, not a component library
+
+onePress ships no UI kit and does not aim at "a page that looks acceptable". UI design is decomposed into four auditable, versionable artifacts:
+
+| Layer | Artifact (inside the target repo) | Role | Produced by | When missing |
+|-------|-----------------------------------|------|-------------|--------------|
+| Knowledge | `docs/design-system/projectbaseline/MASTER.md` | Single project-wide baseline: palette, type, density, motion, anti-patterns | `ui-ux-pro-max` once (`--design-system --persist`); onePress only protects it | Degrades to a hand-built baseline with human-supplied values |
+| Contract | `openspec/changes/<change>/ui-spec.md` | **Single source of truth for UI**, seven mandatory sections | The `design` artifact (`/op-continue`), only when `**UI Change**: yes` | Gate 0 FAILs and `/op-apply` will not start |
+| Visual surface | `openspec/changes/<change>/sandbox-preview.html` | Single-file preview (inline CSS + JS): four states × Light/Dark, `data-review-id`, `Alt/⌘ + Click` Pin-to-AI annotator | Same as above | Review loses its visual reference; gates 0 / 8 cannot pass |
+| Reuse | `docs/ui-components.md` | base / domain component registry (name / path / archetype / props) | Initialised empty on install, appended by `/op-archive` | Every component is rebuilt from scratch |
+
+The seven sections are fixed: (1) component hierarchy, (2) design tokens (16 channels), (3) four-state matrix, (4) breakpoints and typography, (5) hit areas and micro-motion, (6) industry anti-pattern blacklist, (7) sandbox requirements.
+
+Process constraints come from the `onepress-discipline` skill: 13 iron rules + eight gates (0 / 0.5 / 1–8) + three-level pre-code review (L1 deterministic preflight → L2 cold-context review → L3 human sign-off).
+
+**Three hard boundaries**: the UI contract lives only in `ui-spec.md` and must never be written back to `design.md`; any edit to `ui-spec.md`, the sandbox or `plan.md` invalidates `review.md`; `Review-Status: APPROVED` may only be set by a human, never by the agent.
+
+### 2.2 Default stack
+
+| Dimension | Default | Enforced |
+|-----------|---------|----------|
+| Component shape | React + TSX, `features/<feature>/container.tsx` + `view.tsx` | Views are 100% props-driven; Stage 1 writes production components directly, never transpiled from sandbox HTML |
+| Styling | **Tailwind (v4 preferred)** | No inline styles, no `#hex`/`rgb()`/`hsl()`, no arbitrary pixels (`p-[13px]`) |
+| Components | **shadcn/ui + Radix** | Keep `focus-visible:ring-2`; destructive actions need `<AlertDialog variant="destructive">`; every result needs a `toast` |
+| Tokens | 16 semantic channels + matching foregrounds | `On *` roles rename to `--primary-foreground` etc., `--color-on-*` forbidden; declare variables in `:root` / `.dark` and map them in `@theme inline` |
+| Dark mode | Background `#0F172A`, Card `#111827`, Muted FG `#CBD5E1`, Border `#334155`; Ring picked at ≥3:1 against the dark background | Body contrast ≥4.5:1; large text and control borders ≥3:1 |
+| Icons | `@phosphor-icons/react` (Heroicons / Lucide accepted) | One stroke weight site-wide; Emoji as icons is forbidden |
+| Type | Google Fonts `<link>`, heading + body pair | Body 16px / line-height 1.5 |
+| Motion | Tailwind transitions 150–250ms | Hit areas ≥44×44px, ≥8px apart; `motion-reduce:` required; no GSAP unless already in `package.json` |
+| Tests | Logic-only TDD (vitest / pytest / npm test) | No RTL / DOM snapshots; states and visuals are checked by eye against the sandbox |
+
+No framework lock-in: Next.js, Vite or Remix all work — only the layering and class conventions above are required. Note that gates 2/5/6 are **regex and heuristic scans** over `.tsx/.vue` files and any CSS containing `:root`/`.dark`; they look for Tailwind/shadcn signals (`cursor-pointer`, `size-11`, `focus-visible:ring`, `duration-*`). A repo that does not follow those conventions must align them first, or the gates will keep reporting false FAILs.
+
+Optional enhancements (absent ⇒ `SKIP`, no network, no `npm install`, install verdict unchanged):
+
+| Enhancement | Provides | How to enable |
+|-------------|----------|---------------|
+| `ui-ux-pro-max` | Design retrieval and baseline generation (`--design-system` / `--domain ux` / `--stack shadcn`); needs Node.js + Python3 | `./install.sh --ui-ux-pro-max install`, or `npm install -g ui-ux-pro-max-cli` + `uipro init --ai <harness> --offline` |
+| `playwright` + `@axe-core/playwright` | L1 preflight: four states × two themes (8 views), WCAG, hit areas, overflow, CLS proxy | Install yourself; when missing `/op-review` records `L1: SKIP` without blocking |
+
+### 2.3 Can it design UI and interaction on its own?
+
+**Yes — as constraint-driven generation, not free-form art direction.**
+
+It can:
+
+- derive page archetypes (Bento Grid / Swiss Grid 12–16 columns / Dashboard-Grid …) and the Container/View boundary from a requirement;
+- produce Light/Dark values for all 16 token channels, with dark mode converged by a fixed strategy rather than random colour;
+- define Idle / Loading / Empty / Error for every data component, plus submitting locks, destructive confirms and toast feedback;
+- specify breakpoint rules, long-string wrapping and Chip/Badge `+n` disclosure to prevent layout breakage;
+- fix hit areas (≥44×44px), press/hover timing (150 / 200–250ms), easing and `prefers-reduced-motion` fallbacks;
+- extract an industry anti-pattern blacklist as a veto list;
+- emit a clickable single-file sandbox and turn the same contract into production components.
+
+It does not:
+
+- create brand visuals from scratch (logo, illustration, imagery, tone of voice);
+- reproduce a Figma file pixel for pixel (without one, values come from `MASTER.md` and retrieval results, never from vibes);
+- sign off for you (L3 is human-only `APPROVED`);
+- write DOM/RTL snapshot tests (four-state acceptance is a visual check against the sandbox).
+
+Degradation: when `ui-ux-pro-max` is missing it prints `SKIP: ui-ux-pro-max 不可用`, and the seven sections are filled by hand — **values must still come from `MASTER.md`, retrieval results or explicit human input; guessing colours, type or spacing is forbidden**. Requirements with `**UI Change**: no` never enter this flow.
+
+### 2.4 The complete UI path
+
+```text
+requirement
+ ├─ 1 triage    /op-new <change>          → proposal.md first line: **UI Change**: yes
+ ├─ 2 baseline  read MASTER.md; if absent run --design-system once (or build by hand)
+ ├─ 3 retrieve  search.py --domain ux  +  search.py --stack shadcn (2–5 English words each)
+ ├─ 4 contract  /op-continue              → ui-spec.md, seven sections + Review-Status: PENDING
+ ├─ 5 sandbox   same call                  → sandbox-preview.html (four states × two themes)
+ ├─ 6 review    /op-review <change>       → L1 preflight → L2 blind review → L3 human annotations
+                                           → review.md (P0=P1=0 + three sha256)
+ ├─ 7 implement /op-apply                 → Stage 1 view → Stage 2 wire the container
+ └─ 8 verify    /op-verify → /op-archive  → eight gates + sandbox parity → registry append
+```
+
+Shortest command sequence:
+
+```text
+/op-new feat-261121-001-order-list
+/op-continue            # one artifact per call: design (ui-spec + sandbox), specs, tasks, plan, review
+/op-review feat-261121-001-order-list
+/op-apply
+/op-verify
+/op-archive
+```
+
+The three retrieval commands (`--json` for scripts, optional for humans):
+
+```bash
+# baseline: once per project
+python3 .qoder/skills/ui-ux-pro-max/scripts/search.py \
+  "B2B SaaS analytics dashboard data_heavy modern clean" \
+  --design-system --variance 4 --motion 3 --density 8 \
+  --persist -p "ProjectBaseline" --output-dir "./docs"
+
+# step 1: semantic UX (interaction, a11y, overflow)
+python3 .qoder/skills/ui-ux-pro-max/scripts/search.py "keyboard focus dialog accessible" --domain ux
+
+# step 2: stack implementation (Shadcn / Tailwind)
+python3 .qoder/skills/ui-ux-pro-max/scripts/search.py "data table empty state shadcn" --stack shadcn
+```
+
+> Replace `.qoder/` with the harness actually installed (`.cursor/`, `.trae/`, `.opencode/`).
+
+### 2.5 Common mistakes
+
+| Mistake | Correct move |
+|---------|--------------|
+| Editing colours/spacing inside the sandbox | Edit section 2 of `ui-spec.md`, regenerate the sandbox, then re-run L1/L2 |
+| Writing UI requirements into `design.md` | `ui-spec.md` is the single source of truth |
+| Flipping `Review-Status` to APPROVED by hand | Human reviewers only; an agent signature is invalid |
+| Changing the contract without re-reviewing | Any change to contract/sandbox/plan invalidates `review.md` |
+| Papering over with Emoji or grey-on-grey | Icons come from Phosphor/Heroicons/Lucide; a blacklist hit is gate 7 FAIL |
+
+---
+
+## 3. The full development workflow
 
 From zero to archive in 7 steps. **All `/openspec-*` skills run at the target repo root** (the directory containing `openspec/`; OpenSpec 2.0 skills delivery).
 
@@ -221,7 +346,7 @@ Batch: `/op-bulk-archive`. Sync specs only: `/op-sync`.
 
 ---
 
-## 3. Command reference
+## 4. Command reference
 
 | Command | Qoder | OpenCode | Trae | Cursor | Purpose |
 |---------|:-----:|:--------:|:----:|:------:|---------|
@@ -253,7 +378,7 @@ openspec archive <name> --yes                   # archive and sync specs
 
 ---
 
-## 4. Change naming convention
+## 5. Change naming convention
 
 ```text
 {type}-{YYMMDD}-{NNN}-{slug}
@@ -272,7 +397,7 @@ Full details: `studio/openspec/CHANGE_NAMING.md`.
 
 ---
 
-## 5. Asset layering and upgrades
+## 6. Asset layering and upgrades
 
 | Layer | Assets | Upgrade behavior |
 |-------|--------|------------------|
@@ -286,7 +411,7 @@ Uninstall: remove everything except `protectedAssets` from `onePress.lock` (`.op
 
 ---
 
-## 6. Template pack layout
+## 7. Template pack layout
 
 ```text
 onePress/                    # release pack root (generated from studio/pack/)
@@ -341,7 +466,7 @@ onePress/                    # release pack root (generated from studio/pack/)
 
 ---
 
-## 7. FAQ
+## 8. FAQ
 
 **Q: The agent cannot find `INSTALL_PROMPT.md` after cloning?**
 A: Usually the sparse-checkout path does not match the real layout (cone mode silently checks out nothing, no error). Have it verify with `git ls-tree -r --name-only HEAD`, then fall back to `git sparse-checkout disable` (the pack is only KB-sized). This is already covered in the install block above, so it normally self-recovers.
@@ -354,6 +479,9 @@ A: Install still completes, but `/openspec-*` skills and `ui-spec.md`/`sandbox-p
 
 **Q: Where are the workflow skills on OpenCode?**
 A: OpenSpec 2.0 installs them into `.agents/skills/openspec-*`, shared by all four harnesses; this pack only adds `commands/openspec-review-change.md`. If they are missing, run `openspec init --tools opencode` or `openspec update`.
+
+**Q: Can onePress design UI and interaction by itself?**
+A: Yes, with a precise caveat: it is constraint-driven generation, not free-form art direction. Given a requirement plus `MASTER.md`, retrieval results and the component registry, it derives page archetypes, all 16 token channels (including dark mode), the four-state matrix, breakpoint rules, motion timing and an anti-pattern list, then emits a clickable `sandbox-preview.html` and the production component. It does not create logos, illustration or brand voice, does not replace human sign-off, and does not write DOM snapshot tests. Capability boundary: **§2.3**; the path: **§2.4**.
 
 **Q: Can I install only one harness?**
 A: Yes — that is the default. The installer detects by directory: `.qoder/` only → Qoder only, `.trae/` only → Trae only, `.cursor/` only → Cursor only, several present → every detected harness, none → it asks first. You can also pass `--harness trae,cursor`. To add another harness later, re-run the install; only that harness is written and the existing one is untouched.
